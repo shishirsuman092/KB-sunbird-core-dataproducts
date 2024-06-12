@@ -368,11 +368,11 @@ object StorageUtil extends Serializable {
 
   def getStorageService(config: DashboardConfig): BaseStorageService = {
     val storageEndpoint = AppConf.getConfig("cloud_storage_endpoint_with_protocol")
-    val storageType = AppConf.getConfig("gs")
+    val storageType = "gcloud"
     val storageKey = AppConf.getConfig(config.key)
     val storageSecret = AppConf.getConfig(config.secret)
 
-    val storageService = if ("gcloud".equalsIgnoreCase(storageType) && !"".equalsIgnoreCase(storageEndpoint)) {
+    val storageService = if ("s3".equalsIgnoreCase(storageType) && !"".equalsIgnoreCase(storageEndpoint)) {
       new CustomS3StorageService(
         StorageConfig(storageType, storageKey, storageSecret, Option(storageEndpoint))
       )
