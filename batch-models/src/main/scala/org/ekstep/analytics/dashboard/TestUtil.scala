@@ -122,7 +122,7 @@ object TestUtil extends Serializable {
 
       "key" -> "aws_storage_key",
       "secret" -> "aws_storage_secret",
-      "store" -> "s3",
+      "store" -> "gs",
       "container" -> "igot",
 
       "platformRatingSurveyId" -> "1696404440829",
