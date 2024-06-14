@@ -22,14 +22,16 @@ object JobManager extends optional.Application {
     val storageType = AppConf.getConfig("cloud_storage_type")
 
     val storageEndpoint = AppConf.getConfig("cloud_storage_endpoint_with_protocol")
+    val storageKey = AppConf.getConfig("aws_storage_key")
+    val storageSecret = AppConf.getConfig("aws_storage_secret")
     val storageService = if ("s3".equalsIgnoreCase(storageType) && !"".equalsIgnoreCase(storageEndpoint)) {
-        new CustomS3StorageService(
-            StorageConfig(storageType, AppConf.getConfig("storage.key.config"), AppConf.getConfig("storage.secret.config"), Option(storageEndpoint))
-        )
+      new CustomS3StorageService(
+        StorageConfig(storageType, storageKey, storageSecret, Option(storageEndpoint))
+      )
     } else {
-        StorageServiceFactory.getStorageService(
-            StorageConfig(storageType, AppConf.getConfig("storage.key.config"), AppConf.getConfig("storage.secret.config"))
-        )
+      StorageServiceFactory.getStorageService(
+        StorageConfig(storageType, storageKey, storageSecret)
+      )
     }
 
     def main(config: String) {
