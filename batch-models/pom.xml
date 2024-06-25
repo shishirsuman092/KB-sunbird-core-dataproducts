@@ -243,8 +243,8 @@
             <version>1.0</version>
         </dependency>
         <dependency>
-			<groupId>org.sunbird</groupId>
-			<artifactId>cloud-store-sdk</artifactId>
+			<groupId>net.karmayogibharat</groupId>
+			<artifactId>cloud-store-sdk_2.11</artifactId>
 			<version>1.4.6</version>
 			<exclusions>
 				<exclusion>
