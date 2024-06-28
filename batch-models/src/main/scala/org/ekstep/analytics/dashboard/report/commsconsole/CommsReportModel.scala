@@ -43,7 +43,7 @@ object CommsReportModel extends AbsDashboardModel {
     val rawEnrollmentsDF = spark.read.option("header", "true")
       .csv(s"${conf.localReportDir}/${conf.userEnrolmentReportPath}/${today}-warehouse")
       //.withColumn("completionDate", to_date(col("completed_on"), dateFormat2))
-      .withColumn("completionDate",  date_format(col("completed_on"), "dd/MM/yyyy HH:mm:ss a"))
+      .withColumn("completionDate",  date_format(col("last_accessed_on"), "dd/MM/yyyy HH:mm:ss a"))
     val enrollmentsDF = rawEnrollmentsDF
       .join(userDF, Seq("user_id"), "left")
 
