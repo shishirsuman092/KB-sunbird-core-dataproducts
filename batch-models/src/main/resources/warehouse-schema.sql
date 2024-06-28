@@ -13,8 +13,8 @@ CREATE TABLE user_detail(
    email VARCHAR(255),
    phone_number VARCHAR(255),
    groups VARCHAR(255),
-   tag VARCHAR(255),
-   roles VARCHAR(255),
+   tag VARCHAR(512),
+   roles VARCHAR(500),
    gender VARCHAR(255),
    category VARCHAR(255),
    created_by_id VARCHAR(255),
@@ -22,7 +22,7 @@ CREATE TABLE user_detail(
    external_system_id VARCHAR(255),
    is_verified_karmayogi VARCHAR(255),
    mdo_created_on DATE,
-   user_registration_date DATE,
+   user_registration_date VARCHAR(255),
    data_last_generated_on VARCHAR(255)
 );
 
@@ -44,12 +44,12 @@ CREATE TABLE user_enrolments(
    batch_id VARCHAR(255) NOT NULL,
    content_id  VARCHAR(255)  NOT NULL,
    content_progress_percentage FLOAT,
-   completed_on DATE,
+   last_accessed_on VARCHAR(255) ,
    certificate_generated VARCHAR(255),
-   certificate_generated_on DATE,
+   certificate_generated_on VARCHAR(255) ,
    user_rating FLOAT,
    resource_count_consumed INTEGER,
-   enrolled_on DATE,
+   enrolled_on VARCHAR(255) ,
    user_consumption_status VARCHAR(255),
    data_last_generated_on VARCHAR(255),
    PRIMARY KEY (user_id, content_id, batch_id)
@@ -64,12 +64,12 @@ CREATE TABLE content(
    content_type VARCHAR(255),
    batch_id VARCHAR(255),
    batch_name VARCHAR(255),
-   batch_start_date DATE,
-   batch_end_date DATE,
+   batch_start_date VARCHAR(255),
+   batch_end_date VARCHAR(255),
    content_duration VARCHAR(255),
    content_rating FLOAT,
-   last_published_on DATE,
-   content_retired_on DATE,
+   last_published_on VARCHAR(255),
+   content_retired_on VARCHAR(255),
    content_status VARCHAR(255),
    resource_count INTEGER,
    total_certificates_issued INTEGER,
@@ -86,7 +86,7 @@ CREATE TABLE assessment_detail(
    assessment_type VARCHAR(255),
    assessment_duration VARCHAR(255),
    time_spent_by_the_user VARCHAR(255),
-   completion_date DATE,
+   completion_date VARCHAR(255),
    score_achieved FLOAT,
    overall_score FLOAT,
    cut_off_percentage FLOAT,
@@ -121,6 +121,7 @@ CREATE TABLE bp_enrolments(
    data_last_generated_on VARCHAR(255)
 );
 
+-- Table: cb_plan
 CREATE TABLE cb_plan(
    cb_plan_id VARCHAR(255) NOT NULL,
    org_id VARCHAR(255) NOT NULL,
@@ -132,6 +133,28 @@ CREATE TABLE cb_plan(
    allocated_on VARCHAR(255),
    due_by VARCHAR(255),
    status VARCHAR(255)
+);
+
+-- Table: kcm_content_mapping
+CREATE TABLE kcm_content_mapping(
+   course_id VARCHAR(255) NOT NULL,
+   competency_area_id INTEGER,
+   competency_theme_id  INTEGER,
+   competency_sub_theme_id INTEGER
+);
+
+-- Table: kcm_dictionary
+CREATE TABLE kcm_dictionary(
+   competency_area_id INTEGER,
+   competency_area TEXT,
+   competency_area_description  TEXT,
+   competency_theme_type VARCHAR(255),
+   competency_theme_id INTEGER,
+   competency_theme TEXT,
+   competency_theme_description TEXT,
+   competency_sub_theme_id INTEGER,
+   competency_sub_theme TEXT,
+   competency_sub_theme_description TEXT
 );
 
 -- Create PostgreSQL user and grant privileges
@@ -146,3 +169,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON bp_enrolments TO postgres;
 GRANT SELECT, INSERT, UPDATE, DELETE ON cb_plan TO postgres;
 
 ALTER TABLE user_enrolments ADD COLUMN live_cbp_plan_mandate boolean;
+ALTER TABLE user_enrolments ADD COLUMN certificate_id VARCHAR(255);
+ALTER TABLE user_enrolments ADD COLUMN first_completed_on VARCHAR(255);
+ALTER TABLE user_detail ADD COLUMN weekly_claps_day_before_yesterday VARCHAR(255);
+ALTER TABLE user_detail ADD COLUMN status INTEGER;
+ALTER TABLE user_detail ADD COLUMN no_of_karma_points INTEGER;
+ALTER TABLE org_hierarchy ADD COLUMN mdo_created_on DATE;
