@@ -60,7 +60,7 @@ object CommsReportModel extends AbsDashboardModel {
     val mdoCompletionRateDF = mdoCBPCompletionsDF.join(mdoUserCountsDF, Seq("mdo_id"), "left")
       .withColumn("completionPerUser", col("completionCount") / col("userCount"))
     val mdoCompletionRateWithAdminDetailsDF = mdoCompletionRateDF.join(mdoAdminDF, Seq("mdo_id"), "left")
-     .orderBy(desc("completionPerUser"), desc("mdo_id"))
+      .orderBy(desc("completionPerUser"), desc("mdo_id"))
       .withColumn("Last_Updated_On", lastUpdatedOn)
       .select(
         col("full_name").alias("Name"),
@@ -75,7 +75,7 @@ object CommsReportModel extends AbsDashboardModel {
         col("completionPerUser").alias("Content_Completion_Per_User"),
         col("Last_Updated_On")
       )
-    generateReport(mdoCompletionRateWithAdminDetailsDF, s"${commsConsoleReportPath}/AllMDOsContentCompletion", fileName="AllMDOsContentCompletion")
+    generateReport(mdoCompletionRateWithAdminDetailsDF, s"${commsConsoleReportPath}/AllMDOsContentCompletion", fileName = "AllMDOsContentCompletion")
 
     val usersWithEnrollments = enrollmentsDF.select("user_id").distinct()
     //users who have not been enrolled in any cbp
@@ -92,20 +92,17 @@ object CommsReportModel extends AbsDashboardModel {
         col("user_registration_date").alias("User_Registration_Date"),
         col("Last_Updated_On")
       )
-    generateReport(usersWithoutAnyEnrollmentsWithUserDetailsDF, s"${commsConsoleReportPath}/UsersOnboardedNotSignedUpAnyContent", fileName="UsersOnboardedNotSignedUpAnyContent")
-    
-    // comment show later
-    show(userDF,"userDF")
-    
+    generateReport(usersWithoutAnyEnrollmentsWithUserDetailsDF, s"${commsConsoleReportPath}/UsersOnboardedNotSignedUpAnyContent", fileName = "UsersOnboardedNotSignedUpAnyContent")
+
+    // remove show code later
+    show(userDF, "userDF")
     // users created in last 15 days, but not enrolled in any cbp
     val usersCreatedInLastNDaysDF = userDF.filter(col("registrationDate").between(dateNDaysAgo, currentDate)).select("user_id").distinct()
-    // comment show later
-    show(usersCreatedInLastNDaysDF,"usersCreatedInLastNDaysDF")
-    
+    // remove show code later
+    show(usersCreatedInLastNDaysDF, "usersCreatedInLastNDaysDF")
     val usersCreatedInLastNDaysWithoutEnrollmentsDF = usersCreatedInLastNDaysDF.except(usersWithEnrollments)
-    // comment show later
-    show(usersCreatedInLastNDaysWithoutEnrollmentsDF,"usersCreatedInLastNDaysWithoutEnrollmentsDF")
-    
+    // remove show code later
+    show(usersCreatedInLastNDaysWithoutEnrollmentsDF, "usersCreatedInLastNDaysWithoutEnrollmentsDF")
     val usersCreatedInLastNDaysWithoutEnrollmentsWithUserDetailsDF = usersCreatedInLastNDaysWithoutEnrollmentsDF.join(userDF, Seq("user_id"), "left")
       .withColumn("Last_Updated_On", lastUpdatedOn)
       .select(
@@ -118,11 +115,15 @@ object CommsReportModel extends AbsDashboardModel {
         col("user_registration_date").alias("User_Registration_Date"),
         col("Last_Updated_On")
       )
-    // comment show later
-    show(usersCreatedInLastNDaysWithoutEnrollmentsWithUserDetailsDF,"usersCreatedInLastNDaysWithoutEnrollmentsWithUserDetailsDF")
-    // generate report
-    generateReport(usersCreatedInLastNDaysWithoutEnrollmentsWithUserDetailsDF, s"${commsConsoleReportPath}/UsersOnboardedLast15DaysNotSignedUpAnyContent", fileName="UsersOnboardedLast15DaysNotSignedUpAnyContent")
-
+    
+    // remove show code later
+    show(usersCreatedInLastNDaysWithoutEnrollmentsWithUserDetailsDF, "usersCreatedInLastNDaysWithoutEnrollmentsWithUserDetailsDF")
+    
+    // generate report if usersCreatedInLastNDaysWithoutEnrollmentsWithUserDetailsDF is not empty
+    if (!usersCreatedInLastNDaysWithoutEnrollmentsWithUserDetailsDF.isEmpty) {
+    generateReport(usersCreatedInLastNDaysWithoutEnrollmentsWithUserDetailsDF, s"${commsConsoleReportPath}/UsersOnboardedLast15DaysNotSignedUpAnyContent", fileName = "UsersOnboardedLast15DaysNotSignedUpAnyContent")
+    }
+    
     //top 60 users ranked by cbp completion in last 15 days
     val topXCompletionsInNDays = enrollmentsDF.filter(col("completionDate").between(dateNDaysAgo, currentDate))
       .groupBy("user_id")
@@ -143,8 +144,10 @@ object CommsReportModel extends AbsDashboardModel {
         col("completionCount").alias("Content_Completion"),
         col("Last_Updated_On")
       )
-    generateReport(topXCompletionsInNDays, s"${commsConsoleReportPath}/Top1LakhUsersContentCompletionLast15Days", fileName="Top1LakhUsersContentCompletionLast15Days")
-
+    // generate report is topXCompletionsInNDays is not empty
+    if(!topXCompletionsInNDays.isEmpty) {
+      generateReport(topXCompletionsInNDays, s"${commsConsoleReportPath}/Top1LakhUsersContentCompletionLast15Days", fileName = "Top1LakhUsersContentCompletionLast15Days")
+    }
     val prarambhCourses = conf.commsConsolePrarambhCbpIds.split(",").map(_.trim).toList
     val rozgarTags =  conf.commsConsolePrarambhTags.split(",").map(_.trim).toList
     val checkForRozgarTag = rozgarTags.map(value => expr(s"lower(tag) like '%$value%'")).reduce(_ or _)
@@ -175,10 +178,14 @@ object CommsReportModel extends AbsDashboardModel {
         col("prarambhCompletionCount")
       )
 
-    generateReport(prarambhUserDataWithCompletionCountsDF.filter(col("prarambhCompletionCount") === prarambhCompletionCount).drop("prarambhCompletionCount")
-      , s"${commsConsoleReportPath}/UsersCompleted6PrarambhCoursesPendingFullCompletion", fileName="UsersCompleted6PrarambhCoursesPendingFullCompletion")
-    generateReport(prarambhUserDataWithCompletionCountsDF.filter(col("prarambhCompletionCount") === prarambhCourseCount).drop("prarambhCompletionCount")
+    if(!prarambhUserDataWithCompletionCountsDF.isEmpty) {
+      generateReport(prarambhUserDataWithCompletionCountsDF.filter(col("prarambhCompletionCount") === prarambhCompletionCount).drop("prarambhCompletionCount")
+        , s"${commsConsoleReportPath}/UsersCompleted6PrarambhCoursesPendingFullCompletion", fileName = "UsersCompleted6PrarambhCoursesPendingFullCompletion")
+    }
+    if(!prarambhUserDataWithCompletionCountsDF.isEmpty) {
+      generateReport(prarambhUserDataWithCompletionCountsDF.filter(col("prarambhCompletionCount") === prarambhCourseCount).drop("prarambhCompletionCount")
       , s"${commsConsoleReportPath}/UsersFinishedEntirePrarambhModule", fileName="UsersFinishedEntirePrarambhModule")
+    }
 
     syncReports(s"${conf.localReportDir}/${commsConsoleReportPath}", commsConsoleReportPath)
 
