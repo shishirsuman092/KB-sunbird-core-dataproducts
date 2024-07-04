@@ -142,10 +142,8 @@ object CommsReportModel extends AbsDashboardModel {
         col("completionCount").alias("Content_Completion"),
         col("Last_Updated_On")
       )
-    // generate report is topXCompletionsInNDays is not empty
-    if(!topXCompletionsInNDays.isEmpty) {
-      generateReport(topXCompletionsInNDays, s"${commsConsoleReportPath}/Top1LakhUsersContentCompletionLast15Days", fileName = "Top1LakhUsersContentCompletionLast15Days")
-    }
+    generateReport(topXCompletionsInNDays, s"${commsConsoleReportPath}/Top1LakhUsersContentCompletionLast15Days", fileName = "Top1LakhUsersContentCompletionLast15Days")
+
     val prarambhCourses = conf.commsConsolePrarambhCbpIds.split(",").map(_.trim).toList
     val rozgarTags =  conf.commsConsolePrarambhTags.split(",").map(_.trim).toList
     val checkForRozgarTag = rozgarTags.map(value => expr(s"lower(tag) like '%$value%'")).reduce(_ or _)
@@ -176,14 +174,10 @@ object CommsReportModel extends AbsDashboardModel {
         col("prarambhCompletionCount")
       )
 
-    if(!prarambhUserDataWithCompletionCountsDF.isEmpty) {
-      generateReport(prarambhUserDataWithCompletionCountsDF.filter(col("prarambhCompletionCount") === prarambhCompletionCount).drop("prarambhCompletionCount")
-        , s"${commsConsoleReportPath}/UsersCompleted6PrarambhCoursesPendingFullCompletion", fileName = "UsersCompleted6PrarambhCoursesPendingFullCompletion")
-    }
-    if(!prarambhUserDataWithCompletionCountsDF.isEmpty) {
-      generateReport(prarambhUserDataWithCompletionCountsDF.filter(col("prarambhCompletionCount") === prarambhCourseCount).drop("prarambhCompletionCount")
-      , s"${commsConsoleReportPath}/UsersFinishedEntirePrarambhModule", fileName="UsersFinishedEntirePrarambhModule")
-    }
+    generateReport(prarambhUserDataWithCompletionCountsDF.filter(col("prarambhCompletionCount") === prarambhCompletionCount).drop("prarambhCompletionCount")
+      , s"${commsConsoleReportPath}/UsersCompleted6PrarambhCoursesPendingFullCompletion", fileName = "UsersCompleted6PrarambhCoursesPendingFullCompletion")
+    generateReport(prarambhUserDataWithCompletionCountsDF.filter(col("prarambhCompletionCount") === prarambhCourseCount).drop("prarambhCompletionCount")
+    , s"${commsConsoleReportPath}/UsersFinishedEntirePrarambhModule", fileName="UsersFinishedEntirePrarambhModule")
 
     syncReports(s"${conf.localReportDir}/${commsConsoleReportPath}", commsConsoleReportPath)
 
