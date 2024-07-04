@@ -120,10 +120,8 @@ object CommsReportModel extends AbsDashboardModel {
     show(usersCreatedInLastNDaysWithoutEnrollmentsWithUserDetailsDF, "usersCreatedInLastNDaysWithoutEnrollmentsWithUserDetailsDF")
     
     // generate report if usersCreatedInLastNDaysWithoutEnrollmentsWithUserDetailsDF is not empty
-    if (!usersCreatedInLastNDaysWithoutEnrollmentsWithUserDetailsDF.isEmpty) {
     generateReport(usersCreatedInLastNDaysWithoutEnrollmentsWithUserDetailsDF, s"${commsConsoleReportPath}/UsersOnboardedLast15DaysNotSignedUpAnyContent", fileName = "UsersOnboardedLast15DaysNotSignedUpAnyContent")
-    }
-    
+
     //top 60 users ranked by cbp completion in last 15 days
     val topXCompletionsInNDays = enrollmentsDF.filter(col("completionDate").between(dateNDaysAgo, currentDate))
       .groupBy("user_id")
