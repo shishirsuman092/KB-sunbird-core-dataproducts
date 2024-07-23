@@ -9,6 +9,7 @@ import org.ekstep.analytics.dashboard.DashboardUtil._
 import org.ekstep.analytics.dashboard.DataUtil._
 import org.ekstep.analytics.framework._
 import org.joda.time.DateTime
+import org.apache.spark.sql.functions.col
 
 import java.text.SimpleDateFormat
 import java.time.LocalDate
@@ -57,6 +58,13 @@ object DashboardSyncModel extends AbsDashboardModel {
       {userOrgDF.filter(expr("userStatus=1 AND userOrgID IS NOT NULL AND userOrgStatus=1")).select("userOrgID").distinct().count()},
       "orgUserCountDF.count() should equal distinct active org count in userOrgDF")
 
+    //obtain and save total karma points of each user
+    val karmaPointsDataDF = userKarmaPointsDataFrame()
+      .groupBy(col("userid").alias("userID")).agg(sum(col("points")).alias("total_points"))
+
+    val kPointsWithUserOrgDF = karmaPointsDataDF.join(userOrgDF, karmaPointsDataDF("userID") === userOrgDF("userID"), "inner")
+      .select(karmaPointsDataDF("*"), userOrgDF("fullName"), userOrgDF("userOrgID"), userOrgDF("userOrgName"), userOrgDF("professionalDetails.designation").alias("designation"), userOrgDF("userProfileImgUrl"))
+
     val (hierarchyDF, allCourseProgramDetailsWithCompDF, allCourseProgramDetailsDF,
     allCourseProgramDetailsWithRatingDF) = contentDataFrames(orgDF)
 
@@ -83,6 +91,20 @@ object DashboardSyncModel extends AbsDashboardModel {
     Redis.dispatch(conf.redisOrgNameKey, orgNameMap)
     Redis.update(conf.redisTotalRegisteredOfficerCountKey, activeUserCount.toString)
     Redis.update(conf.redisTotalOrgCountKey, activeOrgCount.toString)
+
+    // update redis key for top 10 learners in MDO channel
+    val toJsonStringUDF = udf((userID: String, fullName: String, userOrgName: String, designation: String, userProfileImgUrl: String, total_points: Long, rank: Int) => {
+      s"""{"userID":"$userID","fullName":"$fullName","userOrgName":"$userOrgName","designation":"$designation","userProfileImgUrl":"$userProfileImgUrl","total_points":$total_points,"rank":$rank}"""
+    })
+    val windowSpec = Window.partitionBy("userOrgID").orderBy(col("total_points").desc)
+    val rankedDF = kPointsWithUserOrgDF.withColumn("rank", rank().over(windowSpec))
+    val top10LearnersByMDODF = rankedDF.filter(col("rank") <= 10)
+    val jsonStringDF = top10LearnersByMDODF.withColumn("json_details", toJsonStringUDF(
+      col("userID"), col("fullName"), col("userOrgName"), col("designation"), col("userProfileImgUrl"), col("total_points"), col("rank")
+    )).groupBy("userOrgID").agg(collect_list(col("json_details")).as("top_learners"))
+    val resultDF = jsonStringDF.select(col("userOrgID"), to_json(struct(col("top_learners"))).alias("top_learners"))
+
+    Redis.dispatchDataFrame[String]("dashboard_top_10_learners_on_kp_by_user_org", resultDF, "userOrgID", "top_learners")
 
     // update redis data for learner home page
     updateLearnerHomePageData(orgDF, userOrgDF, userCourseProgramCompletionDF)
@@ -123,14 +145,21 @@ object DashboardSyncModel extends AbsDashboardModel {
 
     // cbp-wise live/draft/review/retired/pending-publish course counts
     val allCourseDF = allCourseProgramDetailsWithRatingDF.where(expr("category='Course'"))
-    val liveCourseDF = allCourseProgramDetailsWithRatingDF.where(expr("courseStatus='Live'"))
+    val allCourseModeratedCourseDF = allCourseProgramDetailsWithRatingDF.where(expr("category IN ('Course', 'Moderated Course')"))
+    val liveCourseDF = allCourseDF.where(expr("courseStatus='Live'"))
+    val liveCourseModeratedCourseDF = allCourseModeratedCourseDF.where(expr("courseStatus='Live'"))
     val draftCourseDF = allCourseDF.where(expr("courseStatus='Draft'"))
     val reviewCourseDF = allCourseDF.where(expr("courseStatus='Review'"))
     val retiredCourseDF = allCourseDF.where(expr("courseStatus='Retired'"))
     val pendingPublishCourseDF = reviewCourseDF.where(expr("courseReviewStatus='Reviewed'"))
+    val liveContentDF = allCourseProgramDetailsWithRatingDF.where(expr("courseStatus='Live'"))
 
     val liveCourseCountByCBPDF = liveCourseDF.groupBy("courseOrgID").agg(count("*").alias("count"))
     Redis.dispatchDataFrame[Long]("dashboard_live_course_count_by_course_org", liveCourseCountByCBPDF, "courseOrgID", "count")
+    val liveCourseModeratedCourseByCBPDF = liveCourseModeratedCourseDF.groupBy("courseOrgID").agg(count("*").alias("count"))
+    Redis.dispatchDataFrame[Long]("dashboard_live_course_moderated_course_count_by_course_org", liveCourseModeratedCourseByCBPDF, "courseOrgID", "count")
+    val liveContentCountByCBPDF = liveContentDF.groupBy("courseOrgID").agg(count("*").alias("count"))
+    Redis.dispatchDataFrame[Long]("dashboard_live_content_count_by_course_org", liveContentCountByCBPDF, "courseOrgID", "count")
     val draftCourseCountByCBPDF = draftCourseDF.groupBy("courseOrgID").agg(count("*").alias("count"))
     Redis.dispatchDataFrame[Long]("dashboard_draft_course_count_by_course_org", draftCourseCountByCBPDF, "courseOrgID", "count")
     val reviewCourseCountByCBPDF = reviewCourseDF.groupBy("courseOrgID").agg(count("*").alias("count"))
@@ -147,6 +176,7 @@ object DashboardSyncModel extends AbsDashboardModel {
 
     // Average rating across all live courses with ratings, and by CBP
     val ratedLiveCourseDF = liveCourseDF.where(col("ratingAverage").isNotNull)
+    val ratedLiveCourseModeratedCourseDF = liveCourseModeratedCourseDF.where(col("ratingAverage").isNotNull)
     val avgRatingOverall = ratedLiveCourseDF.agg(avg("ratingAverage").alias("ratingAverage")).select("ratingAverage").first().getDouble(0)
     Redis.update("dashboard_course_average_rating_overall", avgRatingOverall.toString)
     println(s"dashboard_course_average_rating_overall = ${avgRatingOverall}")
@@ -155,12 +185,28 @@ object DashboardSyncModel extends AbsDashboardModel {
     show(avgRatingByCBPDF, "avgRatingByCBPDF")
     Redis.dispatchDataFrame[Double]("dashboard_course_average_rating_by_course_org", avgRatingByCBPDF, "courseOrgID", "ratingAverage")
 
+    val courseModeratedCourseAvgRatingByCBPDF = ratedLiveCourseModeratedCourseDF.groupBy("courseOrgID").agg(avg("ratingAverage").alias("ratingAverage"))
+    show(courseModeratedCourseAvgRatingByCBPDF, "courseModeratedCourseAvgRatingByCBPDF")
+    Redis.dispatchDataFrame[Double]("dashboard_course_moderated_course_average_rating_by_course_org", courseModeratedCourseAvgRatingByCBPDF, "courseOrgID", "ratingAverage")
+
+    // cbpwise content average rating
+    val ratedLiveContentDF = liveContentDF.where(col("ratingAverage").isNotNull)
+    val avgContentRatingByCBPDF = ratedLiveContentDF.groupBy("courseOrgID").agg(avg("ratingAverage").alias("ratingAverage"))
+    show(avgContentRatingByCBPDF, "avgContentRatingByCBPDF")
+    Redis.dispatchDataFrame[Double]("dashboard_content_average_rating_by_course_org", avgContentRatingByCBPDF, "courseOrgID", "ratingAverage")
+
     // enrollment/not-started/started/in-progress/completion count, live and retired courses
-    val liveRetiredCourseEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("courseStatus IN ('Live', 'Retired') AND userStatus=1"))
+    val liveRetiredContentEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("courseStatus IN ('Live', 'Retired') AND userStatus=1"))
+    val liveRetiredCourseEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category='Course' AND courseStatus IN ('Live', 'Retired') AND userStatus=1"))
     val liveRetiredCourseProgramEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category IN ('Course', 'Program') AND courseStatus IN ('Live', 'Retired') AND userStatus=1"))
+    val liveRetiredCourseProgramExcludingModeratedEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category IN ('Course', 'Program', 'Blended Program', 'CuratedCollections', 'Standalone Assessment', 'Curated Program') AND courseStatus IN ('Live', 'Retired') AND userStatus=1"))
+    val liveRetiredCourseModeratedCourseEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category IN ('Course', 'Moderated Course') AND courseStatus IN ('Live', 'Retired') AND userStatus=1"))
+
+    //get only Live counts
     val liveCourseProgramEnrolmentDF = liveRetiredCourseProgramEnrolmentDF.where(expr("courseStatus = 'Live'"))
-    //val liveRetiredCourseProgramExcludingModeratedEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category IN ('Course', 'Program', 'Blended Program', 'CuratedCollections', 'Standalone Assessment', 'Curated Program') AND courseStatus IN ('Live', 'Retired') AND userStatus=1"))
-    val liveCourseProgramExcludingModeratedEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("courseStatus = 'Live'"))
+    val liveCourseProgramExcludingModeratedEnrolmentDF = liveRetiredCourseProgramExcludingModeratedEnrolmentDF.where(expr("courseStatus = 'Live'"))
+    val liveCourseModeratedCourseEnrolmentDF = liveRetiredCourseModeratedCourseEnrolmentDF.where(expr("courseStatus = 'Live'"))
+
     val currentDate = LocalDate.now()
     // Calculate twenty four hours ago
     val twentyFourHoursAgo = currentDate.minusDays(1)
@@ -248,8 +294,10 @@ object DashboardSyncModel extends AbsDashboardModel {
 
     // mdo-wise enrollment/not-started/started/in-progress/completion counts
     val liveRetiredCourseEnrolmentByMDODF = liveRetiredCourseEnrolmentDF.groupBy("userOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
+    val liveRetiredContentEnrolmentByMDODF = liveRetiredContentEnrolmentDF.groupBy("userOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     val liveRetiredCourseEnrolmentsInLast12MonthsByMDODF = liveRetiredCourseEnrolmentsInLast12MonthsDF.groupBy("userOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     Redis.dispatchDataFrame[Long]("dashboard_enrolment_count_by_user_org", liveRetiredCourseEnrolmentByMDODF, "userOrgID", "count")
+    Redis.dispatchDataFrame[Long]("dashboard_enrolment_content_by_user_org", liveRetiredContentEnrolmentByMDODF, "userOrgID", "count")
     Redis.dispatchDataFrame[Long]("dashboard_enrolment_unique_user_count_by_user_org", liveRetiredCourseEnrolmentByMDODF, "userOrgID", "uniqueUserCount")
     Redis.dispatchDataFrame[Long]("dashboard_active_users_last_12_months_by_org", liveRetiredCourseEnrolmentsInLast12MonthsByMDODF, "userOrgID", "uniqueUserCount")
     val liveRetiredCourseNotStartedByMDODF = liveRetiredCourseNotStartedDF.groupBy("userOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
@@ -264,16 +312,15 @@ object DashboardSyncModel extends AbsDashboardModel {
     val liveRetiredCourseCompletedByMDODF = liveRetiredCourseCompletedDF.groupBy("userOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     Redis.dispatchDataFrame[Long]("dashboard_completed_count_by_user_org", liveRetiredCourseCompletedByMDODF, "userOrgID", "count")
     Redis.dispatchDataFrame[Long]("dashboard_completed_unique_user_count_by_user_org", liveRetiredCourseCompletedByMDODF, "userOrgID", "uniqueUserCount")
-    val coreCompetenciesByenrolmentsCompletionsDF = liveRetiredCourseEnrolmentsCompletionsDF.join(allCourseProgramCompetencyDF, "courseID").select("userOrgID", "competencyName")
-    // Aggregating competencyName for each userOrgID
-    val coreCompetenciesByenrolmentsCompletionsByMDODF = coreCompetenciesByenrolmentsCompletionsDF.groupBy("userOrgID").agg(collect_set("competencyName").as("uniqueCompetencyList"))
-      .withColumn("uniqueCompetencyList", concat_ws(", ", col("uniqueCompetencyList")))
-    Redis.dispatchDataFrame[Long]("dashboard_core_competencies_by_user_org", coreCompetenciesByenrolmentsCompletionsByMDODF, "userOrgID", "uniqueCompetencyList")
 
 
     // cbp-wise enrollment/not-started/started/in-progress/completion counts
     val liveRetiredCourseEnrolmentByCBPDF = liveRetiredCourseEnrolmentDF.groupBy("courseOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
+    val liveRetiredCourseModeratedCourseEnrolmentByCBPDF = liveRetiredCourseModeratedCourseEnrolmentDF.groupBy("courseOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
+    val liveRetiredContentEnrolmentByCBPDF = liveRetiredContentEnrolmentDF.groupBy("courseOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     Redis.dispatchDataFrame[Long]("dashboard_enrolment_count_by_course_org", liveRetiredCourseEnrolmentByCBPDF, "courseOrgID", "count")
+    Redis.dispatchDataFrame[Long]("dashboard_course_moderated_course_enrolment_count_by_course_org", liveRetiredCourseModeratedCourseEnrolmentByCBPDF, "courseOrgID", "count")
+    Redis.dispatchDataFrame[Long]("dashboard_enrolment_content_by_course_org", liveRetiredContentEnrolmentByCBPDF, "courseOrgID", "count")
     Redis.dispatchDataFrame[Long]("dashboard_enrolment_unique_user_count_by_course_org", liveRetiredCourseEnrolmentByCBPDF, "courseOrgID", "uniqueUserCount")
     val liveRetiredCourseNotStartedByCBPDF = liveRetiredCourseNotStartedDF.groupBy("courseOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     Redis.dispatchDataFrame[Long]("dashboard_not_started_count_by_course_org", liveRetiredCourseNotStartedByCBPDF, "courseOrgID", "count")
@@ -290,24 +337,75 @@ object DashboardSyncModel extends AbsDashboardModel {
 
 
     // cbp wise total certificate generations, competencies and top 10 content by completions for ati cti web page
-    val certificateGeneratedDF = liveRetiredCourseCompletedDF.filter($"certificateGeneratedOn".isNotNull && $"certificateGeneratedOn" =!= "")
+    val certificateGeneratedDF = liveRetiredContentEnrolmentDF.filter($"certificateGeneratedOn".isNotNull && $"certificateGeneratedOn" =!= "")
     val certificateGeneratedByCBPDF = certificateGeneratedDF.groupBy("courseOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     Redis.dispatchDataFrame[Long]("dashboard_certificates_generated_count_by_course_org", certificateGeneratedByCBPDF, "courseOrgID", "count")
-    val competencyCountByCBPDF = allCourseProgramCompetencyDF.groupBy("courseOrgID").agg(countDistinct("competencyName").alias("uniqueCompetencyCount"))
-    Redis.dispatchDataFrame[Long]("dashboard_competencies_count_by_course_org", competencyCountByCBPDF, "courseOrgID", "uniqueCompetencyCount")
-    val liveCourseProgramExcludingModeratedBYCBPDF = liveCourseProgramExcludingModeratedCompletedDF
-      .groupBy("courseOrgID", "courseID")
-      .agg(count("*").alias("count")) // Collect all courseIDs for each courseOrgID
+
+    val courseModeratedCourseCertificateGeneratedDF = liveRetiredCourseModeratedCourseEnrolmentDF.filter($"certificateGeneratedOn".isNotNull && $"certificateGeneratedOn" =!= "")
+    val courseModeratedCourseCertificateGeneratedByCBPDF = courseModeratedCourseCertificateGeneratedDF.groupBy("courseOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
+    Redis.dispatchDataFrame[Long]("dashboard_course_moderated_course_certificates_generated_count_by_course_org", courseModeratedCourseCertificateGeneratedByCBPDF, "courseOrgID", "count")
+
+    val courseIDCountsByCBPDF = liveRetiredContentEnrolmentDF.groupBy("courseOrgID", "courseID").count()
+    val sortedCourseIDCountsByCBPDF = courseIDCountsByCBPDF.orderBy(col("count").desc)
+    val courseIDsByCBPConcatenatedDF = sortedCourseIDCountsByCBPDF.groupBy("courseOrgID").agg(concat_ws(",", collect_list("courseID")).alias("sortedCourseIDs"))
+    val competencyCountByCBPDF = courseIDsByCBPConcatenatedDF.withColumnRenamed("courseOrgID", "courseOrgID").withColumnRenamed("sortedCourseIDs", "courseIDs")
+    Redis.dispatchDataFrame[Long]("dashboard_competencies_count_by_course_org", competencyCountByCBPDF, "courseOrgID", "courseIDs")
+
+    // get the count for each courseID
+    val topContentCountDF = liveCourseProgramExcludingModeratedCompletedDF.groupBy("courseID").agg(count("*").alias("count"))
+
+    // Join count back to main DataFrame
+    val liveCourseProgramExcludingModeratedCompletedWithCountDF = liveCourseProgramExcludingModeratedCompletedDF.join(topContentCountDF, "courseID")
+
+    // define a windowspec
     val windowSpec = Window.partitionBy("courseOrgID").orderBy(col("count").desc)
-    val liveCourseProgramExcludingModeratedFinalBYCBPDF = liveCourseProgramExcludingModeratedBYCBPDF.withColumn("ranked_courseID", collect_list(col("courseID")).over(windowSpec))
 
-    val liveRetiredTop10CourseCompletedByCBPDF = liveCourseProgramExcludingModeratedFinalBYCBPDF
+    val topCoursesByCBPDF = liveCourseProgramExcludingModeratedCompletedWithCountDF
+      .filter($"category" === "Course")
+      .withColumn("sorted_courseIDs", concat_ws(",", collect_set($"courseID").over(windowSpec)))
       .groupBy("courseOrgID")
-      .agg(concat_ws(",", array_distinct(flatten(collect_list(col("ranked_courseID"))))).alias("sorted_courseIDs"))
+      .agg(
+        concat_ws(",", collect_set($"sorted_courseIDs")).alias("sorted_courseIDs"),
+        concat(col("courseOrgID"), lit(":courses")).alias("courseOrgID:content"))
+      .select("courseOrgID:content","sorted_courseIDs")
+    show(topCoursesByCBPDF, "coursesDF")
+    val topProgramsByCBPDF = liveCourseProgramExcludingModeratedCompletedWithCountDF
+      .filter($"category" === "Program")
+      .withColumn("sorted_courseIDs", concat_ws(",", collect_set($"courseID").over(windowSpec)))
+      .groupBy("courseOrgID")
+      .agg(
+        concat_ws(",", collect_set($"sorted_courseIDs")).alias("sorted_courseIDs"),
+        concat(col("courseOrgID"), lit(":programs")).alias("courseOrgID:content"))
+      .select("courseOrgID:content","sorted_courseIDs")
+
+    val topAssessmentsByCBPDF = liveCourseProgramExcludingModeratedCompletedWithCountDF
+      .filter($"category" === "Standalone Assessment")
+      .withColumn("sorted_courseIDs", concat_ws(",", collect_set($"courseID").over(windowSpec)))
+      .groupBy("courseOrgID")
+      .agg(concat_ws(",", collect_set($"sorted_courseIDs")).alias("sorted_courseIDs"),
+        concat(col("courseOrgID"), lit(":assessments")).alias("courseOrgID:content")
+      )
+      .select("courseOrgID:content","sorted_courseIDs")
+    val combinedDFByCBP = topCoursesByCBPDF.union(topProgramsByCBPDF).union(topAssessmentsByCBPDF)
+
+    Redis.dispatchDataFrame[String]("dashboard_top_10_courses_by_completion_by_course_org", combinedDFByCBP, "courseOrgID:content", "sorted_courseIDs")
+
+    // DSR new keys monthly active users and certificate issued yesterday
+    val averageMonthlyActiveUsersCount = averageMonthlyActiveUsersDataFrame()
+    Redis.update("dashboard_average_monthly_active_users_last_30_days", averageMonthlyActiveUsersCount.toString)
+    println(s"dashboard_average_monthly_active_users_last_30_days = ${averageMonthlyActiveUsersCount}")
 
 
-    // Dispatch DataFrame to Redis
-    Redis.dispatchDataFrame[String]("dashboard_top_10_courses_by_completion_by_course_org", liveRetiredTop10CourseCompletedByCBPDF, "courseOrgID", "sorted_courseIDs")
+    println("This is the 24 hours ago start of the day =====")
+    println(twentyFourHoursAgoLocalDateTime)
+    val tmpDF = liveRetiredCourseModeratedCourseEnrolmentDF.filter($"certificateGeneratedOn".isNotNull && $"certificateGeneratedOn" =!= "").select(col("certificateGeneratedOn"))
+    show(tmpDF, "tmpDF to see the datetime type")
+    val twenteyFourHoursAgoLocalDateTimeString = (twentyFourHoursAgoLocalDateTime.toString)+":00+0000"
+    val courseModeratedCourseCertificateGeneratedYesterdayDF = liveRetiredCourseModeratedCourseEnrolmentDF.filter($"certificateGeneratedOn".isNotNull && $"certificateGeneratedOn" =!= "" && $"certificateGeneratedOn" >= twenteyFourHoursAgoLocalDateTimeString)
+    val courseModeratedCourseCertificateGeneratedYesterdayCountDF = courseModeratedCourseCertificateGeneratedYesterdayDF.agg(count("*").alias("count"))
+    val courseModeratedCourseCertificateGeneratedYesterdayCount = courseModeratedCourseCertificateGeneratedYesterdayCountDF.select("count").first().getLong(0)
+    Redis.update("dashboard_course_moderated_course_certificates_generated_yesterday_count", courseModeratedCourseCertificateGeneratedYesterdayCount.toString)
+
 
     // courses enrolled/completed at-least once, only live courses
     val liveCourseEnrolmentDF = liveRetiredCourseEnrolmentDF.where(expr("courseStatus='Live'"))
@@ -334,26 +432,31 @@ object DashboardSyncModel extends AbsDashboardModel {
     Redis.dispatchDataFrame[Long]("dashboard_courses_completed_at_least_once_by_user_org", liveCourseCompletedAtLeastOnceByMDODF, "userOrgID", "count")
 
     //mdo-wise 24 hour login percentage and certificates acquired
-
     val query = """SELECT dimension_channel AS userOrgID, COUNT(DISTINCT(uid)) as activeCount FROM \"summary-events\" WHERE dimensions_type='app' AND __time > CURRENT_TIMESTAMP - INTERVAL '24' HOUR GROUP BY 1"""
     var usersLoggedInLast24HrsByMDODF = druidDFOption(query, conf.sparkDruidRouterHost).orNull
     if (usersLoggedInLast24HrsByMDODF == null)
-      {
-        print("Empty dataframe: usersLoggedInLast24HrsByMDODF")
-      }
+    {
+      print("Empty dataframe: usersLoggedInLast24HrsByMDODF")
+    }
     else
-      {
-        usersLoggedInLast24HrsByMDODF = usersLoggedInLast24HrsByMDODF.withColumn("activeCount", expr("CAST(activeCount as LONG)"))
-        val loginPercentDF = usersLoggedInLast24HrsByMDODF.join(activeUsersByMDODF, Seq("userOrgID"))
-        // Calculating login percentage
-        val loginPercentbyMDODF = loginPercentDF.withColumn("loginPercentage", ((col("activeCount") / col("count")) * 100))
-        // Selecting required columns
-        val loginPercentLast24HrsbyMDODF = loginPercentbyMDODF.select("userOrgID", "loginPercentage")
-        Redis.dispatchDataFrame[Long]("dashboard_login_percent_last_24_hrs_by_user_org", loginPercentLast24HrsbyMDODF, "userOrgID", "loginPercentage")
-      }
-
+    {
+      usersLoggedInLast24HrsByMDODF = usersLoggedInLast24HrsByMDODF.withColumn("activeCount", expr("CAST(activeCount as LONG)"))
+      val loginPercentDF = usersLoggedInLast24HrsByMDODF.join(activeUsersByMDODF, Seq("userOrgID"))
+      // Calculating login percentage
+      val loginPercentbyMDODF = loginPercentDF.withColumn("loginPercentage", ((col("activeCount") / col("count")) * 100))
+      // Selecting required columns
+      val loginPercentLast24HrsbyMDODF = loginPercentbyMDODF.select("userOrgID", "loginPercentage")
+      Redis.dispatchDataFrame[Long]("dashboard_login_percent_last_24_hrs_by_user_org", loginPercentLast24HrsbyMDODF, "userOrgID", "loginPercentage")
+    }
     val certificateGeneratedByMDODF = certificateGeneratedDF.groupBy("userOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     Redis.dispatchDataFrame[Long]("dashboard_certificates_generated_count_by_user_org", certificateGeneratedByMDODF, "userOrgID", "count")
+
+    //mdo wise core competencies (providing the courses)
+    val courseIDCountsByMDODF = liveRetiredContentEnrolmentDF.groupBy("userOrgID", "courseID").count()
+    val sortedCourseIDCountsByMDODF = courseIDCountsByMDODF.orderBy(col("count").desc)
+    val courseIDsByMDOConcatenatedDF = sortedCourseIDCountsByMDODF.groupBy("userOrgID").agg(concat_ws(",", collect_list("courseID")).alias("sortedCourseIDs"))
+    val competencyCountByMDODF = courseIDsByMDOConcatenatedDF.withColumnRenamed("userOrgID", "userOrgID").withColumnRenamed("sortedCourseIDs", "courseIDs")
+    Redis.dispatchDataFrame[Long]("dashboard_core_competencies_by_user_org", competencyCountByMDODF, "userOrgID", "courseIDs")
 
 
     // Top 5 Users - By course completion
@@ -459,6 +562,22 @@ object DashboardSyncModel extends AbsDashboardModel {
     Redis.update("dashboard_top_5_mdo_by_live_courses", top5MdoByLiveCoursesJson)
 
     // new redis updates - end
+  }
+
+  def averageMonthlyActiveUsersDataFrame()(implicit spark: SparkSession, conf: DashboardConfig) : Long = {
+    val query = """SELECT ROUND(AVG(daily_count * 1.0), 0) as DAUOutput FROM (SELECT COUNT(DISTINCT(actor_id)) AS daily_count, TIME_FLOOR(__time + INTERVAL '05:30' HOUR TO MINUTE, 'P1D') AS day_start FROM \"telemetry-events-syncts\" WHERE eid='IMPRESSION' AND actor_type='User' AND __time > CURRENT_TIMESTAMP - INTERVAL '30' DAY GROUP BY 2)"""
+    var df = druidDFOption(query, conf.sparkDruidRouterHost).orNull
+    var averageMonthlyActiveUserCount = 0L
+    if (df == null || df.isEmpty) return averageMonthlyActiveUserCount
+    else
+    {
+      df = df.withColumn("DAUOutput", expr("CAST(DAUOutput as LONG)"))
+      df = df.withColumn("DAUOutput", col("DAUOutput").cast("long"))
+      averageMonthlyActiveUserCount = df.select("DAUOutput").first().getLong(0)
+    }
+    println("======222222222222=========")
+    println(averageMonthlyActiveUserCount)
+    averageMonthlyActiveUserCount
   }
 
   def updateLearnerHomePageData(orgDF: DataFrame, userOrgDF: DataFrame, userCourseProgramCompletionDF: DataFrame)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
@@ -588,6 +707,17 @@ object DashboardSyncModel extends AbsDashboardModel {
 
     print("trending certifications :" +courseIdsString + "\n")
     Redis.updateMapField("lhp_trending", "across:certifications", courseIdsString)
+
+    val topNCertificationsByMDO = certificationsOfTheWeek
+      .groupBy("userOrgID", "courseID")
+      .agg(count("*").alias("courseCount"))
+      .orderBy(desc("courseCount"))
+      .groupBy("userOrgID")
+      .agg(concat_ws(",", collect_list("courseID")).alias("certifications"))
+      .withColumn("userOrgID:certifications", concat(col("userOrgID"), lit(":certifications")))
+      .limit(10)
+    show(topNCertificationsByMDO, "topNCertificationsByMDO")
+    Redis.dispatchDataFrame[String]("lhp_trending", topNCertificationsByMDO, "userOrgID:certifications", "certifications", replace = false)
   }
 
   def processTrending(allCourseProgramCompletionWithDetailsDF: DataFrame)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
@@ -631,7 +761,7 @@ object DashboardSyncModel extends AbsDashboardModel {
       .filter(col("userOrgID:courses").isNotNull && col("userOrgID:courses") =!= "")
 
     val trendingProgramsByOrg = allCourseProgramCompletionWithDetailsDF
-      .filter("dbCompletionStatus IN (0, 1, 2) AND courseStatus = 'Live' AND category  IN ('Blended Program', 'Curated Program')")
+      .filter("dbCompletionStatus IN (0, 1, 2) AND courseStatus = 'Live' AND category IN ('Blended Program', 'Curated Program')")
       .groupBy("userOrgID", "courseID")
       .agg(count("*").alias("enrollmentCount"))
       .groupByLimit(Seq("userOrgID"), "enrollmentCount", 50, desc = true)
@@ -690,13 +820,13 @@ object DashboardSyncModel extends AbsDashboardModel {
       .join(allCourseProgramDetailsWithRatingDF, col("activityid").equalTo(col("courseID")), "inner")
       .filter(col("review").isNotNull && col("rating").>=("4.5"))
 
-      ratingDf = ratingDf.select(
-        col("activityid").alias("courseID"),
-        col("courseOrgID"),
-        col("activitytype"),
-        col("rating"),
-        col("userid").alias("userID"),
-        col("review")
+    ratingDf = ratingDf.select(
+      col("activityid").alias("courseID"),
+      col("courseOrgID"),
+      col("activitytype"),
+      col("rating"),
+      col("userid").alias("userID"),
+      col("review")
     ).orderBy(col("courseOrgID"))
 
     show(ratingDf)
