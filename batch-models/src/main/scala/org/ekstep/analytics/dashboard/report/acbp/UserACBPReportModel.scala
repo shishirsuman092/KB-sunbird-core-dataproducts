@@ -20,7 +20,6 @@ object UserACBPReportModel extends AbsDashboardModel {
     // get user and org data frames
     var (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
     val orgHierarchyData = orgHierarchyDataframe()
-
     val userDataDF = userOrgDF
       .join(orgHierarchyData, Seq("userOrgID"), "left")
       .withColumn("designation", coalesce(col("professionalDetails.designation"), lit("")))
@@ -56,6 +55,7 @@ object UserACBPReportModel extends AbsDashboardModel {
     // get cbplan data for warehouse
     val cbPlanWarehouseDF = acbpAllEnrolmentDF
       .withColumn("allotment_to", expr("CASE WHEN assignmentType='CustomUser' THEN userID WHEN assignmentType= 'Designation' THEN designation WHEN assignmentType = 'AllUser' THEN 'All Users' ELSE 'No Records' END"))
+      .withColumn("data_last_generated_on", currentDateTime)
       .select(
         col("userOrgID").alias("org_id"),
         col("acbpCreatedBy").alias("created_by"),
@@ -68,7 +68,9 @@ object UserACBPReportModel extends AbsDashboardModel {
         date_format(col("completionDueDate"), "yyyy-MM-dd").alias("due_by"),
         //col("allocatedOn").alias("allocated_on"),
         //col("completionDueDate").alias("due_by"),
-        col("acbpStatus").alias("status"))
+        col("acbpStatus").alias("status"),
+        col("data_last_generated_on")
+      )
       .distinct().orderBy("org_id","created_by","cbPlanName")
     show(cbPlanWarehouseDF, "cbPlanWarehouseDF")
 

@@ -36,8 +36,8 @@ object KCMModel extends AbsDashboardModel {
     val competencyContentMappingDF = cbpDetails
       .join(competencyJoinedDF, Seq("courseID"), "left")
       .dropDuplicates(Seq("courseID","competency_area_id","competency_theme_id","competency_sub_theme_id"))
-    val contentMappingDF = competencyContentMappingDF
-      .select(col("courseID").alias("course_id"), col("competency_area_id"), col("competency_theme_id"), col("competency_sub_theme_id"))
+    val contentMappingDF = competencyContentMappingDF.withColumn("data_last_generated_on", currentDateTime)
+      .select(col("courseID").alias("course_id"), col("competency_area_id"), col("competency_theme_id"), col("competency_sub_theme_id"), col("data_last_generated_on"))
     show(contentMappingDF, "competency content mapping df")
 
     generateReport(contentMappingDF.coalesce(1), s"${reportPathContentCompetencyMapping}-warehouse")
@@ -70,8 +70,10 @@ object KCMModel extends AbsDashboardModel {
       .withColumn("competency_theme_type", col("jsonThemeType.themeType"))
       .join(competencyDataDF, col("id")===col("competency_sub_theme_id"))
       .withColumnRenamed("name","competency_sub_theme").withColumnRenamed("description","competency_sub_theme_description")
+      .withColumn("data_last_generated_on", currentDateTime)
       .select("competency_area_id", "competency_area", "competency_area_description", "competency_theme_type",
-        "competency_theme_id", "competency_theme", "competency_theme_description", "competency_sub_theme_id", "competency_sub_theme", "competency_sub_theme_description")
+        "competency_theme_id", "competency_theme", "competency_theme_description", "competency_sub_theme_id",
+        "competency_sub_theme", "competency_sub_theme_description","data_last_generated_on")
     show(competencyDetailsDF, "Competency details dataframe")
 
     generateReport(competencyDetailsDF.coalesce(1), s"${reportPathCompetencyHierarchy}-warehouse")

@@ -22,7 +22,6 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
     val today = getDate()
 
     var (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
-
     // get course details, with rating info
     val (hierarchyDF, allCourseProgramDetailsWithCompDF, allCourseProgramDetailsDF,
     allCourseProgramDetailsWithRatingDF) = contentDataFrames(orgDF, Seq("Course", "Program", "Blended Program", "Standalone Assessment", "Curated Program"), runValidation = false)
@@ -120,7 +119,7 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
     }
 
     val warehouseDF = finalDF
-      .withColumn("data_last_generated_on", date_format(current_timestamp(), "yyyy-MM-dd HH:mm:ss a"))
+      .withColumn("data_last_generated_on", currentDateTime)
       .select(
         col("userID").alias("user_id"),
         col("course_id").alias("content_id"),

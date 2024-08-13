@@ -56,8 +56,8 @@ object DataExhaustModel extends AbsDashboardModel {
     // ES content
     val primaryCategories = Seq("Course","Program","Blended Program","Curated Program","Standalone Assessment","CuratedCollections","Moderated Course")
     val shouldClause = primaryCategories.map(pc => s"""{"match":{"primaryCategory.raw":"${pc}"}}""").mkString(",")
-    val fields = Seq("identifier", "name", "primaryCategory", "status", "reviewStatus", "channel", "duration", "leafNodesCount", "lastPublishedOn", "lastStatusChangedOn", "createdFor", "competencies_v5", "programDirectorName")
-    val arrayFields = Seq("createdFor")
+    val fields = Seq("identifier", "name", "primaryCategory", "status", "reviewStatus", "channel", "duration", "leafNodesCount", "lastPublishedOn", "lastStatusChangedOn", "createdFor", "competencies_v5", "programDirectorName","language")
+    val arrayFields = Seq("createdFor","language")
     val fieldsClause = fields.map(f => s""""${f}"""").mkString(",")
     val query = s"""{"_source":[${fieldsClause}],"query":{"bool":{"should":[${shouldClause}]}}}"""
     val esContentDF = elasticSearchDataFrame(conf.sparkElasticsearchConnectionHost, "compositesearch", query, fields, arrayFields)
@@ -92,13 +92,15 @@ object DataExhaustModel extends AbsDashboardModel {
       .withColumn("is_content_provider",
         when(col("orgType").cast("int") === 128 || col("orgType").cast("int") === 128, lit("Y")).otherwise(lit("N")))
       .withColumn("organization", when(col("ministry").isNotNull && col("department").isNotNull, col("mdo_name")).otherwise(null))
-      .withColumn("data_last_generated_on", date_format(current_timestamp(), "yyyy-MM-dd HH:mm:ss a"))
+      .withColumn("data_last_generated_on", currentDateTime)
       .distinct()
       .drop("orgType")
       .dropDuplicates(Seq("mdo_id"))
       .repartition(16)
     show(orgHierarchyDF, "orgHierarchyDF")
     cache.write(orgHierarchyDF, "orgHierarchy")
+    show(orgPostgresDF, "orgCompleteHierarchyDF")
+    cache.write(orgPostgresDF, "orgCompleteHierarchy")
 
     val userDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraUserTable)
     show(userDF, "userDF")
@@ -108,8 +110,13 @@ object DataExhaustModel extends AbsDashboardModel {
     show(learnerLeaderboardDF, "learnerLeaderboardDF")
     cache.write(learnerLeaderboardDF, "learnerLeaderBoard")
 
+    val userKarmaPointsDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraKarmaPointsTable)
+    show(userKarmaPointsDF, "Karma Points data")
+    cache.write(userKarmaPointsDF, "userKarmaPoints")
+
     val userKarmaPointsSummaryDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraKarmaPointsSummaryTable)
     show(userKarmaPointsSummaryDF, "userKarmaPointsSummaryDF")
     cache.write(userKarmaPointsSummaryDF, "userKarmaPointsSummary")
   }
 }
+

@@ -78,6 +78,7 @@ case class DashboardConfig (
                              cassandraKarmaPointsSummaryTable: String,
                              cassandraLearnerLeaderBoardTable: String,
                              cassandraLearnerLeaderBoardLookupTable: String,
+                             cassandraMDOLearnerLeaderboardTable: String,
 
                              //warehouse tables;
                              appPostgresHost: String,
@@ -267,6 +268,7 @@ object DashboardConfigParser extends Serializable {
       cassandraKarmaPointsSummaryTable = getConfigModelParam(config, "cassandraKarmaPointsSummaryTable"),
       cassandraLearnerLeaderBoardTable = getConfigModelParam(config, "cassandraLearnerLeaderBoardTable"),
       cassandraLearnerLeaderBoardLookupTable = getConfigModelParam(config, "cassandraLearnerLeaderBoardLookupTable"),
+      cassandraMDOLearnerLeaderboardTable = getConfigModelParam(config, "cassandraMDOLearnerLeaderboardTable"),
 
       // redis keys
       redisRegisteredOfficerCountKey = "mdo_registered_officer_count",
@@ -379,9 +381,8 @@ object StorageUtil extends Serializable {
     val storageEndpoint = AppConf.getConfig("cloud_storage_endpoint_with_protocol")
     val storageType = "gcloud"
     val storageKey = AppConf.getConfig(config.key)
-    println(s"conf key value ${config.key}")
     val storageSecret = AppConf.getConfig(config.secret)
-    println(s"Storage key value ${storageKey}")
+
     val storageService = if ("s3".equalsIgnoreCase(storageType) && !"".equalsIgnoreCase(storageEndpoint)) {
       new CustomS3StorageService(
         StorageConfig(storageType, storageKey, storageSecret, Option(storageEndpoint))
@@ -604,6 +605,8 @@ object DashboardUtil extends Serializable {
     val endOfWeek = startOfWeek.plusDays(6).withTime(23, 59, 59, 999)
     (formatter.print(startOfWeek), dateFormatter.print(endOfWeek), formatter.print(endOfWeek), dateFormatter.print(dataTillDate))
   }
+
+  val currentDateTime = date_format(current_timestamp(), "yyyy-MM-dd HH:mm:ss a")
 
   /* Util functions */
   def csvWrite(df: DataFrame, path: String, header: Boolean = true, saveMode: SaveMode = SaveMode.Overwrite): Unit = {

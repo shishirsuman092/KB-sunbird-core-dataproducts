@@ -64,16 +64,17 @@ object UserReportModel extends AbsDashboardModel {
       .coalesce(1)
 
     val reportPath = s"${conf.userReportPath}/${today}"
-    // generateReport(fullReportDF, s"${reportPath}-full")
+    //generateReport(fullReportDF, s"${reportPath}-full")
     val mdoWiseReportDF = fullReportDF.drop("userID", "userOrgID", "userCreatedBy")
-
+    // Repartition by mdo_id and write to CSV
     generateReport(mdoWiseReportDF, reportPath,"mdoid", "UserReport")
     // to be removed once new security job is created
     if (conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
     }
     val df_warehouse = userData
-      .withColumn("data_last_generated_on", date_format(current_timestamp(), "yyyy-MM-dd HH:mm:ss a"))
+      .withColumn("marked_as_not_my_user", when(col("userProfileStatus") === "NOT-MY-USER", true).otherwise(false))
+      .withColumn("data_last_generated_on", currentDateTime)
       .select(
         col("userID").alias("user_id"),
         col("userOrgID").alias("mdo_id"),
@@ -94,6 +95,7 @@ object UserReportModel extends AbsDashboardModel {
         col("additionalProperties.externalSystem").alias("external_system"),
         col("additionalProperties.externalSystemId").alias("external_system_id"),
         col("weekly_claps_day_before_yesterday"),
+        col("marked_as_not_my_user"),
         col("data_last_generated_on")
       )
 

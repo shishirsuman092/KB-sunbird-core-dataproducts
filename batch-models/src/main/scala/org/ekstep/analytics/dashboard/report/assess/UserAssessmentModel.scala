@@ -25,7 +25,6 @@ object UserAssessmentModel extends AbsDashboardModel {
 
     // obtain user org data
     var (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
-
     // get course details, with rating info
     val (hierarchyDF, allCourseProgramDetailsWithCompDF, allCourseProgramDetailsDF,
       allCourseProgramDetailsWithRatingDF) = contentDataFrames(orgDF)

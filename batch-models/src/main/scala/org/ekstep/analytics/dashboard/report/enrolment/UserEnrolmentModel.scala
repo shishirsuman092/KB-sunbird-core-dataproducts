@@ -151,7 +151,7 @@ object UserEnrolmentModel extends AbsDashboardModel {
     val warehouseDF = df
       .withColumn("certificate_generated_on",date_format(from_utc_timestamp(to_utc_timestamp(to_timestamp(
         col("certificateGeneratedOn"), "yyyy-MM-dd'T'HH:mm:ss.SSS"), "UTC"), "IST"), "yyyy-MM-dd HH:mm:ss"))
-      .withColumn("data_last_generated_on", date_format(current_timestamp(), "yyyy-MM-dd HH:mm:ss a"))
+      .withColumn("data_last_generated_on", currentDateTime)
       .select(
         col("userID").alias("user_id"),
         col("batchID").alias("batch_id"),
@@ -169,8 +169,8 @@ object UserEnrolmentModel extends AbsDashboardModel {
         col("issuedCertificateCount").alias("number_of_certificate"),
         col("userRating").alias("user_rating"),
         col("Certificate_ID").alias("certificate_id"),
-        col("data_last_generated_on"),
-        col("live_cbp_plan_mandate")
+        col("live_cbp_plan_mandate"),
+        col("data_last_generated_on")
       ).dropDuplicates("user_id","batch_id","content_id")
     generateReport(warehouseDF.coalesce(1), s"${reportPath}-warehouse")
 
