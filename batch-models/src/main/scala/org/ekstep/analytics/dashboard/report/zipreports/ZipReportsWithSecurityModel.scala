@@ -38,6 +38,15 @@ object ZipReportsWithSecurityModel extends AbsDashboardModel {
     val specificDate = getDate()
     val kcmFolderPath = s"${conf.localReportDir}/${conf.kcmReportPath}/${specificDate}/ContentCompetencyMapping"
 
+
+    val delDirectory = new File(destinationPath)
+    if(delDirectory.exists() && delDirectory.isDirectory) {
+      delDirectory.listFiles().foreach { file =>
+        print("Deleting the merged folder: " + delDirectory)
+        file.delete()
+      }
+    }
+
     // Method to traverse all the report folders within the source folder and check for specific date folder
     def traverseDirectory(directory: File): Unit = {
       // Get the list of files and directories in the current directory

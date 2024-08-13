@@ -124,7 +124,7 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
       .select(
         col("userID").alias("user_id"),
         col("course_id").alias("content_id"),
-        col("assessID").alias("assessment_id"),
+        col("assessChildID").alias("assessment_id"),
         col("assessChildName").alias("assessment_name"),
         col("assessment_type").alias("assessment_type"),
         col("totalAssessmentDuration").alias("assessment_duration"),

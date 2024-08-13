@@ -3,19 +3,21 @@ package org.ekstep.analytics.dashboard.report.survey.status
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.spark.SparkContext
-import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.functions.{col, from_json, lit, udf}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.sql.{SaveMode, SparkSession}
-
+import org.apache.spark.sql.{Column, DataFrame, SaveMode, SparkSession}
+import org.apache.spark.storage.StorageLevel
 import org.ekstep.analytics.dashboard.DashboardUtil._
 import org.ekstep.analytics.dashboard.DataUtil._
 import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig}
 import org.ekstep.analytics.framework.FrameworkContext
-import org.ekstep.analytics.framework.util.JobLogger
 import org.joda.time.LocalDate
 import org.joda.time.format.DateTimeFormat
 
+import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Paths}
 import java.text.SimpleDateFormat
+import scala.collection.JavaConverters._
 
 object StatusReportModel extends AbsDashboardModel {
 
@@ -26,14 +28,14 @@ object StatusReportModel extends AbsDashboardModel {
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
 
     val today = getDate()
-    JobLogger.log("Querying mongo database to get report configurations")
+    println("Querying mongo database to get report configurations")
     val surveyStatusReportColumnsConfig = getReportConfig("surveyStatusReport")
     val mapper = new ObjectMapper().registerModule(DefaultScalaModule)
     val surveyStatusReportColumnsConfigMap = mapper.readValue(surveyStatusReportColumnsConfig, classOf[Map[String, String]])
     val reportColumnsMap = surveyStatusReportColumnsConfigMap("reportColumns").asInstanceOf[Map[String, String]]
     val userProfileColumnsMap = surveyStatusReportColumnsConfigMap("userProfileColumns").asInstanceOf[Map[String, String]]
     val sortingColumns = surveyStatusReportColumnsConfigMap("sortingColumns")
-    val columnsToBeQueried = reportColumnsMap.keys.mkString(",") + ",userProfile"
+    val columnsToBeQueried = reportColumnsMap.keys.mkString(",") //+ ",userProfile"
     val userProfileSchema = StructType(userProfileColumnsMap.keys.toSeq.map(key => StructField(key, StringType, nullable = true)))
     val reportColumns = reportColumnsMap.keys.toList.map(key => col(key).as(reportColumnsMap(key)))
     val userProfileColumns = userProfileColumnsMap.keys.toList.map(key => col(s"parsedProfile.$key").as(userProfileColumnsMap(key)))
@@ -46,45 +48,45 @@ object StatusReportModel extends AbsDashboardModel {
      */
     val solutionIds = conf.solutionIDs
     if (solutionIds != null && solutionIds.trim.nonEmpty) {
-      JobLogger.log("Processing report requests from the configurations")
+      println("Processing report requests from the configurations")
       val solutionIdsDF = getSolutionIdsAsDF(solutionIds)
 
       solutionIdsDF.collect().foreach { row =>
         val solutionId = row.getString(0)
         val solutionName = row.getString(1)
-        JobLogger.log(s"Started processing report request for solutionId: $solutionId")
+        println(s"Started processing report request for solutionId: $solutionId")
         generateSurveyStatusReport(solutionId, solutionName)
       }
     } else {
-      JobLogger.log("Processing report requests for all solutionId's")
-      JobLogger.log("Querying druid to get all the unique solutionId's")
+      println("Processing report requests for all solutionId's")
+      println("Querying druid to get all the unique solutionId's")
       val solutionIdsDF = loadAllUniqueSolutionIds("sl-survey-meta")
 
       if (conf.includeExpiredSolutionIDs) {
-        JobLogger.log("Generating report for all the expired solutionId's also")
+        println("Generating report for all the expired solutionId's also")
         solutionIdsDF.collect().foreach { row =>
           val solutionId = row.getString(0)
           val solutionName = row.getString(1)
-          JobLogger.log(s"Started processing report request for solutionId: $solutionId")
+          println(s"Started processing report request for solutionId: $solutionId")
           generateSurveyStatusReport(solutionId, solutionName)
         }
       } else {
-        JobLogger.log("Query mongodb to get solution end-date for all the unique solutionId's")
+        println("Query mongodb to get solution end-date for all the unique solutionId's")
         val solutionsEndDateDF = getSolutionsEndDate(solutionIdsDF)
         solutionsEndDateDF.collect().foreach { row =>
           val solutionId = row.getString(0)
           val solutionName = row.getString(1)
           val endDate = new SimpleDateFormat("yyyy-MM-dd").format(row.getDate(1))
           if (endDate != null) {
-            JobLogger.log(s"Started processing report request for solutionId: $solutionId")
+            println(s"Started processing report request for solutionId: $solutionId")
             if (isSolutionWithinReportDate(endDate)) {
-              JobLogger.log(s"Solution with Id $solutionId will ends on $endDate")
+              println(s"Solution with Id $solutionId will ends on $endDate")
               generateSurveyStatusReport(solutionId, solutionName)
             } else {
-              JobLogger.log(s"Solution with Id $solutionId has ended on $endDate date, Hence not generating the report for this ID ")
+              println(s"Solution with Id $solutionId has ended on $endDate date, Hence not generating the report for this ID ")
             }
           } else {
-            JobLogger.log(s"End Date for solutionId: $solutionId is NULL, Hence skipping generating the report for this ID ")
+            println(s"End Date for solutionId: $solutionId is NULL, Hence skipping generating the report for this ID ")
           }
         }
       }
@@ -102,9 +104,9 @@ object StatusReportModel extends AbsDashboardModel {
         endDateOfSolution.isEqual(today) || (endDateOfSolution.isAfter(today) || endDateOfSolution.isAfter(updatedDate)) || endDateOfSolution.isEqual(updatedDate)
       }
     }
-    JobLogger.log("Zipping the csv content folder and syncing to blob storage")
+    println("Zipping the csv content folder and syncing to blob storage")
     zipAndSyncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
-    JobLogger.log("Successfully zipped folder and synced to blob storage")
+    println("Successfully zipped folder and synced to blob storage")
 
     /**
      * This method takes solutionId to query, parse userProfile JSON, append status data and sort the CSV
@@ -112,23 +114,95 @@ object StatusReportModel extends AbsDashboardModel {
      */
     def generateSurveyStatusReport(solutionId: String, solutionName: String) = {
       val dataSource = "sl-survey-meta"
-      val originalSolutionDf = getSolutionIdData(columnsToBeQueried, dataSource, solutionId)
-      JobLogger.log(s"Successfully executed druid query for solutionId: $solutionId")
-      val finalSolutionDf = processProfileData(originalSolutionDf, userProfileSchema, requiredCsvColumns)
-      JobLogger.log(s"Successfully parsed userProfile key for solutionId: $solutionId")
-      val columnsMatch = validateColumns(finalSolutionDf, sortingColumns.split(",").map(_.trim))
+      val batchSize = conf.SurveyStatusReportBatchSize.toInt
+      getSolutionIdData(columnsToBeQueried, dataSource, solutionId, solutionName, batchSize)
+      println(s"-------------- Successfully Generated Survey Status CSV In Batches And Combined Into A Single File For A SolutionId: ${solutionId} --------------")
+    }
 
-      if (columnsMatch == true) {
-        val columnsOrder = sortingColumns.split(",").map(_.trim)
-        val sortedFinalDF = finalSolutionDf.select(columnsOrder.map(col): _*)
-        val solutionsName = solutionName
-          .replaceAll("[^a-zA-Z0-9\\s]", "")
-          .replaceAll("\\s+", " ")
-          .trim()
-        generateReport(sortedFinalDF, s"${reportPath}", fileName = s"${solutionsName}-${solutionId}", fileSaveMode = SaveMode.Append)
-        JobLogger.log(s"Successfully generated survey status csv report for solutionId: $solutionId")
+    def getSolutionIdData(columns: String, dataSource: String, solutionId: String, solutionName: String, batchSize: Int)(implicit spark: SparkSession, conf: DashboardConfig) {
+      import spark.implicits._
+      val surveySubmissionIdQuery = raw"""SELECT DISTINCT(surveySubmissionId) FROM \"$dataSource\" WHERE solutionId='$solutionId'"""
+      val surveySubmissionIds = druidDFOption(surveySubmissionIdQuery, conf.mlSparkDruidRouterHost, limit = 1000000)
+        .getOrElse(spark.emptyDataFrame)
+        .as[String]
+        .collect()
+      println(s"Total ${surveySubmissionIds.length} Survey Submissions for a solutionId: $solutionId")
+      var batchCount = 0
+      surveySubmissionIds.grouped(batchSize).toList.foreach { batchSurveySubmissionIds =>
+        batchCount += 1
+        val batchQuery = raw"""SELECT $columns FROM \"$dataSource\" WHERE solutionId='$solutionId' AND surveySubmissionId IN ('${batchSurveySubmissionIds.mkString("','")}')"""
+        var batchDF = druidDFOption(batchQuery, conf.mlSparkDruidRouterHost, limit = 1000000).getOrElse(spark.emptyDataFrame)
+        batchDF.persist(StorageLevel.DISK_ONLY)
+        if (batchDF.columns.contains("evidences")) {
+          val baseUrl = conf.baseUrlForEvidences
+          val addBaseUrl = udf((evidences: String) => {
+            if (evidences != null && evidences.trim.nonEmpty) {
+              evidences.split(", ")
+                .map(url => s"$baseUrl$url")
+                .mkString(",")
+            } else {
+              evidences
+            }
+          })
+          batchDF = batchDF.withColumn("evidences", addBaseUrl(col("evidences")))
+        }
+        val finalSolutionDf = processProfileData(batchDF, userProfileSchema, requiredCsvColumns)
+        val columnsMatch = validateColumns(finalSolutionDf, sortingColumns.split(",").map(_.trim))
+
+        if (columnsMatch == true) {
+          val columnsOrder = sortingColumns.split(",").map(_.trim)
+          val sortedFinalDF = finalSolutionDf.select(columnsOrder.map(col): _*)
+          generateReport(sortedFinalDF, reportPath, fileSaveMode = SaveMode.Append)
+          println(s"Batch : $batchCount, Successfully generated survey Status csv report for solutionId: $solutionId")
+        } else {
+          println(s"Error occurred while matching the data frame columns with config sort columns for solutionId: $solutionId")
+        }
+        batchDF.unpersist()
+      }
+      val solutionsName = solutionName
+        .replaceAll("[^a-zA-Z0-9\\s]", "")
+        .replaceAll("\\s+", " ")
+        .trim()
+      println(s"Total $batchCount batches processed for solutionId: $solutionId")
+      combineCsvFiles(s"${conf.localReportDir}/${reportPath}", s"${conf.localReportDir}/${reportPath}/${solutionsName}-${solutionId}.csv")
+    }
+
+    def processProfileData(originalDf: DataFrame, profileSchema: StructType, requiredCsvColumns: List[Column])(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
+      val hasUserProfileColumn = originalDf.columns.contains("userProfile")
+      if (hasUserProfileColumn) {
+        val parsedDf = originalDf.withColumn("parsedProfile", from_json(col("userProfile"), profileSchema))
+        parsedDf.select(requiredCsvColumns: _*)
       } else {
-        JobLogger.log(s"Error occurred while matching the dataframe columns with config sort columns for solutionId: $solutionId")
+        val emptyParsedDf = originalDf.withColumn("parsedProfile", lit(null).cast(StringType))
+        emptyParsedDf.select(requiredCsvColumns: _*)
+      }
+    }
+
+    def combineCsvFiles(inputPath: String, outputPath: String): Unit = {
+      val inputDir = Paths.get(inputPath)
+      val outputFilePath = Paths.get(outputPath)
+      val outputStream = Files.newBufferedWriter(outputFilePath, StandardCharsets.UTF_8)
+      var isFirstFile = true
+
+      try {
+        val partFiles = Files.list(inputDir).iterator().asScala
+          .filter(file => file.getFileName.toString.startsWith("part-") && file.getFileName.toString.endsWith(".csv"))
+          .toList
+
+        partFiles.foreach { file =>
+          val lines = Files.readAllLines(file, StandardCharsets.UTF_8).asScala
+          lines.zipWithIndex.foreach { case (line, idx) =>
+            if (isFirstFile || idx > 0) {
+              outputStream.write(line)
+              outputStream.newLine()
+            }
+          }
+          isFirstFile = false
+        }
+        // Delete part files
+        partFiles.foreach(file => Files.delete(file))
+      } finally {
+        outputStream.close()
       }
     }
 

@@ -60,6 +60,7 @@ object UserEnrolmentModel extends AbsDashboardModel {
       .withColumn("completedOn", date_format(col("courseCompletedTimestamp"), "yyyy-MM-dd HH:mm:ss"))
       .withColumn("enrolledOn", date_format(col("courseEnrolledTimestamp"), "yyyy-MM-dd HH:mm:ss"))
       .withColumn("firstCompletedOn", date_format(col("firstCompletedOn"), "yyyy-MM-dd HH:mm:ss"))
+      .withColumn("lastContentAccessTimestamp", date_format(col("lastContentAccessTimestamp"), "yyyy-MM-dd HH:mm:ss"))
       .withColumn("courseLastPublishedOn", to_date(col("courseLastPublishedOn"), "dd/MM/yyyy"))
       .withColumn("courseBatchStartDate", to_date(col("courseBatchStartDate"), "dd/MM/yyyy"))
       .withColumn("courseBatchEndDate", to_date(col("courseBatchEndDate"), "dd/MM/yyyy"))
@@ -71,7 +72,7 @@ object UserEnrolmentModel extends AbsDashboardModel {
       .withColumn("ArchivedOn", to_date(col("ArchivedOn"), "dd/MM/yyyy"))
       .withColumn("Certificate_ID", col("certificateID"))
 
-    df = df.distinct().dropDuplicates("userID", "courseID")
+    df = df.distinct().dropDuplicates("userID", "courseID", "batchID")
 
     // read acbp data and filter the cbp plan based on status
     val acbpDF = acbpDetailsDF().where(col("acbpStatus") === "Live")
@@ -155,15 +156,18 @@ object UserEnrolmentModel extends AbsDashboardModel {
         col("userID").alias("user_id"),
         col("batchID").alias("batch_id"),
         col("courseID").alias("content_id"),
-        col("completionPercentage").alias("content_progress_percentage"),
-        col("completedOn").alias("last_accessed_on"),
-        col("firstCompletedOn").alias("first_completed_on"),
-        col("Certificate_Generated").alias("certificate_generated"),
-        col("certificate_generated_on").alias("certificate_generated_on"),
-        col("userRating").alias("user_rating"),
-        col("courseProgress").alias("resource_count_consumed"),
         col("enrolledOn").alias("enrolled_on"),
+        col("completionPercentage").alias("content_progress_percentage"),
+        col("courseProgress").alias("resource_count_consumed"),
         col("userCourseCompletionStatus").alias("user_consumption_status"),
+        col("firstCompletedOn").alias("first_completed_on"),
+        col("firstCompletedOn").alias("first_certificate_generated_on"),
+        col("completedOn").alias("last_completed_on"),
+        col("certificate_generated_on").alias("last_certificate_generated_on"),
+        col("lastContentAccessTimestamp").alias("content_last_accessed_on"),
+        col("Certificate_Generated").alias("certificate_generated"),
+        col("issuedCertificateCount").alias("number_of_certificate"),
+        col("userRating").alias("user_rating"),
         col("Certificate_ID").alias("certificate_id"),
         col("data_last_generated_on"),
         col("live_cbp_plan_mandate")

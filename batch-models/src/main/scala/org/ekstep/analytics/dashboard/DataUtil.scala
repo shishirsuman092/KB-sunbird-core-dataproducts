@@ -11,11 +11,16 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Column, DataFrame, Row, SparkSession}
 import org.apache.spark.storage.StorageLevel
 import DashboardUtil._
+
+import java.time.{Instant, LocalDate, ZoneOffset, ZonedDateTime}
 import org.ekstep.analytics.framework.{FrameworkContext, StorageConfig}
 
 import java.io.{File, Serializable}
+import java.sql.Timestamp
 import java.util
+import java.util.UUID
 import scala.collection.mutable.ListBuffer
+
 
 
 object DataUtil extends Serializable {
@@ -432,7 +437,6 @@ object DataUtil extends Serializable {
 
     val df = userDF.join(joinOrgDF, Seq("userOrgID"), "left")
     show(df, "userOrgDataFrame")
-
     df
   }
 
@@ -802,7 +806,7 @@ object DataUtil extends Serializable {
   }
 
   def validatePrimaryCategories(primaryCategories: Seq[String]): Unit = {
-    val allowedCategories = Seq("Course", "Program", "Blended Program", "CuratedCollections", "Standalone Assessment","Curated Program")
+    val allowedCategories = Seq("Course", "Program", "Blended Program", "CuratedCollections", "Standalone Assessment","Moderated Course","Curated Program")
     val notAllowed = primaryCategories.toSet.diff(allowedCategories.toSet)
     if (notAllowed.nonEmpty) {
       throw new Exception(s"Category not allowed: ${notAllowed.mkString(", ")}")
@@ -825,7 +829,7 @@ object DataUtil extends Serializable {
     df
   }
 
-  def contentDataFrames(orgDF: DataFrame, primaryCategories: Seq[String] = Seq("Course","Program","Blended Program","Curated Program","Standalone Assessment","CuratedCollections"), runValidation: Boolean = true)(implicit spark: SparkSession, conf: DashboardConfig): (DataFrame, DataFrame, DataFrame, DataFrame) = {
+  def contentDataFrames(orgDF: DataFrame, primaryCategories: Seq[String] = Seq("Course","Program","Blended Program","Curated Program","Moderated Course","Standalone Assessment","CuratedCollections"), runValidation: Boolean = true)(implicit spark: SparkSession, conf: DashboardConfig): (DataFrame, DataFrame, DataFrame, DataFrame) = {
     validatePrimaryCategories(primaryCategories)
 
     val hierarchyDF = contentHierarchyDataFrame()
@@ -1022,9 +1026,10 @@ object DataUtil extends Serializable {
       .withColumn("courseEnrolledTimestamp", col("enrolled_date"))
       .withColumn("lastContentAccessTimestamp", col("lastcontentaccesstime"))
       .withColumn("issuedCertificateCount", size(col("issued_certificates")))
-      .withColumn("certificateGeneratedOn", when(col("issued_certificates").isNull, "").otherwise( col("issued_certificates")(0).getItem("lastIssuedOn")))
-      .withColumn("firstCompletedOn", when(col("issued_certificates").isNull, "").otherwise(when(size(col("issued_certificates")) > 0, col("issued_certificates")(size(col("issued_certificates")) - 1).getItem("lastIssuedOn")).otherwise("")))
-      .withColumn("certificateID", when(col("issued_certificates").isNull, "").otherwise( col("issued_certificates")(0).getItem("identifier")))
+      .withColumn("issuedCertificateCountPerContent", when(size(col("issued_certificates")) > 0, lit(1)).otherwise( lit(0)))
+      .withColumn("certificateGeneratedOn", when(col("issued_certificates").isNull, "").otherwise( col("issued_certificates")(size(col("issued_certificates")) - 1).getItem("lastIssuedOn")))
+      .withColumn("firstCompletedOn", when(col("issued_certificates").isNull, "").otherwise(when(size(col("issued_certificates")) > 0, col("issued_certificates")(0).getItem("lastIssuedOn")).otherwise("")))
+      .withColumn("certificateID", when(col("issued_certificates").isNull, "").otherwise( col("issued_certificates")(size(col("issued_certificates")) - 1).getItem("identifier")))
       .withColumnRenamed("userid", "userID")
       .withColumnRenamed("courseid", "courseID")
       .withColumnRenamed("batchid", "batchID")
@@ -1592,12 +1597,38 @@ object DataUtil extends Serializable {
     df
   }
 
+  def npsUpgradedTriggerC1DataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
+    val query = """SELECT userID as userid FROM \"nps-users-data-upgraded\" where  __time >= CURRENT_TIMESTAMP - INTERVAL '15' DAY"""
+    var df = druidDFOption(query, conf.sparkDruidRouterHost, limit = 1000000).orNull
+    if(df == null) return emptySchemaDataFrame(Schema.npsUserIds)
+    df = df.na.drop(Seq("userid"))
+    df
+  }
+
+
+
+
   def npsTriggerC2DataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
     val query = """(SELECT DISTINCT(userID) as userid FROM \"dashboards-user-course-program-progress\" WHERE __time = (SELECT MAX(__time) FROM \"dashboards-user-course-program-progress\") AND courseCompletedTimestamp >= TIMESTAMP_TO_MILLIS(__time + INTERVAL '5:30' HOUR TO MINUTE - INTERVAL '3' MONTH) / 1000.0 AND category IN ('Course','Program') AND courseStatus IN ('Live', 'Retired') AND dbCompletionStatus = 2) UNION ALL (SELECT uid as userid FROM (SELECT SUM(total_time_spent) AS totalTime, uid FROM \"summary-events\" WHERE __time >= CURRENT_TIMESTAMP - INTERVAL '3' MONTH AND dimensions_type='app' GROUP BY 2) WHERE totalTime >= 7200)"""
     var df = druidDFOption(query, conf.sparkDruidRouterHost, limit = 1000000).orNull
     if (df == null) return emptySchemaDataFrame(Schema.npsUserIds)
     df = df.dropDuplicates("userid")
     df
+  }
+
+  def npsUpgradedTriggerC2DataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
+    // val formatter = DateTimeFormatter.ofPattern("yyyy-mm-dd hh:mm:ss")
+    val currentDate = LocalDate.now()
+    val currentTimestamp = Timestamp.valueOf(currentDate.atStartOfDay())
+    val fifteenDaysAgoDate = LocalDate.now().minusDays(15)
+    val fifteenDaysAgoTimestamp = Timestamp.valueOf(fifteenDaysAgoDate.atStartOfDay())
+
+    var enrolmentDF = cache.load("enrolment")
+    show(enrolmentDF, "This is the enrolmentDF")
+    // println("This is the schema :"+ enrolmentDF.schema())
+    enrolmentDF =  enrolmentDF.filter((col("completedon").between(fifteenDaysAgoTimestamp, currentTimestamp)) ||
+      (col("enrolled_date").between(fifteenDaysAgoTimestamp, currentTimestamp))).select("userid").distinct()
+    enrolmentDF
   }
 
   def npsTriggerC3DataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
@@ -1607,10 +1638,34 @@ object DataUtil extends Serializable {
     df
   }
 
+  def npsUpgradedTriggerC3DataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
+    val timeUUIDToTimestampMills = udf((timeUUID: String) => (UUID.fromString(timeUUID).timestamp() - 0x01b21dd213814000L) / 10000)
+    val currentDate = current_timestamp()
+    // Calculate start milliseconds of current date
+    val currentStartMillis = unix_timestamp(date_trunc("day", currentDate)) * 1000
+    // Calculate start milliseconds of 15 days ago
+    val fifteenDaysAgo = currentDate - expr("interval 15 days")
+    val fifteenDaysAgoStartMillis = unix_timestamp(date_trunc("day", fifteenDaysAgo)) * 1000
+    val ratingsDF = cache.load("rating")
+      .withColumn("rated_on", timeUUIDToTimestampMills(col("createdon")))
+      .where(s"rated_on >= '${fifteenDaysAgoStartMillis}' AND rated_on <= '${currentStartMillis}'")
+      .select("userid").distinct()
+    ratingsDF
+  }
+
   def userFeedFromCassandraDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
     var df = cassandraTableAsDataFrame(conf.cassandraUserFeedKeyspace, conf.cassandraUserFeedTable)
       .select(col("userid").alias("userid"))
       .where(col("category") === "NPS")
+    if(df == null) return emptySchemaDataFrame(Schema.npsUserIds)
+    df = df.na.drop(Seq("userid"))
+    df
+  }
+
+  def userUpgradedFeedFromCassandraDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
+    var df = cassandraTableAsDataFrame(conf.cassandraUserFeedKeyspace, conf.cassandraUserFeedTable)
+      .select(col("userid").alias("userid"))
+      .where(col("category") === "NPS2")
     if(df == null) return emptySchemaDataFrame(Schema.npsUserIds)
     df = df.na.drop(Seq("userid"))
     df
@@ -1705,15 +1760,15 @@ object DataUtil extends Serializable {
 //    storageService.closeContext()
 //    println(s"REPORT: Finished syncing reports from ${reportTempPath} to ${conf.store}://${conf.container}/${reportPath}")
 //  }
-def syncReports(reportTempPath: String, reportPath: String)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-  println(s"REPORT: Syncing reports from ${reportTempPath} to ${conf.store}://${conf.container}/${reportPath} ...")
-  val storageService = StorageUtil.getStorageService(conf)
-  // upload files to - {store}://{container}/{reportPath}/
-  val storageConfig = new StorageConfig(conf.store, conf.container, reportTempPath)
-  storageService.upload(storageConfig.container, reportTempPath, s"${reportPath}/", Some(true), Some(0), Some(3), None)
-  storageService.closeContext()
-  println(s"REPORT: Finished syncing reports from ${reportTempPath} to ${conf.store}://${conf.container}/${reportPath}")
-}
+  def syncReports(reportTempPath: String, reportPath: String)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
+    println(s"REPORT: Syncing reports from ${reportTempPath} to ${conf.store}://${conf.container}/${reportPath} ...")
+    val storageService = StorageUtil.getStorageService(conf)
+    // upload files to - {store}://{container}/{reportPath}/
+    val storageConfig = new StorageConfig(conf.store, conf.container, reportTempPath)
+    storageService.upload(storageConfig.container, reportTempPath, s"${reportPath}/", Some(true), Some(0), Some(3), None)
+    storageService.closeContext()
+    println(s"REPORT: Finished syncing reports from ${reportTempPath} to ${conf.store}://${conf.container}/${reportPath}")
+  }
 
   def generateAndSyncReports(df: DataFrame, partitionKey: String, reportPath: String, fileName: String)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
     val reportTempPath = s"${conf.localReportDir}/${reportPath}"
@@ -1735,32 +1790,6 @@ def syncReports(reportTempPath: String, reportPath: String)(implicit spark: Spar
       .add(StructField("solutionIds", StringType, nullable = false))
     val df = spark.createDataFrame(rowRDD, schema)
     df
-  }
-
-  def getSolutionIdData(columns: String, dataSource: String, solutionId: String)(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
-    val query = raw"""SELECT $columns FROM  \"$dataSource\" WHERE solutionId='$solutionId'"""
-    var df = druidDFOption(query, conf.mlSparkDruidRouterHost, limit = 1000000).orNull
-    if (df == null) return emptySchemaDataFrame(Schema.solutionIdDataSchema)
-    if (df.columns.contains("evidences")) {
-      val baseUrl = conf.baseUrlForEvidences
-      val addBaseUrl = udf((evidences: String) => {
-        if (evidences != null && evidences.trim.nonEmpty) {
-          evidences.split(", ")
-            .map(url => s"$baseUrl$url")
-            .mkString(",")
-        } else {
-          evidences
-        }
-      })
-      df = df.withColumn("evidences", addBaseUrl(col("evidences")))
-    }
-    df
-  }
-
-  def processProfileData(originalDf: DataFrame, profileSchema: StructType, requiredCsvColumns: List[Column])(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
-    val parsedDf = originalDf.withColumn("parsedProfile", from_json(col("userProfile"), profileSchema))
-    val finalDF = parsedDf.select(requiredCsvColumns: _*)
-    finalDF
   }
 
   def validateColumns(df: DataFrame, columns: Seq[String]): Boolean = {

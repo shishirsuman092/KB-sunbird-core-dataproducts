@@ -269,9 +269,9 @@ object BlendedProgramReportModel extends AbsDashboardModel {
       syncReports(s"${conf.localReportDir}/${reportPath}", reportPathMDO)
     }
     // cbp wise
-    val cbpReportDF = reportDF
+    val cbpReportDF = fullReportDF.drop("userID", "userOrgID", "bpID", "bpChildID", "bpBatchID", "bpIssuedCertificateCount", "bpProgramDirectorName","contentid")
       .drop("Email", "Phone_Number", "mdoid")
-      .withColumnRenamed("contentid", "mdoid")
+      .withColumnRenamed("bpOrgID", "mdoid")
       .withColumnRenamed("maskedEmail", "Email")
       .withColumnRenamed("maskedPhone", "Phone_Number")
 

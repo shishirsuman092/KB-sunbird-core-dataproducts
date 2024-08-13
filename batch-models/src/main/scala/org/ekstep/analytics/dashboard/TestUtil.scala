@@ -63,6 +63,10 @@ object TestUtil extends Serializable {
       "includeExpiredSolutionIDs" -> "true",
       "mlSparkDruidRouterHost" -> "192.168.3.91",
       "mlSparkMongoConnectionHost" -> "192.168.3.178",
+      "SurveyQuestionReportBatchSize" -> "2000",
+      "SurveyStatusReportBatchSize" -> "20000",
+      "ObservationQuestionReportBatchSize" -> "2000",
+      "ObservationStatusReportBatchSize" -> "15000",
 
       "appPostgresHost" -> "192.168.3.178:5432",
       "appPostgresUsername" -> "sunbird",

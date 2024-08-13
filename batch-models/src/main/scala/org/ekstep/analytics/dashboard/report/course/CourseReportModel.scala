@@ -120,7 +120,7 @@ object CourseReportModel extends AbsDashboardModel {
                 sum(when(col("userCourseCompletionStatus") === "in-progress", 1).otherwise(0)).alias("inProgressCount"),
                 sum(when(col("userCourseCompletionStatus") === "not-started", 1).otherwise(0)).alias("notStartedCount"),
                 sum(when(col("userCourseCompletionStatus") === "completed", 1).otherwise(0)).alias("completedCount"),
-                sum(col("issuedCertificateCount")).alias("totalCertificatesIssued")
+                  sum(col("issuedCertificateCountPerContent")).alias("totalCertificatesIssued")
               )
               .withColumn("firstCompletedOn", to_date(col("earliestCourseCompleted"), "dd/MM/yyyy"))
               .withColumn("lastCompletedOn", to_date(col("latestCourseCompleted"), "dd/MM/yyyy"))
