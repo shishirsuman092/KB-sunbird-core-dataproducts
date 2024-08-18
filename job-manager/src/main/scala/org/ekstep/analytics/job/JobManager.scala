@@ -28,7 +28,7 @@ object JobManager extends optional.Application {
         )
     } else {
         StorageServiceFactory.getStorageService(
-            StorageConfig(storageType, AppConf.getConfig("storage.key.config"), AppConf.getConfig("storage.secret.config"))
+            StorageConfig(storageType, "storage.key.config", "storage.secret.config")
         )
     }
 
