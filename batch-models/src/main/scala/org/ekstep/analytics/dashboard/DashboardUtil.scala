@@ -352,8 +352,8 @@ class AvroFSCache(val path: String, val compression: String = "snappy") extends 
     df.write.mode(SaveMode.Overwrite).option("compression", compression).format("avro").save(s"${path}/${name}")
   }
   def load(name: String)(implicit spark: SparkSession): DataFrame = {
-    //spark.read.format("avro").load(s"${path}/${name}").persist(StorageLevel.MEMORY_ONLY)
-    spark.read.format("avro").load(s"${path}/${name}") // removed the persist to optimise memory usage
+    spark.read.format("avro").load(s"${path}/${name}").persist(StorageLevel.MEMORY_ONLY)
+    //spark.read.format("avro").load(s"${path}/${name}") // removed the persist to optimise memory usage
   }
 }
 
