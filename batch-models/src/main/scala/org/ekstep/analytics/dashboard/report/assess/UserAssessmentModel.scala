@@ -37,7 +37,7 @@ object UserAssessmentModel extends AbsDashboardModel {
     kafkaDispatch(withTimestamp(assessWithDetailsDF, timestamp), conf.assessmentTopic)
 
     val assessChildrenDF = assessmentChildrenDataFrame(assessWithHierarchyDF)
-    val userAssessmentDF = userAssessmentDataFrame()
+    val userAssessmentDF = cache.load("userAssessment")
     val userAssessChildrenDF = userAssessmentChildrenDataFrame(userAssessmentDF, assessChildrenDF)
     val userAssessChildrenDetailsDF = userAssessmentChildrenDetailsDataFrame(userAssessChildrenDF, assessWithDetailsDF,
       allCourseProgramDetailsWithRatingDF, userOrgDF)
@@ -93,7 +93,7 @@ object UserAssessmentModel extends AbsDashboardModel {
     val reportPath = s"${conf.standaloneAssessmentReportPath}/${today}"
     // generateReport(df, s"${reportPath}-full")
     df = df.drop("assessID", "assessOrgID")
-    generateAndSyncReports(df, "mdoid", reportPath, "StandaloneAssessmentReport")
+    generateReport(df, reportPath, "mdoid", "StandaloneAssessmentReport")
 
     Redis.closeRedisConnect()
 
