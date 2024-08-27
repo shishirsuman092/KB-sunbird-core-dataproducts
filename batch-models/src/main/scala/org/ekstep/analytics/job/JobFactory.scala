@@ -25,6 +25,8 @@ import org.ekstep.analytics.dashboard.telemetry.SummaryRedisSyncJob
 import org.ekstep.analytics.dashboard.weekly.claps.WeeklyClapsJob
 import org.ekstep.analytics.dashboard.ministrymetrics.MinistryMetricsJob
 import org.ekstep.analytics.dashboard.ministryleaderboard.MinistryLearnerLeaderboardJob
+import org.ekstep.analytics.dashboard.nationallearningweek.NationalLearningWeekJob
+import org.ekstep.analytics.dashboard.survey.npsUpgrade.NpsUpgradeJob
 
 import scala.reflect.runtime.universe
 import org.ekstep.analytics.framework.IJob
@@ -99,7 +101,7 @@ object JobFactory {
       case "druid-dataset" =>
         OnDemandDruidExhaustJob
       case "survey-nps" =>
-        NpsJob
+        NpsUpgradeJob
       case "in-app-review-feed" =>
         InAppReviewJob
       case "zip-upload" =>
@@ -116,6 +118,8 @@ object JobFactory {
         MinistryMetricsJob
       case "ministry-learner-leaderboard" =>
         MinistryLearnerLeaderboardJob
+      case "national-learning-week" =>
+        NationalLearningWeekJob
       case _ =>
         reflectModule(jobType);
     }

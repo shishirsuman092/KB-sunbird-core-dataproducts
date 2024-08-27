@@ -155,6 +155,10 @@ case class DashboardConfig (
                              SurveyStatusReportBatchSize: String,
                              ObservationQuestionReportBatchSize: String,
                              ObservationStatusReportBatchSize: String,
+                             nationalLearningWeekStart: String,
+                             nationalLearningWeekEnd: String,
+                             cassandraNLWUserLeaderboardTable: String,
+                             cassandraNLWMdoLeaderboardTable: String,
 
 
                              prefixDirectoryPath: String,
@@ -324,8 +328,14 @@ object DashboardConfigParser extends Serializable {
       ObservationQuestionReportBatchSize = getConfigModelParam(config, "ObservationQuestionReportBatchSize"),
       ObservationStatusReportBatchSize = getConfigModelParam(config, "ObservationStatusReportBatchSize"),
 
+      nationalLearningWeekStart = getConfigModelParam(config, "nationalLearningWeekStart"),
+      nationalLearningWeekEnd = getConfigModelParam(config, "nationalLearningWeekEnd"),
+      cassandraNLWUserLeaderboardTable = getConfigModelParam(config, "cassandraNLWUserLeaderboardTable"),
+      cassandraNLWMdoLeaderboardTable = getConfigModelParam(config, "cassandraNLWMdoLeaderboardTable"),
 
-      // comms-console
+
+
+        // comms-console
       commsConsolePrarambhEmailSuffix = getConfigModelParam(config, "commsConsolePrarambhEmailSuffix", ".kb@karmayogi.in"),
       commsConsoleNumDaysToConsider = getConfigModelParam(config, "commsConsoleNumDaysToConsider", "15").toInt,
       commsConsoleNumTopLearnersToConsider = getConfigModelParam(config, "commsConsoleNumTopLearnersToConsider", "60").toInt,
