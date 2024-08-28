@@ -134,6 +134,7 @@ case class DashboardConfig (
                              acbpMdoEnrolmentReportPath: String,
                              acbpMdoSummaryReportPath: String,
                              kcmReportPath: String,
+                             validationReportPath:String,
 
                              commsConsolePrarambhEmailSuffix: String,
                              commsConsoleNumDaysToConsider: Int,
@@ -314,6 +315,7 @@ object DashboardConfigParser extends Serializable {
       acbpMdoEnrolmentReportPath = getConfigModelParam(config, "acbpMdoEnrolmentReportPath"),
       acbpMdoSummaryReportPath = getConfigModelParam(config, "acbpMdoSummaryReportPath"),
       kcmReportPath = getConfigModelParam(config, "kcmReportPath"),
+      validationReportPath = getConfigModelParam(config, "validationReportPath"),
       //ml report config
       gracePeriod = getConfigModelParam(config, "gracePeriod"),
       solutionIDs = getConfigModelParam(config, "solutionIDs"),
