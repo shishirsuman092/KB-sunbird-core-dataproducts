@@ -31,7 +31,9 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
     val assessWithDetailsDF = assessWithHierarchyDF.drop("children")
 
     val assessChildrenDF = assessmentChildrenDataFrame(assessWithHierarchyDF)
-    val userAssessmentDF = userAssessmentDataFrame().filter(col("assessUserStatus") === "SUBMITTED")
+    val userAssessmentDF = cache.load("userAssessment").filter(col("assessUserStatus") === "SUBMITTED")
+      .withColumn("assessStartTime", col("assessStartTimestamp").cast("long"))
+      .withColumn("assessEndTime", col("assessEndTimestamp").cast("long"))
     val userAssessChildrenDF = userAssessmentChildrenDataFrame(userAssessmentDF, assessChildrenDF)
     val userAssessChildrenDetailsDF = userAssessmentChildrenDetailsDataFrame(userAssessChildrenDF, assessWithDetailsDF,
       allCourseProgramDetailsWithRatingDF, userOrgDF)

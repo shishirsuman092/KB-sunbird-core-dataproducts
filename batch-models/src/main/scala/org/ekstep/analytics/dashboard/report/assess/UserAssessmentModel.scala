@@ -37,7 +37,7 @@ object UserAssessmentModel extends AbsDashboardModel {
     kafkaDispatch(withTimestamp(assessWithDetailsDF, timestamp), conf.assessmentTopic)
 
     val assessChildrenDF = assessmentChildrenDataFrame(assessWithHierarchyDF)
-    val userAssessmentDF = userAssessmentDataFrame()
+    val userAssessmentDF = cache.load("userAssessment")
     val userAssessChildrenDF = userAssessmentChildrenDataFrame(userAssessmentDF, assessChildrenDF)
     val userAssessChildrenDetailsDF = userAssessmentChildrenDetailsDataFrame(userAssessChildrenDF, assessWithDetailsDF,
       allCourseProgramDetailsWithRatingDF, userOrgDF)
