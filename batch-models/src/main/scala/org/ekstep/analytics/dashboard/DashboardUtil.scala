@@ -476,7 +476,6 @@ object DashboardUtil extends Serializable {
 
   implicit var debug: Boolean = false
   implicit var validation: Boolean = false
-
   /**
    * Adds more utility functions to spark DataFrame
    * @param df implicit data frame reference
@@ -618,7 +617,11 @@ object DashboardUtil extends Serializable {
     (formatter.print(startOfWeek), dateFormatter.print(endOfWeek), formatter.print(endOfWeek), dateFormatter.print(dataTillDate))
   }
 
-  val currentDateTime = date_format(current_timestamp(), "yyyy-MM-dd HH:mm:ss a")
+  val dateTimeWithAMPMFormat = "yyyy-MM-dd HH:mm:ss a"
+  val currentDateTime = date_format(current_timestamp(), dateTimeWithAMPMFormat)
+  val dateTimeFormat = "yyyy-MM-dd HH:mm:ss"
+  val dateFormat = "yyyy-MM-dd"
+  val timeFormat = "HH:mm:ss"
 
   /* Util functions */
   def csvWrite(df: DataFrame, path: String, header: Boolean = true, saveMode: SaveMode = SaveMode.Overwrite): Unit = {
