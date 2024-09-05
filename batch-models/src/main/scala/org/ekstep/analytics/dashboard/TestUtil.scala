@@ -147,7 +147,7 @@ object TestUtil extends Serializable {
       "acbpMdoSummaryReportPath" -> "standalone-reports/cbp-report-mdo-summary",
       "kcmReportPath" -> "standalone-reports/kcm-report",
       "commsConsoleReportPath" -> "standalone-reports/comms-console",
-
+      "validationReportPath"->"standalone-reports/validation-report",
       "commsConsolePrarambhEmailSuffix" -> ".kb@karmayogi.in",
       "commsConsoleNumDaysToConsider" -> "15",
       "commsConsoleNumTopLearnersToConsider" -> "60",
