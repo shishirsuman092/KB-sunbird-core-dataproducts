@@ -21,7 +21,7 @@ object CourseReportModel extends AbsDashboardModel {
     // Get course data
     val allCourseProgramDetailsDF = broadcast(contentWithOrgDetailsDataFrame(orgDF, Seq("Course", "Program", "Blended Program", "CuratedCollections", "Curated Program"))).persist()
     // Get content resource hierarchy and rename the identifier field to courseID
-    var contentResourceHierarchyDF = contentHierarchyDataFrame().withColumnRenamed("identifier", "courseID").persist()
+    val contentResourceHierarchyDF = contentHierarchyDataFrame().withColumnRenamed("identifier", "courseID").persist()
     // Join contentResourceHierarchyDF with allCourseProgramDetailsDF
     val getContentResourceWithCategoryDF = contentResourceHierarchyDF
       .join(allCourseProgramDetailsDF, Seq("courseID"), "inner")
@@ -61,7 +61,7 @@ object CourseReportModel extends AbsDashboardModel {
       )
 
     // Explode the first-level children to get the second-level children
-    var resultDF = firstLevelDF
+    val resultDF = firstLevelDF
       .withColumn("second_level_child", explode_outer(col("first_level_child.children")))
       .select(
         col("content_id"),
