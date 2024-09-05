@@ -24,7 +24,7 @@ object UserAssessmentModel extends AbsDashboardModel {
     val today = getDate()
 
     // obtain user org data
-    var (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
+    val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
     // get course details, with rating info
     val (hierarchyDF, allCourseProgramDetailsWithCompDF, allCourseProgramDetailsDF,
       allCourseProgramDetailsWithRatingDF) = contentDataFrames(orgDF)
@@ -93,7 +93,7 @@ object UserAssessmentModel extends AbsDashboardModel {
     val reportPath = s"${conf.standaloneAssessmentReportPath}/${today}"
     // generateReport(df, s"${reportPath}-full")
     df = df.drop("assessID", "assessOrgID")
-    generateReport(df, reportPath, "mdoid", "StandaloneAssessmentReport")
+    generateAndSyncReports(df, "mdoid",reportPath, "StandaloneAssessmentReport")
 
     Redis.closeRedisConnect()
 

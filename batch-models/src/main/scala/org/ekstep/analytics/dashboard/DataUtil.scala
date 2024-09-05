@@ -19,6 +19,7 @@ import java.io.{File, Serializable}
 import java.sql.Timestamp
 import java.util
 import java.util.UUID
+import org.joda.time.DateTime
 import scala.collection.mutable.ListBuffer
 
 
@@ -1607,7 +1608,7 @@ object DataUtil extends Serializable {
   }
 
   def npsUpgradedTriggerC1DataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
-    val query = """SELECT userID as userid FROM \"nps-users-data-upgraded\" where  __time >= CURRENT_TIMESTAMP - INTERVAL '15' DAY"""
+    val query = """SELECT userID as userid FROM \"nps-upgraded-users-data\" where  __time >= CURRENT_TIMESTAMP - INTERVAL '15' DAY"""
     var df = druidDFOption(query, conf.sparkDruidRouterHost, limit = 1000000).orNull
     if(df == null) return emptySchemaDataFrame(Schema.npsUserIds)
     df = df.na.drop(Seq("userid"))
@@ -1649,18 +1650,20 @@ object DataUtil extends Serializable {
 
   def npsUpgradedTriggerC3DataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
     val timeUUIDToTimestampMills = udf((timeUUID: String) => (UUID.fromString(timeUUID).timestamp() - 0x01b21dd213814000L) / 10000)
-    val currentDate = current_timestamp()
-    // Calculate start milliseconds of current date
-    val currentStartMillis = unix_timestamp(date_trunc("day", currentDate)) * 1000
-    // Calculate start milliseconds of 15 days ago
-    val fifteenDaysAgo = currentDate - expr("interval 15 days")
-    val fifteenDaysAgoStartMillis = unix_timestamp(date_trunc("day", fifteenDaysAgo)) * 1000
+    val currentDate = DateTime.now()
+    println(currentDate)
+    val currentDateStartMillis = currentDate.getMillis
+    // Start of 15 Days Ago (Midnight)
+    val fifteenDaysAgoStartMillis = currentDate.minusDays(15).withTimeAtStartOfDay().getMillis
+    println(fifteenDaysAgoStartMillis)
     val ratingsDF = cache.load("rating")
       .withColumn("rated_on", timeUUIDToTimestampMills(col("createdon")))
-      .where(s"rated_on >= '${fifteenDaysAgoStartMillis}' AND rated_on <= '${currentStartMillis}'")
+      .where(s"rated_on >= '${fifteenDaysAgoStartMillis}' AND rated_on < '${currentDateStartMillis}'")
       .select("userid").distinct()
+    show(ratingsDF, "These are users who have rated a course in last 15 days")
     ratingsDF
   }
+
 
   def userFeedFromCassandraDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
     var df = cassandraTableAsDataFrame(conf.cassandraUserFeedKeyspace, conf.cassandraUserFeedTable)
