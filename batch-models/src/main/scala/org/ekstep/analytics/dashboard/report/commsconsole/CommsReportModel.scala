@@ -16,48 +16,52 @@ object CommsReportModel extends AbsDashboardModel {
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
 
     val today = getDate()
+
+    val dateFormat1 = "dd/MM/yyyy"
+    val dateFormat2 = "yyyy-MM-dd"
     val bkEmailSuffix = conf.commsConsolePrarambhEmailSuffix
     val numOfDays = -conf.commsConsoleNumDaysToConsider
     val numOfTopLearners = conf.commsConsoleNumTopLearnersToConsider
     val currentDate = current_date()
     val dateNDaysAgo = date_add(currentDate, numOfDays)
-    val lastUpdatedOn = currentDateTime
+    val lastUpdatedOn = date_format(current_timestamp(), "dd/MM/yyyy HH:mm:ss a")
     val commsConsoleReportPath = s"${conf.commsConsoleReportPath}/${today}"
 
-    // Broadcast orgDF as it's a smaller dataframe and used multiple times in joins
-    val orgDF = broadcast(spark.read.option("header", "true")
+    val orgDF = spark.read.option("header", "true")
       .csv(s"${conf.localReportDir}/${conf.orgHierarchyReportPath}/${today}-warehouse")
       .withColumn("department", when(col("ministry").isNotNull && col("department").isNull, col("mdo_name")).otherwise(col("department")))
       .withColumn("ministry", when(col("ministry").isNull && col("department").isNull, col("mdo_name")).otherwise(col("ministry")))
-      .select("mdo_id", "ministry", "department", "organization"))
+      .select("mdo_id", "ministry", "department", "organization")
 
-    // Cache userDF for reuse
     val userDF = spark.read.option("header", "true")
       .csv(s"${conf.localReportDir}/${conf.userReportPath}/${today}-warehouse")
-      .withColumn("registrationDate", date_format(col("user_registration_date"), dateTimeWithAMPMFormat))
+      //.withColumn("registrationDate", to_date(col("user_registration_date"), dateFormat1))
+      .withColumn("registrationDate",  date_format(col("user_registration_date"), "dd/MM/yyyy HH:mm:ss a"))
       .select("user_id", "mdo_id", "full_name", "email", "phone_number", "roles", "registrationDate", "tag", "user_registration_date")
       .join(orgDF, Seq("mdo_id"), "left")
-      .cache()
 
-    // Cache enrollmentsDF for reuse
     val rawEnrollmentsDF = spark.read.option("header", "true")
       .csv(s"${conf.localReportDir}/${conf.userEnrolmentReportPath}/${today}-warehouse")
-      .withColumn("completionDate", date_format(col("content_last_accessed_on"), dateTimeWithAMPMFormat))
-      .cache()
+      //.withColumn("completionDate", to_date(col("completed_on"), dateFormat2))
+      .withColumn("completionDate",  date_format(col("content_last_accessed_on"), "dd/MM/yyyy HH:mm:ss a"))
+    val enrollmentsDF = rawEnrollmentsDF
+      .join(userDF, Seq("user_id"), "left")
 
-    val enrollmentsDF = rawEnrollmentsDF.join(userDF, Seq("user_id"), "left").cache()
-
-    val mdoUserCountsDF = userDF.groupBy("mdo_id").agg(count("*").alias("userCount"))
+    val mdoUserCountsDF = userDF.groupBy("mdo_id")
+      .agg(
+        count("*").alias("userCount")
+      )
 
     val mdoCBPCompletionsDF = enrollmentsDF.filter(col("user_consumption_status") === "completed").groupBy("mdo_id")
-      .agg(count("*").alias("completionCount"))
-
+      .agg(
+        count("*").alias("completionCount")
+      )
     val mdoAdminDF = userDF.filter(col("roles").contains("MDO_LEADER") || col("roles").contains("MDO_ADMIN"))
     val mdoCompletionRateDF = mdoCBPCompletionsDF.join(mdoUserCountsDF, Seq("mdo_id"), "left")
       .withColumn("completionPerUser", col("completionCount") / col("userCount"))
     val mdoCompletionRateWithAdminDetailsDF = mdoCompletionRateDF.join(mdoAdminDF, Seq("mdo_id"), "left")
       .orderBy(desc("completionPerUser"), desc("mdo_id"))
-      .withColumn("Last_Updated_On", lit(lastUpdatedOn))
+      .withColumn("Last_Updated_On", lastUpdatedOn)
       .select(
         col("full_name").alias("Name"),
         col("email").alias("Email"),
@@ -77,7 +81,7 @@ object CommsReportModel extends AbsDashboardModel {
     //users who have not been enrolled in any cbp
     val usersWithoutAnyEnrollments = userDF.select("user_id").distinct().except(usersWithEnrollments)
     val usersWithoutAnyEnrollmentsWithUserDetailsDF = usersWithoutAnyEnrollments.join(userDF, Seq("user_id"), "left")
-      .withColumn("Last_Updated_On", lit(lastUpdatedOn))
+      .withColumn("Last_Updated_On", lastUpdatedOn)
       .select(
         col("full_name").alias("Name"),
         col("email").alias("Email"),
@@ -94,7 +98,7 @@ object CommsReportModel extends AbsDashboardModel {
     val usersCreatedInLastNDaysDF = userDF.filter(col("user_registration_date").between(dateNDaysAgo, currentDate)).select("user_id").distinct()
     val usersCreatedInLastNDaysWithoutEnrollmentsDF = usersCreatedInLastNDaysDF.except(usersWithEnrollments)
     val usersCreatedInLastNDaysWithoutEnrollmentsWithUserDetailsDF = usersCreatedInLastNDaysWithoutEnrollmentsDF.join(userDF, Seq("user_id"), "left")
-      .withColumn("Last_Updated_On", lit(lastUpdatedOn))
+      .withColumn("Last_Updated_On", lastUpdatedOn)
       .select(
         col("full_name").alias("Name"),
         col("email").alias("Email"),
@@ -110,10 +114,12 @@ object CommsReportModel extends AbsDashboardModel {
     //top 60 users ranked by cbp completion in last 15 days
     val topXCompletionsInNDays = enrollmentsDF.filter(col("content_last_accessed_on").between(dateNDaysAgo, currentDate))
       .groupBy("user_id")
-      .agg(count("*").alias("completionCount"))
+      .agg(
+        count("*").alias("completionCount")
+      )
       .orderBy(desc("completionCount")).limit(numOfTopLearners)
       .join(userDF, Seq("user_id"), "left")
-      .withColumn("Last_Updated_On", lit(lastUpdatedOn))
+      .withColumn("Last_Updated_On", lastUpdatedOn)
       .select(
         col("full_name").alias("Name"),
         col("email").alias("Email"),
