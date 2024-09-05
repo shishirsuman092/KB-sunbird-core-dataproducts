@@ -63,6 +63,12 @@ object JobLogSummary {
             output.append(s"  - '$pid' timeTaken: ${endEvent.timeTaken.getOrElse("N/A")}\n")
           }
 
+          if (pid == "WorkFlowSummaryModel") {
+            val totalInputEvents = logs.flatMap(_.inputEvents).sum
+            val totalOutputEvents = logs.flatMap(_.outputEvents).sum
+            output.append(s"  - 'WorkFlowSummaryModel' - Input Events: $totalInputEvents\n")
+            output.append(s"  - 'WorkFlowSummaryModel' - Output Events: $totalOutputEvents\n")
+          }
         } else {
           output.append(s"Job with pid '$pid' is missing some events:\n")
           if (!hasJobStart) output.append(s"  - Missing JOB_START\n")
