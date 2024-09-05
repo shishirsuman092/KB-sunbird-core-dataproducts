@@ -123,6 +123,7 @@ object ZipReportsWithSecurityModel extends AbsDashboardModel {
         println(s"Individual ZIP file created for $orgID: $zipFilePath")
       } else {
         println("No mdoid folders found in the given directory.")
+      }
     }
 
     // Merging zip files based on hierarchy
