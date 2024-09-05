@@ -1,4 +1,4 @@
-//package org.ekstep.analytics.dashboard.leaderboard
+package org.ekstep.analytics.dashboard.leaderboard
 
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.{Row, SparkSession}
