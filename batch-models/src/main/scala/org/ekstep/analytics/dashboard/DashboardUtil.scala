@@ -339,7 +339,7 @@ object DashboardConfigParser extends Serializable {
 
 
 
-        // comms-console
+      // comms-console
       commsConsolePrarambhEmailSuffix = getConfigModelParam(config, "commsConsolePrarambhEmailSuffix", ".kb@karmayogi.in"),
       commsConsoleNumDaysToConsider = getConfigModelParam(config, "commsConsoleNumDaysToConsider", "15").toInt,
       commsConsoleNumTopLearnersToConsider = getConfigModelParam(config, "commsConsoleNumTopLearnersToConsider", "60").toInt,
@@ -373,23 +373,23 @@ class AvroFSCache(val path: String, val compression: String = "snappy") extends 
 
 object StorageUtil extends Serializable {
 
-//  def getStorageService(config: DashboardConfig): BaseStorageService = {
-//    val storageEndpoint = AppConf.getConfig("cloud_storage_endpoint_with_protocol")
-//    val storageType = "s3"
-//    val storageKey = AppConf.getConfig(config.key)
-//    val storageSecret = AppConf.getConfig(config.secret)
-//
-//    val storageService = if ("s3".equalsIgnoreCase(storageType) && !"".equalsIgnoreCase(storageEndpoint)) {
-//      new CustomS3StorageService(
-//        StorageConfig(storageType, storageKey, storageSecret, Option(storageEndpoint))
-//      )
-//    } else {
-//      StorageServiceFactory.getStorageService(
-//        StorageConfig(storageType, AppConf.getConfig("storage.key.config"), AppConf.getConfig("storage.secret.config"))
-//      )
-//    }
-//    storageService
-//  }
+  //  def getStorageService(config: DashboardConfig): BaseStorageService = {
+  //    val storageEndpoint = AppConf.getConfig("cloud_storage_endpoint_with_protocol")
+  //    val storageType = "s3"
+  //    val storageKey = AppConf.getConfig(config.key)
+  //    val storageSecret = AppConf.getConfig(config.secret)
+  //
+  //    val storageService = if ("s3".equalsIgnoreCase(storageType) && !"".equalsIgnoreCase(storageEndpoint)) {
+  //      new CustomS3StorageService(
+  //        StorageConfig(storageType, storageKey, storageSecret, Option(storageEndpoint))
+  //      )
+  //    } else {
+  //      StorageServiceFactory.getStorageService(
+  //        StorageConfig(storageType, AppConf.getConfig("storage.key.config"), AppConf.getConfig("storage.secret.config"))
+  //      )
+  //    }
+  //    storageService
+  //  }
 
   def getStorageService(config: DashboardConfig): BaseStorageService = {
     val storageEndpoint = AppConf.getConfig("cloud_storage_endpoint_with_protocol")

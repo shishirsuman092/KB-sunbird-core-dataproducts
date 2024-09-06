@@ -245,14 +245,13 @@ object ZipReportsWithSecurityModel extends AbsDashboardModel {
 
     // End of zipping the reports and syncing to blob store
     //deleting the tmp merged folder
-        try {
-          FileUtils.deleteDirectory(new File(destinationPath))
-        } catch {
-          case e: Exception => println(s"Error deleting directory: ${e.getMessage}")
-        }
+    try {
+      FileUtils.deleteDirectory(new File(destinationPath))
+    } catch {
+      case e: Exception => println(s"Error deleting directory: ${e.getMessage}")
+    }
   }
 }
-
 
 
 
