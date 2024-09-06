@@ -77,7 +77,7 @@ object MinistryMetricsModel extends AbsDashboardModel {
 
       // Cast columns to integer and coalesce null values
       finalResultDF
-        .withColumn("learningSumValue", col("learningSumValue").cast("int"))
+        .withColumn("learningSumValue", coalesce(col("learningSumValue").cast("int"), lit(0)))
         .withColumn("loginSumValue", coalesce(col("loginSumValue").cast("int"), lit(0)))
         .withColumn("certSumValue", coalesce(col("certSumValue").cast("int"), lit(0)))
         .withColumn("enrolmentSumValue", coalesce(col("enrolmentSumValue").cast("int"), lit(0)))
@@ -138,7 +138,7 @@ object MinistryMetricsModel extends AbsDashboardModel {
       show(finalResultDF, "finalresult")
 
       finalResultDF
-        .withColumn("learningSumValue", col("learningSumValue").cast("int"))
+        .withColumn("learningSumValue", coalesce(col("learningSumValue").cast("int"), lit(0)))
         .withColumn("loginSumValue", coalesce(col("loginSumValue").cast("int"), lit(0)))
         .withColumn("certSumValue", coalesce(col("certSumValue").cast("int"), lit(0)))
         .withColumn("enrolmentSumValue", coalesce(col("enrolmentSumValue").cast("int"), lit(0)))
@@ -210,7 +210,7 @@ object MinistryMetricsModel extends AbsDashboardModel {
 
       // Final type casting and null handling
       finalResultDF
-        .withColumn("learningSumValue", col("learningSumValue").cast("int"))
+        .withColumn("learningSumValue", coalesce(col("learningSumValue").cast("int"), lit(0)))
         .withColumn("loginSumValue", coalesce(col("loginSumValue").cast("int"), lit(0)))
         .withColumn("certSumValue", coalesce(col("certSumValue").cast("int"), lit(0)))
         .withColumn("enrolmentSumValue", coalesce(col("enrolmentSumValue").cast("int"), lit(0)))
