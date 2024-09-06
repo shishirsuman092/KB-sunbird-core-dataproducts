@@ -1557,7 +1557,6 @@ object DataUtil extends Serializable {
    */
   def oldAssessmentDetailsDataframe()(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): DataFrame = {
     val df = cache.load("oldAssessmentDetails").withColumnRenamed("user_id", "userID").withColumnRenamed("parent_source_id", "courseID")
-    show(df, "Old assessment data")
     df
   }
   /* telemetry data frames */
