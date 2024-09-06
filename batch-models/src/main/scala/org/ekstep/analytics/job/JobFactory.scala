@@ -101,7 +101,7 @@ object JobFactory {
       case "druid-dataset" =>
         OnDemandDruidExhaustJob
       case "survey-nps" =>
-        NpsUpgradeJob
+        NpsJob
       case "in-app-review-feed" =>
         InAppReviewJob
       case "zip-upload" =>

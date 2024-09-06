@@ -160,6 +160,7 @@ case class DashboardConfig (
                              nationalLearningWeekEnd: String,
                              cassandraNLWUserLeaderboardTable: String,
                              cassandraNLWMdoLeaderboardTable: String,
+                             cassandraOldAssesmentTable: String,
 
 
                              prefixDirectoryPath: String,
@@ -274,6 +275,7 @@ object DashboardConfigParser extends Serializable {
       cassandraLearnerLeaderBoardTable = getConfigModelParam(config, "cassandraLearnerLeaderBoardTable"),
       cassandraLearnerLeaderBoardLookupTable = getConfigModelParam(config, "cassandraLearnerLeaderBoardLookupTable"),
       cassandraMDOLearnerLeaderboardTable = getConfigModelParam(config, "cassandraMDOLearnerLeaderboardTable"),
+      cassandraOldAssesmentTable = getConfigModelParam(config, "cassandraOldAssesmentTable"),
 
       // redis keys
       redisRegisteredOfficerCountKey = "mdo_registered_officer_count",
