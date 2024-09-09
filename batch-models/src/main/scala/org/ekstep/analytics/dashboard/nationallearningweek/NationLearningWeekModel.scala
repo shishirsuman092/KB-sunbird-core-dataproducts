@@ -28,9 +28,6 @@ object NationalLearningWeekModel extends AbsDashboardModel {
       .filter(col("credit_date") >= monthStart && col("credit_date") <= monthEnd)
       .groupBy(col("userid")).agg(sum(col("points")).alias("total_points"), max(col("credit_date")).alias("last_credit_date"))
 
-    show(karmaPointsDataDF, "this is the kp_data")
-
-
     //get user and user-org data
     var (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
 
@@ -62,20 +59,17 @@ object NationalLearningWeekModel extends AbsDashboardModel {
 
     val filteredUserLeaderBoardDataDF = userLeaderBoardDataDF
       .filter(col("total_points").isNotNull && col("total_points") > 0)
-    show(filteredUserLeaderBoardDataDF, "finaluserdata")
 
     val windowSpecRank = Window.partitionBy("org_id").orderBy(desc("total_points"))
 
     // rank the users based on the points within each org
     val userLeaderBoardOrderedDataDF = filteredUserLeaderBoardDataDF.withColumn("rank", dense_rank().over(windowSpecRank))
-    userLeaderBoardOrderedDataDF.show(false)
 
     // sort them based on their fullNames for each rank group within each org
     val windowSpecRow = Window.partitionBy("org_id").orderBy(col("rank"), col("last_credit_date").asc)
     val finalUserLeaderBoardDataDF = userLeaderBoardOrderedDataDF.withColumn("row_num", row_number.over(windowSpecRow))
     val selectedColUserLeaderboardDF = finalUserLeaderBoardDataDF.select(col("userid"), col("org_id"), col("fullname"), col("designation"),col("profile_image"), col("total_points"),
       col("last_credit_date"), col("rank"), col("row_num")).dropDuplicates("userid")
-    show(selectedColUserLeaderboardDF, "orderedData")
 
     // write to cassandra National Learning Week user table
      writeToCassandra(selectedColUserLeaderboardDF, conf.cassandraUserKeyspace, conf.cassandraNLWUserLeaderboardTable)
@@ -87,21 +81,19 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         max("last_credit_date").as("last_credit_date") // Max last_credit_date for each org_id
       )
 
-    show(mdoNLWLeaderBoardDF, "hellooo")
-
-    //    val sizedDF = mdoNLWLeaderBoardDF.withColumn("size",
-    //     when(col("total_users") > 7, "XL")
-    //    .when(col("total_users").between(4, 6), "L")
-    //    .when(col("total_users").between(3, 2), "M")
-    //    .otherwise("S")
-    //)
-
-    val sizedDF = mdoNLWLeaderBoardDF.withColumn("size",
-      when(col("total_users") > 7, "XL")
-        .when(col("total_users") === 3, "L")
-        .when(col("total_users") === 2, "M")
+        val sizedDF = mdoNLWLeaderBoardDF.withColumn("size",
+         when(col("total_users") > 50000, "XL")
+        .when(col("total_users").between(10000, 50000), "L")
+        .when(col("total_users").between(1000, 10000), "M")
         .otherwise("S")
     )
+
+//    val sizedDF = mdoNLWLeaderBoardDF.withColumn("size",
+//      when(col("total_users") > 7, "XL")
+//        .when(col("total_users") === 3, "L")
+//        .when(col("total_users") === 2, "M")
+//        .otherwise("S")
+//    )
 
 
     val windowSpec2 = Window.partitionBy("size").orderBy(
@@ -110,7 +102,6 @@ object NationalLearningWeekModel extends AbsDashboardModel {
 
     val rankedDF = sizedDF.withColumn("row_num", row_number().over(windowSpec2))
     val selectedColMdoLeaderboardDF = rankedDF.select(col("org_id"), col("size"), col("total_users"), col("org_name"), col("row_num"), col("total_points"), col("last_credit_date"))
-    show(selectedColMdoLeaderboardDF, "select")
     writeToCassandra(selectedColMdoLeaderboardDF, conf.cassandraUserKeyspace, conf.cassandraNLWMdoLeaderboardTable)
   }
 }
