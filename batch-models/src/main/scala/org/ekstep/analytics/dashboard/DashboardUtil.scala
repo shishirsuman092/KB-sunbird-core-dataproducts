@@ -170,7 +170,11 @@ case class DashboardConfig (
                              // for weekly claps
                              cutoffTime: Float,
                              // to enable/disable report sync
-                             reportSyncEnable: Boolean
+                             reportSyncEnable: Boolean,
+                             // warehouse report path
+                             warehouseReportPath: String,
+                             warehouseReportZipPath: String,
+                             destinationFullReportPath: String
                            ) extends Serializable
 
 object DashboardConfigParser extends Serializable {
@@ -355,7 +359,11 @@ object DashboardConfigParser extends Serializable {
       // for weekly claps
       cutoffTime = getConfigModelParam(config, "cutoffTime", "60.0").toFloat,
       // config to enable disable report sync
-      reportSyncEnable = getConfigModelParam(config, "reportSyncEnable", "true").toBoolean
+      reportSyncEnable = getConfigModelParam(config, "reportSyncEnable", "true").toBoolean,
+      // warehouse report path
+      warehouseReportPath = getConfigModelParam(config, "warehouseReportPath", "warehouse"),
+      warehouseReportZipPath = getConfigModelParam(config, "warehouseReportZipPath", "warehouseZip"),
+      destinationFullReportPath = getConfigModelParam(config, "destinationFullReportPath", "destinationFullReportPath")
     )
   }
   /* Config functions end */
