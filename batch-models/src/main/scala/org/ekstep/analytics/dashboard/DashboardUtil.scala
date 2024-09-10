@@ -134,6 +134,7 @@ case class DashboardConfig (
                              acbpMdoEnrolmentReportPath: String,
                              acbpMdoSummaryReportPath: String,
                              kcmReportPath: String,
+                             validationReportPath:String,
 
                              commsConsolePrarambhEmailSuffix: String,
                              commsConsoleNumDaysToConsider: Int,
@@ -155,6 +156,11 @@ case class DashboardConfig (
                              SurveyStatusReportBatchSize: String,
                              ObservationQuestionReportBatchSize: String,
                              ObservationStatusReportBatchSize: String,
+                             nationalLearningWeekStart: String,
+                             nationalLearningWeekEnd: String,
+                             cassandraNLWUserLeaderboardTable: String,
+                             cassandraNLWMdoLeaderboardTable: String,
+                             cassandraOldAssesmentTable: String,
 
 
                              prefixDirectoryPath: String,
@@ -269,6 +275,7 @@ object DashboardConfigParser extends Serializable {
       cassandraLearnerLeaderBoardTable = getConfigModelParam(config, "cassandraLearnerLeaderBoardTable"),
       cassandraLearnerLeaderBoardLookupTable = getConfigModelParam(config, "cassandraLearnerLeaderBoardLookupTable"),
       cassandraMDOLearnerLeaderboardTable = getConfigModelParam(config, "cassandraMDOLearnerLeaderboardTable"),
+      cassandraOldAssesmentTable = getConfigModelParam(config, "cassandraOldAssesmentTable"),
 
       // redis keys
       redisRegisteredOfficerCountKey = "mdo_registered_officer_count",
@@ -310,6 +317,7 @@ object DashboardConfigParser extends Serializable {
       acbpMdoEnrolmentReportPath = getConfigModelParam(config, "acbpMdoEnrolmentReportPath"),
       acbpMdoSummaryReportPath = getConfigModelParam(config, "acbpMdoSummaryReportPath"),
       kcmReportPath = getConfigModelParam(config, "kcmReportPath"),
+      validationReportPath = getConfigModelParam(config, "validationReportPath"),
       //ml report config
       gracePeriod = getConfigModelParam(config, "gracePeriod"),
       solutionIDs = getConfigModelParam(config, "solutionIDs"),
@@ -323,6 +331,12 @@ object DashboardConfigParser extends Serializable {
       SurveyStatusReportBatchSize = getConfigModelParam(config, "SurveyStatusReportBatchSize"),
       ObservationQuestionReportBatchSize = getConfigModelParam(config, "ObservationQuestionReportBatchSize"),
       ObservationStatusReportBatchSize = getConfigModelParam(config, "ObservationStatusReportBatchSize"),
+
+      nationalLearningWeekStart = getConfigModelParam(config, "nationalLearningWeekStart"),
+      nationalLearningWeekEnd = getConfigModelParam(config, "nationalLearningWeekEnd"),
+      cassandraNLWUserLeaderboardTable = getConfigModelParam(config, "cassandraNLWUserLeaderboardTable"),
+      cassandraNLWMdoLeaderboardTable = getConfigModelParam(config, "cassandraNLWMdoLeaderboardTable"),
+
 
 
       // comms-console
@@ -359,23 +373,23 @@ class AvroFSCache(val path: String, val compression: String = "snappy") extends 
 
 object StorageUtil extends Serializable {
 
-//  def getStorageService(config: DashboardConfig): BaseStorageService = {
-//    val storageEndpoint = AppConf.getConfig("cloud_storage_endpoint_with_protocol")
-//    val storageType = "s3"
-//    val storageKey = AppConf.getConfig(config.key)
-//    val storageSecret = AppConf.getConfig(config.secret)
-//
-//    val storageService = if ("s3".equalsIgnoreCase(storageType) && !"".equalsIgnoreCase(storageEndpoint)) {
-//      new CustomS3StorageService(
-//        StorageConfig(storageType, storageKey, storageSecret, Option(storageEndpoint))
-//      )
-//    } else {
-//      StorageServiceFactory.getStorageService(
-//        StorageConfig(storageType, AppConf.getConfig("storage.key.config"), AppConf.getConfig("storage.secret.config"))
-//      )
-//    }
-//    storageService
-//  }
+  //  def getStorageService(config: DashboardConfig): BaseStorageService = {
+  //    val storageEndpoint = AppConf.getConfig("cloud_storage_endpoint_with_protocol")
+  //    val storageType = "s3"
+  //    val storageKey = AppConf.getConfig(config.key)
+  //    val storageSecret = AppConf.getConfig(config.secret)
+  //
+  //    val storageService = if ("s3".equalsIgnoreCase(storageType) && !"".equalsIgnoreCase(storageEndpoint)) {
+  //      new CustomS3StorageService(
+  //        StorageConfig(storageType, storageKey, storageSecret, Option(storageEndpoint))
+  //      )
+  //    } else {
+  //      StorageServiceFactory.getStorageService(
+  //        StorageConfig(storageType, AppConf.getConfig("storage.key.config"), AppConf.getConfig("storage.secret.config"))
+  //      )
+  //    }
+  //    storageService
+  //  }
 
   def getStorageService(config: DashboardConfig): BaseStorageService = {
     val storageEndpoint = AppConf.getConfig("cloud_storage_endpoint_with_protocol")

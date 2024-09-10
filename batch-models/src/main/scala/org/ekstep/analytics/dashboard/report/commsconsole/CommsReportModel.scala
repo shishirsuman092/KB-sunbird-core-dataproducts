@@ -60,7 +60,7 @@ object CommsReportModel extends AbsDashboardModel {
     val mdoCompletionRateDF = mdoCBPCompletionsDF.join(mdoUserCountsDF, Seq("mdo_id"), "left")
       .withColumn("completionPerUser", col("completionCount") / col("userCount"))
     val mdoCompletionRateWithAdminDetailsDF = mdoCompletionRateDF.join(mdoAdminDF, Seq("mdo_id"), "left")
-     .orderBy(desc("completionPerUser"), desc("mdo_id"))
+      .orderBy(desc("completionPerUser"), desc("mdo_id"))
       .withColumn("Last_Updated_On", lastUpdatedOn)
       .select(
         col("full_name").alias("Name"),
@@ -116,7 +116,7 @@ object CommsReportModel extends AbsDashboardModel {
       .groupBy("user_id")
       .agg(
         count("*").alias("completionCount")
-        )
+      )
       .orderBy(desc("completionCount")).limit(numOfTopLearners)
       .join(userDF, Seq("user_id"), "left")
       .withColumn("Last_Updated_On", lastUpdatedOn)

@@ -120,6 +120,9 @@ object TestUtil extends Serializable {
       "cassandraAcbpTable" -> "cb_plan",
       "cassandraLearnerLeaderBoardLookupTable" -> "learner_leaderboard_lookup",
       "cassandraLearnerLeaderBoardTable" -> "learner_leaderboard",
+      "cassandraOldAssesmentTable" -> "user_assessment_master",
+      "cassandraNLWMdoLeaderboardTable" -> "nlw_mdo_leaderboard",
+      "cassandraNLWUserLeaderboardTable" -> "nlw_user_leaderboard",
 
       "mongoDatabase" -> "nodebb",
       "mongoDBCollection" -> "objects",
@@ -147,13 +150,17 @@ object TestUtil extends Serializable {
       "acbpMdoSummaryReportPath" -> "standalone-reports/cbp-report-mdo-summary",
       "kcmReportPath" -> "standalone-reports/kcm-report",
       "commsConsoleReportPath" -> "standalone-reports/comms-console",
-
+      "validationReportPath"->"standalone-reports/validation-report",
       "commsConsolePrarambhEmailSuffix" -> ".kb@karmayogi.in",
       "commsConsoleNumDaysToConsider" -> "15",
       "commsConsoleNumTopLearnersToConsider" -> "60",
       "commsConsolePrarambhTags" -> "rojgaar,rozgaar,rozgar",
       "commsConsolePrarambhCbpIds" -> "do_113882965067743232154,do_1137468666262241281756,do_1139032976499261441156",
       "commsConsolePrarambhNCount" -> "2",
+      "nationalLearningWeekStart" -> "",
+      "nationalLearningWeekEnd" -> "",
+      "cassandraNLWUserLeaderboardTable" -> "nlw_user_leaderboard",
+      "cassandraNLWMdoLeaderboardTable" -> "nlw_mdo_leaderboard",
 
       "prefixDirectoryPath" -> "standalone-reports",
       "destinationDirectoryPath" -> "standalone-reports/merged",

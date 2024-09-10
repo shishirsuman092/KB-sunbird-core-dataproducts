@@ -31,7 +31,9 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
     val assessWithDetailsDF = assessWithHierarchyDF.drop("children")
 
     val assessChildrenDF = assessmentChildrenDataFrame(assessWithHierarchyDF)
-    val userAssessmentDF = userAssessmentDataFrame().filter(col("assessUserStatus") === "SUBMITTED")
+    val userAssessmentDF = cache.load("userAssessment").filter(col("assessUserStatus") === "SUBMITTED")
+      .withColumn("assessStartTime", col("assessStartTimestamp").cast("long"))
+      .withColumn("assessEndTime", col("assessEndTimestamp").cast("long"))
     val userAssessChildrenDF = userAssessmentChildrenDataFrame(userAssessmentDF, assessChildrenDF)
     val userAssessChildrenDetailsDF = userAssessmentChildrenDetailsDataFrame(userAssessChildrenDF, assessWithDetailsDF,
       allCourseProgramDetailsWithRatingDF, userOrgDF)
@@ -40,18 +42,15 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
 
     val userAssessChildDataDF = userAssessChildrenDetailsDF
       .join(orgHierarchyData, Seq("userOrgID"), "left")
-    show(userAssessChildDataDF, "userAssessChildDataDF")
 
     val retakesDF = userAssessChildDataDF
       .groupBy("assessChildID", "userID")
       .agg(countDistinct("assessStartTime").alias("retakes"))
-    show(retakesDF, "retakesDF")
 
     val userAssessChildDataLatestDF = userAssessChildDataDF
       .groupByLimit(Seq("assessChildID", "userID"), "assessEndTimestamp", 1, desc = true)
       .drop("rowNum")
       .join(retakesDF, Seq("assessChildID", "userID"), "left")
-    show(userAssessChildDataLatestDF, "userAssessChildDataLatestDF")
 
     val finalDF = userAssessChildDataLatestDF
       .withColumn("userAssessmentDuration", unix_timestamp(col("assessEndTimestamp")) - unix_timestamp(col("assessStartTimestamp")))
@@ -68,9 +67,8 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
       .withColumn("course_id", when(col("assessCategory") === "Standalone Assessment", lit(""))
         .otherwise(col("assessID")))
       .withColumn("Tags", concat_ws(", ", col("additionalProperties.tag")))
-    show(finalDF, "finalDF")
 
-    val fullReportDF = finalDF
+    val fullReportDFNew = finalDF
       .withColumn("Report_Last_Generated_On", date_format(current_timestamp(), "dd/MM/yyyy HH:mm:ss a"))
       .select(
         col("userID").alias("User ID"),
@@ -104,15 +102,67 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
         col("retakes").alias("No. of Retakes"),
         col("userOrgID").alias("mdoid"),
         col("Report_Last_Generated_On")
-      )
-      .coalesce(1)
-    show(fullReportDF, "fullReportDF")
+      ).repartition(1)
 
+
+    // Join using a single column or Seq if multiple columns
+    val userOrgHierarchyDataDF = userOrgDF.join(orgHierarchyData, Seq("userOrgID"), "left")
+    val oldAssessmentData = oldAssessmentDetailsDataframe()
+    val joinedDF = oldAssessmentData.join(allCourseProgramDetailsDF, Seq("courseID"), "left").select(
+      oldAssessmentData.columns.map(col) ++
+        Seq(col("courseName"), col("courseOrgID")): _*)
+    val oldAssessmentDataWithUserDetails = joinedDF.join(userOrgHierarchyDataDF, Seq("userID"), "left")
+    val fullReportDFOld = oldAssessmentDataWithUserDetails
+      .withColumn("Report_Last_Generated_On", date_format(current_timestamp(), "dd/MM/yyyy HH:mm:ss a"))
+      .withColumn("Assessment Type", lit("Learning Resource"))
+      .withColumn("Total Questions", col("correct_count") + col("incorrect_count") + col("not_answered_count"))
+      .withColumn("Assessment Publish Date", lit(null).cast("date"))
+      .withColumn("Assessment Duration", lit(null).cast("string"))
+      .withColumn("Last Attempted Date", lit(null).cast("date"))
+      .withColumn("No. of Retakes", lit(null).cast("integer"))
+      .withColumn("assessChildID", lit(null).cast("string"))
+      .withColumn("Pass", when(col("result_percent") >= col("pass_percent"), lit("Yes")).otherwise(lit("No")))
+      .withColumn("Tags", concat_ws(", ", col("additionalProperties.tag")))
+      .select(
+        col("userID").alias("User ID"),
+        col("source_id").alias("assessID"),
+        col("courseOrgID"),
+        col("assessChildID"),
+        col("userOrgID"),
+        col("fullName").alias("Full Name"),
+        col("professionalDetails.designation").alias("Designation"),
+        col("personalDetails.primaryEmail").alias("E mail"),
+        col("personalDetails.mobile").alias("Phone Number"),
+        col("professionalDetails.group").alias("Group"),
+        col("Tags"),
+        col("ministry_name").alias("Ministry"),
+        col("dept_name").alias("Department"),
+        col("userOrgName").alias("Organisation"),
+        col("source_title").alias("Assessment Name"),
+        col("Assessment Type"),
+        col("courseOrgID").alias("Assessment/Content Provider"),
+        col("Assessment Publish Date"),
+        col("courseName").alias("Course Name"),
+        col("courseID").alias("Course ID"),
+        col("Assessment Duration"),
+        col("Last Attempted Date"),
+        col("result_percent").alias("Latest Percentage Achieved"),
+        col("pass_percent").alias("Cut off Percentage"),
+        col("Pass"),
+        col("Total Questions"),
+        col("incorrect_count").alias("No.of Incorrect Responses"),
+        col("not_answered_count").alias("Unattempted Questions"),
+        col("`No. of Retakes`"),
+        col("userOrgID").alias("mdoid"),
+        col("Report_Last_Generated_On")
+      ).repartition(1)
+
+    val fullReportDF = fullReportDFNew.union(fullReportDFOld)
     val reportPath = s"${conf.cbaReportPath}/${today}"
     // generateReport(fullReportDF, s"${reportPath}-full")
 
-    val mdoReportDF = fullReportDF.drop("assessID", "assessOrgID", "assessChildID", "userOrgID")
-    generateReport(mdoReportDF, reportPath,"mdoid", "UserAssessmentReport")
+    val mdoReportDF = fullReportDF.drop("source_id", "courseOrgID", "assessChildID", "userOrgID", "assessID", "assessOrgID")
+    generateReport(mdoReportDF.coalesce(1), reportPath,"mdoid", "UserAssessmentReport")
     // to be removed once new security job is created
     if (conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
