@@ -173,7 +173,6 @@ case class DashboardConfig (
                              reportSyncEnable: Boolean,
                              // warehouse report path
                              warehouseReportPath: String,
-                             warehouseReportZipPath: String,
                              destinationFullReportPath: String
                            ) extends Serializable
 
