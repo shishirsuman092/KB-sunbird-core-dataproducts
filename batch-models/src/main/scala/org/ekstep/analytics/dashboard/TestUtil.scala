@@ -121,6 +121,8 @@ object TestUtil extends Serializable {
       "cassandraLearnerLeaderBoardLookupTable" -> "learner_leaderboard_lookup",
       "cassandraLearnerLeaderBoardTable" -> "learner_leaderboard",
       "cassandraOldAssesmentTable" -> "user_assessment_master",
+      "cassandraNLWMdoLeaderboardTable" -> "nlw_mdo_leaderboard",
+      "cassandraNLWUserLeaderboardTable" -> "nlw_user_leaderboard",
 
       "mongoDatabase" -> "nodebb",
       "mongoDBCollection" -> "objects",
