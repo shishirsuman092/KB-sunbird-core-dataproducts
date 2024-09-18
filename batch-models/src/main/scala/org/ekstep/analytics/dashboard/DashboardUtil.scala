@@ -361,7 +361,6 @@ object DashboardConfigParser extends Serializable {
       reportSyncEnable = getConfigModelParam(config, "reportSyncEnable", "true").toBoolean,
       // warehouse report path
       warehouseReportPath = getConfigModelParam(config, "warehouseReportPath", "warehouse"),
-      warehouseReportZipPath = getConfigModelParam(config, "warehouseReportZipPath", "warehouseZip"),
       destinationFullReportPath = getConfigModelParam(config, "destinationFullReportPath", "destinationFullReportPath")
     )
   }
