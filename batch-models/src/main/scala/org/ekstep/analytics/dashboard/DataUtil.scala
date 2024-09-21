@@ -61,7 +61,8 @@ object DataUtil extends Serializable {
         StructField("verifiedKarmayogi", BooleanType, nullable = true),
         StructField("mandatoryFieldsExists", BooleanType, nullable = true),
         StructField("profileImageUrl", StringType, nullable = true),
-        StructField("personalDetails", personalDetailsSchema, nullable = true)
+        StructField("personalDetails", personalDetailsSchema, nullable = true),
+        StructField("profileStatus", StringType, nullable = true)
       )
       if (competencies) {
         fields.append(StructField("competencies", ArrayType(profileCompetencySchema), nullable = true))
@@ -112,16 +113,6 @@ object DataUtil extends Serializable {
       StructField("competencyID",  StringType, nullable = true),
       StructField("competencyName",  StringType, nullable = true),
       StructField("competencyStatus",  StringType, nullable = true)
-    ))
-
-    val enrolmentCountByUserSchema: StructType = StructType(Seq(
-      StructField("userID", StringType),
-      StructField("count", StringType)
-    ))
-
-    val learningHoursByUserSchema: StructType = StructType(Seq(
-      StructField("userID", StringType),
-      StructField("totalLearningHours", StringType)
     ))
 
     /* schema definitions for content hierarchy table */
@@ -254,6 +245,15 @@ object DataUtil extends Serializable {
 
     val totalLearningHoursSchema: StructType = StructType(Seq(
       StructField("userOrgID", StringType),
+      StructField("totalLearningHours", StringType)
+    ))
+    val enrolmentCountByUserSchema: StructType = StructType(Seq(
+      StructField("userID", StringType),
+      StructField("count", StringType)
+    ))
+
+    val learningHoursByUserSchema: StructType = StructType(Seq(
+      StructField("userID", StringType),
       StructField("totalLearningHours", StringType)
     ))
     val cbplanDraftDataSchema: StructType = StructType(Seq(
@@ -407,6 +407,7 @@ object DataUtil extends Serializable {
       .withColumn("userVerified", when(col("profileDetails.verifiedKarmayogi").isNull, false).otherwise(col("profileDetails.verifiedKarmayogi")))
       .withColumn("userMandatoryFieldsExists", col("profileDetails.mandatoryFieldsExists"))
       .withColumn("userProfileImgUrl", col("profileDetails.profileImageUrl"))
+      .withColumn("userProfileStatus", col("profileDetails.profileStatus"))
       .withColumn("userPhoneVerified", expr("LOWER(personalDetails.phoneVerified) = 'true'"))
       .withColumn("fullName", concat_ws(" ", col("firstName"), col("lastName")))
 
@@ -464,6 +465,11 @@ object DataUtil extends Serializable {
     show(roleDF, "User Role DataFrame")
 
     roleDF
+  }
+
+  def orgCompleteHierarchyDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
+    val orgCompleteHierarchyDF = cache.load("orgCompleteHierarchy")
+    orgCompleteHierarchyDF
   }
 
   /**
@@ -604,6 +610,7 @@ object DataUtil extends Serializable {
     // now that error handling is done, proceed with business as usual
     df = df
       .withColumn("courseOrgID", explode_outer(col("createdFor")))
+      .withColumn("contentLanguage", explode_outer(col("language")))
       .select(
         col("identifier").alias("courseID"),
         col("primaryCategory").alias("category"),
@@ -618,7 +625,8 @@ object DataUtil extends Serializable {
         col("courseOrgID"),
         col("competencies_v5.competencyAreaId"),
         col("competencies_v5.competencyThemeId"),
-        col("competencies_v5.competencySubThemeId")
+        col("competencies_v5.competencySubThemeId"),
+        col("contentLanguage")
 
       )
 
@@ -1029,7 +1037,7 @@ object DataUtil extends Serializable {
   def userCourseProgramCompletionDataFrame(extraCols: Seq[String] = Seq(), datesAsLong: Boolean = false)(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
 
     val selectCols = Seq("userID", "courseID", "batchID", "courseProgress", "dbCompletionStatus", "courseCompletedTimestamp",
-      "courseEnrolledTimestamp", "lastContentAccessTimestamp", "issuedCertificateCount", "firstCompletedOn", "certificateGeneratedOn", "certificateID") ++ extraCols
+      "courseEnrolledTimestamp", "lastContentAccessTimestamp", "issuedCertificateCount","issuedCertificateCountPerContent", "firstCompletedOn", "certificateGeneratedOn", "certificateID") ++ extraCols
 
     var df = cache.load("enrolment")
       .where(expr("active=true"))
@@ -1037,9 +1045,10 @@ object DataUtil extends Serializable {
       .withColumn("courseEnrolledTimestamp", col("enrolled_date"))
       .withColumn("lastContentAccessTimestamp", col("lastcontentaccesstime"))
       .withColumn("issuedCertificateCount", size(col("issued_certificates")))
-      .withColumn("certificateGeneratedOn", when(col("issued_certificates").isNull, "").otherwise( col("issued_certificates")(0).getItem("lastIssuedOn")))
-      .withColumn("firstCompletedOn", when(col("issued_certificates").isNull, "").otherwise(when(size(col("issued_certificates")) > 0, col("issued_certificates")(size(col("issued_certificates")) - 1).getItem("lastIssuedOn")).otherwise("")))
-      .withColumn("certificateID", when(col("issued_certificates").isNull, "").otherwise( col("issued_certificates")(0).getItem("identifier")))
+      .withColumn("issuedCertificateCountPerContent", when(size(col("issued_certificates")) > 0, lit(1)).otherwise( lit(0)))
+      .withColumn("certificateGeneratedOn", when(col("issued_certificates").isNull, "").otherwise( col("issued_certificates")(size(col("issued_certificates")) - 1).getItem("lastIssuedOn")))
+      .withColumn("firstCompletedOn", when(col("issued_certificates").isNull, "").otherwise(when(size(col("issued_certificates")) > 0, col("issued_certificates")(0).getItem("lastIssuedOn")).otherwise("")))
+      .withColumn("certificateID", when(col("issued_certificates").isNull, "").otherwise( col("issued_certificates")(size(col("issued_certificates")) - 1).getItem("identifier")))
       .withColumnRenamed("userid", "userID")
       .withColumnRenamed("courseid", "courseID")
       .withColumnRenamed("batchid", "batchID")
@@ -1548,11 +1557,17 @@ object DataUtil extends Serializable {
    * Reading user_karma_points data
    */
   def userKarmaPointsDataFrame()(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): DataFrame = {
-    val df = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraKarmaPointsTable)
+    val df = cache.load("userKarmaPoints")
     show(df, "Karma Points data")
     df
   }
-
+  /**
+   * Reading old assessment details
+   */
+  def oldAssessmentDetailsDataframe()(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): DataFrame = {
+    val df = cache.load("oldAssessmentDetails").withColumnRenamed("user_id", "userID").withColumnRenamed("parent_source_id", "courseID")
+    df
+  }
   /* telemetry data frames */
 
   def loggedInMobileUserDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
@@ -1608,11 +1623,10 @@ object DataUtil extends Serializable {
   }
 
   def npsUpgradedTriggerC1DataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
-    val query = """SELECT userID as userid FROM \"nps-upgraded-users-data\" where __time >= CURRENT_TIMESTAMP - INTERVAL '1' HOUR"""
+    val query = """SELECT userID as userid FROM \"nps-upgraded-users-data\" where  __time >= CURRENT_TIMESTAMP - INTERVAL '15' DAY"""
     var df = druidDFOption(query, conf.sparkDruidRouterHost, limit = 1000000).orNull
     if(df == null) return emptySchemaDataFrame(Schema.npsUserIds)
     df = df.na.drop(Seq("userid"))
-    show(df, "user data")
     df
   }
 
@@ -1664,6 +1678,7 @@ object DataUtil extends Serializable {
     show(ratingsDF, "These are users who have rated a course in last 15 days")
     ratingsDF
   }
+
 
   def userFeedFromCassandraDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
     var df = cassandraTableAsDataFrame(conf.cassandraUserFeedKeyspace, conf.cassandraUserFeedTable)
@@ -1763,6 +1778,15 @@ object DataUtil extends Serializable {
   org.sunbird.cloud.storage.factory.StorageConfig and
   org.ekstep.analytics.framework.StorageConfig */
 
+  //  def syncReports(reportTempPath: String, reportPath: String)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
+  //    println(s"REPORT: Syncing reports from ${reportTempPath} to ${conf.store}://${conf.container}/${reportPath} ...")
+  //    val storageService = StorageUtil.getStorageService(conf)
+  //    // upload files to - {store}://{container}/{reportPath}/
+  //    val storageConfig = new StorageConfig(conf.store, conf.container, reportTempPath)
+  //    storageService.upload(storageConfig.container, reportTempPath, s"${reportPath}/", Some(true), Some(0), Some(3), None)
+  //    storageService.closeContext()
+  //    println(s"REPORT: Finished syncing reports from ${reportTempPath} to ${conf.store}://${conf.container}/${reportPath}")
+  //  }
   def syncReports(reportTempPath: String, reportPath: String)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
     println(s"REPORT: Syncing reports from ${reportTempPath} to ${conf.store}://${conf.container}/${reportPath} ...")
     val storageService = StorageUtil.getStorageService(conf)
@@ -1886,6 +1910,68 @@ object DataUtil extends Serializable {
     show(df, "ratings")
     df
   }
+  def processOrgsL3(df: DataFrame, userOrgDF: DataFrame, orgHierarchyCompleteDF: DataFrame): DataFrame = {
+    val organisationDF = df.dropDuplicates()
+    val sumDF = organisationDF.withColumn("allIDs", lit(null).cast("string")).select(col("organisationID").alias("ministryID"), col("allIDs"))
+    sumDF
+
+  }
+
+  def processDepartmentL2(df: DataFrame, userOrgDF: DataFrame, orgHierarchyCompleteDF: DataFrame): DataFrame = {
+    val organisationDF = df
+      .join(orgHierarchyCompleteDF, df("departmentMapID") === orgHierarchyCompleteDF("l2mapid"), "left")
+      .select(df("departmentID"), col("sborgid").alias("organisationID")).dropDuplicates()
+    val sumDF = organisationDF
+      .groupBy("departmentID")
+      .agg(
+        concat_ws(",", collect_set(when(col("organisationID").isNotNull, col("organisationID")))).alias("orgIDs")
+      )
+      .withColumn("associatedIds", concat_ws(",", col("orgIDs")))
+      .withColumn("allIDs", concat_ws(",", col("departmentID"), col("associatedIds")))
+      .select(col("departmentID").alias("ministryID"), col("allIDs"))
+    sumDF
+
+  }
+
+  def processMinistryL1(df: DataFrame, userOrgDF: DataFrame, orgHierarchyCompleteDF: DataFrame): DataFrame = {
+    println("Processing Ministry L1 DataFrame:")
+    val departmentAndMapIDsDF = df
+      .join(orgHierarchyCompleteDF, df("ministryMapID") === orgHierarchyCompleteDF("l1mapid"), "left")
+      .select(df("ministryID"), col("sborgid").alias("departmentID"), col("mapid").alias("departmentMapID"))
+
+    // Join with orgHierarchyCompleteDF to get the organisationDF
+    val organisationDF = departmentAndMapIDsDF
+      .join(orgHierarchyCompleteDF, departmentAndMapIDsDF("departmentMapID") === orgHierarchyCompleteDF("l2mapid"), "left")
+      .select(departmentAndMapIDsDF("ministryID"), departmentAndMapIDsDF("departmentID"),col("sborgid").alias("organisationID")).dropDuplicates()
+    val sumDF = organisationDF
+      .groupBy("ministryID")
+      .agg(
+        concat_ws(",", collect_set(when(col("departmentID").isNotNull, col("departmentID")))).alias("departmentIDs"),
+        concat_ws(",", collect_set(when(col("organisationID").isNotNull, col("organisationID")))).alias("orgIDs")
+      )
+      .withColumn("associatedIds", concat_ws(",", col("departmentIDs"), col("orgIDs")))
+      .withColumn("allIDs", concat_ws(",", col("ministryID"), col("associatedIds")))
+      .select(col("ministryID"), col("allIDs"))
+    sumDF
+  }
+
+  def getDetailedHierarchy(userOrgDF: DataFrame)(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
+    var orgHierarchyCompleteDF = orgCompleteHierarchyDataFrame()
+    var distinctMdoIDsDF = userOrgDF.select("userOrgID").distinct()
+    val joinedDF = orgHierarchyCompleteDF.join(distinctMdoIDsDF, orgHierarchyCompleteDF("sborgid") === distinctMdoIDsDF("userOrgID"), "inner")
+    println("The number of distinct orgs in orgHierarchy is: "+joinedDF.count())
+    val ministryL1DF = joinedDF.filter(col("l1mapid").isNull && col("l2mapid").isNull && col("l3mapid").isNull).select(col("sborgid").alias("ministryID"), col("mapid").alias("ministryMapID"))
+    val ministryOrgDF = processMinistryL1(ministryL1DF, userOrgDF, orgHierarchyCompleteDF)
+    val departmentL2DF = joinedDF.filter(col("l2mapid").isNull && col("l1mapid").isNotNull || col("l3mapid").isNotNull).select(col("sborgid").alias("departmentID"), col("mapid").alias("departmentMapID"))
+    val deptOrgDF =  processDepartmentL2(departmentL2DF, userOrgDF, orgHierarchyCompleteDF)
+    val orgsL3DF = joinedDF.filter((col("l3mapid").isNull) && col("l2mapid").isNotNull && col("l1mapid").isNotNull).select(col("sborgid").alias("organisationID"))
+    val orgsDF = processOrgsL3(orgsL3DF, userOrgDF, orgHierarchyCompleteDF)
+    val combinedMinistryMetricsDF = ministryOrgDF.union(deptOrgDF).union(orgsDF)
+    val updatedDF = combinedMinistryMetricsDF.withColumn("allIDs", when(col("allIDs").isNull || trim(col("allIDs")) === "", col("ministryID")).otherwise(col("allIDs")))
+    show(updatedDF, "This will be the final hierarchy")
+    updatedDF
+  }
+
+
 
 }
-
