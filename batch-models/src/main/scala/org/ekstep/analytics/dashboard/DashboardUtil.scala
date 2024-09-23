@@ -160,6 +160,7 @@ case class DashboardConfig (
                              nationalLearningWeekEnd: String,
                              cassandraNLWUserLeaderboardTable: String,
                              cassandraNLWMdoLeaderboardTable: String,
+                             cassandraOldAssesmentTable: String,
 
 
                              prefixDirectoryPath: String,
@@ -274,6 +275,7 @@ object DashboardConfigParser extends Serializable {
       cassandraLearnerLeaderBoardTable = getConfigModelParam(config, "cassandraLearnerLeaderBoardTable"),
       cassandraLearnerLeaderBoardLookupTable = getConfigModelParam(config, "cassandraLearnerLeaderBoardLookupTable"),
       cassandraMDOLearnerLeaderboardTable = getConfigModelParam(config, "cassandraMDOLearnerLeaderboardTable"),
+      cassandraOldAssesmentTable = getConfigModelParam(config, "cassandraOldAssesmentTable"),
 
       // redis keys
       redisRegisteredOfficerCountKey = "mdo_registered_officer_count",
@@ -337,7 +339,7 @@ object DashboardConfigParser extends Serializable {
 
 
 
-        // comms-console
+      // comms-console
       commsConsolePrarambhEmailSuffix = getConfigModelParam(config, "commsConsolePrarambhEmailSuffix", ".kb@karmayogi.in"),
       commsConsoleNumDaysToConsider = getConfigModelParam(config, "commsConsoleNumDaysToConsider", "15").toInt,
       commsConsoleNumTopLearnersToConsider = getConfigModelParam(config, "commsConsoleNumTopLearnersToConsider", "60").toInt,
@@ -371,23 +373,23 @@ class AvroFSCache(val path: String, val compression: String = "snappy") extends 
 
 object StorageUtil extends Serializable {
 
-//  def getStorageService(config: DashboardConfig): BaseStorageService = {
-//    val storageEndpoint = AppConf.getConfig("cloud_storage_endpoint_with_protocol")
-//    val storageType = "s3"
-//    val storageKey = AppConf.getConfig(config.key)
-//    val storageSecret = AppConf.getConfig(config.secret)
-//
-//    val storageService = if ("s3".equalsIgnoreCase(storageType) && !"".equalsIgnoreCase(storageEndpoint)) {
-//      new CustomS3StorageService(
-//        StorageConfig(storageType, storageKey, storageSecret, Option(storageEndpoint))
-//      )
-//    } else {
-//      StorageServiceFactory.getStorageService(
-//        StorageConfig(storageType, AppConf.getConfig("storage.key.config"), AppConf.getConfig("storage.secret.config"))
-//      )
-//    }
-//    storageService
-//  }
+  //  def getStorageService(config: DashboardConfig): BaseStorageService = {
+  //    val storageEndpoint = AppConf.getConfig("cloud_storage_endpoint_with_protocol")
+  //    val storageType = "s3"
+  //    val storageKey = AppConf.getConfig(config.key)
+  //    val storageSecret = AppConf.getConfig(config.secret)
+  //
+  //    val storageService = if ("s3".equalsIgnoreCase(storageType) && !"".equalsIgnoreCase(storageEndpoint)) {
+  //      new CustomS3StorageService(
+  //        StorageConfig(storageType, storageKey, storageSecret, Option(storageEndpoint))
+  //      )
+  //    } else {
+  //      StorageServiceFactory.getStorageService(
+  //        StorageConfig(storageType, AppConf.getConfig("storage.key.config"), AppConf.getConfig("storage.secret.config"))
+  //      )
+  //    }
+  //    storageService
+  //  }
 
   def getStorageService(config: DashboardConfig): BaseStorageService = {
     val storageEndpoint = AppConf.getConfig("cloud_storage_endpoint_with_protocol")
@@ -476,6 +478,7 @@ object DashboardUtil extends Serializable {
 
   implicit var debug: Boolean = false
   implicit var validation: Boolean = false
+
   /**
    * Adds more utility functions to spark DataFrame
    * @param df implicit data frame reference
@@ -617,11 +620,7 @@ object DashboardUtil extends Serializable {
     (formatter.print(startOfWeek), dateFormatter.print(endOfWeek), formatter.print(endOfWeek), dateFormatter.print(dataTillDate))
   }
 
-  val dateTimeWithAMPMFormat = "yyyy-MM-dd HH:mm:ss a"
-  val currentDateTime = date_format(current_timestamp(), dateTimeWithAMPMFormat)
-  val dateTimeFormat = "yyyy-MM-dd HH:mm:ss"
-  val dateFormat = "yyyy-MM-dd"
-  val timeFormat = "HH:mm:ss"
+  val currentDateTime = date_format(current_timestamp(), "yyyy-MM-dd HH:mm:ss a")
 
   /* Util functions */
   def csvWrite(df: DataFrame, path: String, header: Boolean = true, saveMode: SaveMode = SaveMode.Overwrite): Unit = {
