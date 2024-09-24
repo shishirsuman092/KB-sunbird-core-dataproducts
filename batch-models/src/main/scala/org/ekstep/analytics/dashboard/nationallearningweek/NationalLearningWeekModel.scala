@@ -76,7 +76,6 @@ object NationalLearningWeekModel extends AbsDashboardModel {
       col("last_credit_date"), col("rank"), col("row_num"), col("count"), col("learning_hours").alias("total_learning_hours")).dropDuplicates("userid")
     show(selectedColUserLeaderboardDF, "cols")
     // write to cassandra National Learning Week user table
-
     writeToCassandra(selectedColUserLeaderboardDF, conf.cassandraUserKeyspace, conf.cassandraNLWUserLeaderboardTable)
     val mdoNLWLeaderBoardDF = filteredUserLeaderBoardDataDF
       .groupBy("org_id", "org_name")
@@ -107,6 +106,6 @@ object NationalLearningWeekModel extends AbsDashboardModel {
 
     val rankedDF = sizedDF.withColumn("row_num", row_number().over(windowSpec2))
     val selectedColMdoLeaderboardDF = rankedDF.select(col("org_id"), col("size"), col("total_users"), col("org_name"), col("row_num"), col("total_points"), col("last_credit_date"))
-    writeToCassandra(selectedColMdoLeaderboardDF, conf.cassandraUserKeyspace, "nlw_mdo_leaderboard")
+    writeToCassandra(selectedColMdoLeaderboardDF, conf.cassandraUserKeyspace, conf.cassandraNLWMdoLeaderboardTable)
   }
 }
