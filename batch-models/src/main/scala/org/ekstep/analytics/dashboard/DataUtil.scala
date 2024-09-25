@@ -247,6 +247,15 @@ object DataUtil extends Serializable {
       StructField("userOrgID", StringType),
       StructField("totalLearningHours", StringType)
     ))
+    val enrolmentCountByUserSchema: StructType = StructType(Seq(
+      StructField("userID", StringType),
+      StructField("count", StringType)
+    ))
+
+    val learningHoursByUserSchema: StructType = StructType(Seq(
+      StructField("userID", StringType),
+      StructField("totalLearningHours", StringType)
+    ))
     val cbplanDraftDataSchema: StructType = StructType(Seq(
       StructField("name", StringType, nullable = true),
       StructField("assignmentType", StringType, nullable = true),
@@ -1769,15 +1778,15 @@ object DataUtil extends Serializable {
   org.sunbird.cloud.storage.factory.StorageConfig and
   org.ekstep.analytics.framework.StorageConfig */
 
-//  def syncReports(reportTempPath: String, reportPath: String)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-//    println(s"REPORT: Syncing reports from ${reportTempPath} to ${conf.store}://${conf.container}/${reportPath} ...")
-//    val storageService = StorageUtil.getStorageService(conf)
-//    // upload files to - {store}://{container}/{reportPath}/
-//    val storageConfig = new StorageConfig(conf.store, conf.container, reportTempPath)
-//    storageService.upload(storageConfig.container, reportTempPath, s"${reportPath}/", Some(true), Some(0), Some(3), None)
-//    storageService.closeContext()
-//    println(s"REPORT: Finished syncing reports from ${reportTempPath} to ${conf.store}://${conf.container}/${reportPath}")
-//  }
+  //  def syncReports(reportTempPath: String, reportPath: String)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
+  //    println(s"REPORT: Syncing reports from ${reportTempPath} to ${conf.store}://${conf.container}/${reportPath} ...")
+  //    val storageService = StorageUtil.getStorageService(conf)
+  //    // upload files to - {store}://{container}/{reportPath}/
+  //    val storageConfig = new StorageConfig(conf.store, conf.container, reportTempPath)
+  //    storageService.upload(storageConfig.container, reportTempPath, s"${reportPath}/", Some(true), Some(0), Some(3), None)
+  //    storageService.closeContext()
+  //    println(s"REPORT: Finished syncing reports from ${reportTempPath} to ${conf.store}://${conf.container}/${reportPath}")
+  //  }
   def syncReports(reportTempPath: String, reportPath: String)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
     println(s"REPORT: Syncing reports from ${reportTempPath} to ${conf.store}://${conf.container}/${reportPath} ...")
     val storageService = StorageUtil.getStorageService(conf)

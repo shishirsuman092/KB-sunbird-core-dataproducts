@@ -7,7 +7,7 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
 import org.ekstep.analytics.dashboard.DataUtil._
 import org.ekstep.analytics.dashboard.DashboardUtil._
-import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig}
+import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig, Redis}
 import org.ekstep.analytics.framework.FrameworkContext
 
 
@@ -68,11 +68,15 @@ object NationalLearningWeekModel extends AbsDashboardModel {
     // sort them based on their fullNames for each rank group within each org
     val windowSpecRow = Window.partitionBy("org_id").orderBy(col("rank"), col("last_credit_date").asc)
     val finalUserLeaderBoardDataDF = userLeaderBoardOrderedDataDF.withColumn("row_num", row_number.over(windowSpecRow))
-    val selectedColUserLeaderboardDF = finalUserLeaderBoardDataDF.select(col("userid"), col("org_id"), col("fullname"), col("designation"),col("profile_image"), col("total_points"),
-      col("last_credit_date"), col("rank"), col("row_num")).dropDuplicates("userid")
-
+    val certificateCounyByUserDF = Redis.getMapAsDataFrame("dashboard_content_certificates_issued_nlw_by_user", Schema.enrolmentCountByUserSchema)
+    val learningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_content_learning_hours_nlw_by_user", Schema.learningHoursByUserSchema)
+    val extendedColsUserDF = certificateCounyByUserDF.join(learningHoursByUserDF, Seq("userID"), "inner").withColumnRenamed("userID", "userid")
+    val userStatsDataDF = extendedColsUserDF.join(finalUserLeaderBoardDataDF, Seq("userid"), "inner").withColumnRenamed("totalLearningHours", "learning_hours")
+    val selectedColUserLeaderboardDF = userStatsDataDF.select(col("userid"), col("org_id"), col("fullname"), col("designation"),col("profile_image"), col("total_points"),
+      col("last_credit_date"), col("rank"), col("row_num"), col("count"), col("learning_hours").alias("total_learning_hours")).dropDuplicates("userid")
+    show(selectedColUserLeaderboardDF, "cols")
     // write to cassandra National Learning Week user table
-     writeToCassandra(selectedColUserLeaderboardDF, conf.cassandraUserKeyspace, conf.cassandraNLWUserLeaderboardTable)
+    writeToCassandra(selectedColUserLeaderboardDF, conf.cassandraUserKeyspace, conf.cassandraNLWUserLeaderboardTable)
     val mdoNLWLeaderBoardDF = filteredUserLeaderBoardDataDF
       .groupBy("org_id", "org_name")
       .agg(
@@ -81,19 +85,19 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         max("last_credit_date").as("last_credit_date") // Max last_credit_date for each org_id
       )
 
-        val sizedDF = mdoNLWLeaderBoardDF.withColumn("size",
-         when(col("total_users") > 50000, "XL")
+    val sizedDF = mdoNLWLeaderBoardDF.withColumn("size",
+      when(col("total_users") > 50000, "XL")
         .when(col("total_users").between(10000, 50000), "L")
         .when(col("total_users").between(1000, 10000), "M")
         .otherwise("S")
     )
 
-//    val sizedDF = mdoNLWLeaderBoardDF.withColumn("size",
-//      when(col("total_users") > 7, "XL")
-//        .when(col("total_users") === 3, "L")
-//        .when(col("total_users") === 2, "M")
-//        .otherwise("S")
-//    )
+    //    val sizedDF = mdoNLWLeaderBoardDF.withColumn("size",
+    //      when(col("total_users") > 7, "XL")
+    //        .when(col("total_users") === 3, "L")
+    //        .when(col("total_users") === 2, "M")
+    //        .otherwise("S")
+    //    )
 
 
     val windowSpec2 = Window.partitionBy("size").orderBy(
@@ -105,5 +109,3 @@ object NationalLearningWeekModel extends AbsDashboardModel {
     writeToCassandra(selectedColMdoLeaderboardDF, conf.cassandraUserKeyspace, conf.cassandraNLWMdoLeaderboardTable)
   }
 }
-
-
