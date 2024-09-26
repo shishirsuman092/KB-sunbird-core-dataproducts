@@ -560,7 +560,6 @@ object DashboardSyncModel extends AbsDashboardModel {
       .orderBy(col("completedCount").desc)
       .groupBy("userOrgID")
       .agg(to_json(collect_list("jsonData")).alias("jsonData"))
-    show(top5UsersByCompletionByMdoDF, "top5UsersByCompletionByMdoDF")
     Redis.dispatchDataFrame[String]("dashboard_top_5_users_by_completion_by_org", top5UsersByCompletionByMdoDF, "userOrgID", "jsonData")
 
     // Top 5 Courses - By completion
@@ -585,7 +584,6 @@ object DashboardSyncModel extends AbsDashboardModel {
       .orderBy(col("completedCount").desc)
       .groupBy("userOrgID")
       .agg(to_json(collect_list("jsonData")).alias("jsonData"))
-    show(top5CoursesByCompletionByMdoDF, "top5CoursesByCompletionByMdoDF")
     Redis.dispatchDataFrame[String]("dashboard_top_5_courses_by_completion_by_org", top5CoursesByCompletionByMdoDF, "userOrgID", "jsonData")
 
     // Top 5 Content - By completion
@@ -606,7 +604,6 @@ object DashboardSyncModel extends AbsDashboardModel {
       .orderBy(col("completedCount").desc)
       .groupBy("courseOrgID")
       .agg(to_json(collect_list("jsonData")).alias("jsonData"))
-    show(top5ContentByCompletionByCbpDF, "top5ContentByCompletionByCbpDF")
     Redis.dispatchDataFrame[String]("dashboard_top_5_content_by_completion_by_course_org", top5ContentByCompletionByCbpDF, "courseOrgID", "jsonData")
 
     // Top 5 Content - By enrolments
@@ -624,7 +621,6 @@ object DashboardSyncModel extends AbsDashboardModel {
       .orderBy(col("enrolledCount").desc)
       .groupBy("courseOrgID")
       .agg(to_json(collect_list("jsonData")).alias("jsonData"))
-    show(top5ContentByEnrolmentsByCbpDF, "top5ContentByEnrolmentsByCbpDF")
     Redis.dispatchDataFrame[String]("dashboard_top_5_content_by_enrolments_by_course_org", top5ContentByEnrolmentsByCbpDF, "courseOrgID", "jsonData")
 
 
@@ -645,9 +641,7 @@ object DashboardSyncModel extends AbsDashboardModel {
         round(col("ratingAverage"), 1).alias("ratingAverage"),
         col("ratingCount")
       )
-    show(top5CoursesByRatingDF, "top5CoursesByRatingDF")
     val top5CoursesByRatingJson = top5CoursesByRatingDF.toJSON.collectAsList().toString
-    println(top5CoursesByRatingJson)
     Redis.update("dashboard_top_5_courses_by_rating", top5CoursesByRatingJson)
 
     // Top 5 contents - By user ratings
