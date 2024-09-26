@@ -23,12 +23,13 @@ object NationalLearningWeekModel extends AbsDashboardModel {
     val monthStart = conf.nationalLearningWeekStart
     val monthEnd = conf.nationalLearningWeekEnd
 
-    val karmaPointsDataDF = userKarmaPointsDataFrame()
+    //get karma points data and filter for specific month
+    val karmaPointsDataDF = cache.load("userKarmaPoints")
       .filter(col("credit_date") >= monthStart && col("credit_date") <= monthEnd)
       .groupBy(col("userid")).agg(sum(col("points")).alias("total_points"), max(col("credit_date")).alias("last_credit_date"))
 
     //get user and user-org data
-    var (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
+    val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
 
 
     // fetch user details like fullname, profileImg etc for users of selected orgs

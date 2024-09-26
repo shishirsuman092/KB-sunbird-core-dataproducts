@@ -3,6 +3,7 @@ package org.ekstep.analytics.dashboard.report.enrolment
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
+import org.apache.spark.storage.StorageLevel
 import org.ekstep.analytics.dashboard.DashboardUtil._
 import org.ekstep.analytics.dashboard.DataUtil._
 import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig, Redis}
@@ -24,55 +25,51 @@ object UserEnrolmentModel extends AbsDashboardModel {
     val today = getDate()
 
     //GET ORG DATA
-    var (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
+    val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
     val orgHierarchyData = orgHierarchyDataframe()
     val userDataDF = userOrgDF
-      .join(orgHierarchyData, Seq("userOrgID"), "left")
+      .join(broadcast(orgHierarchyData), Seq("userOrgID"), "left")
       .withColumn("designation", coalesce(col("professionalDetails.designation"), lit("")))
-    show(userDataDF, "userDataDF")
 
     // Get course data first
     val allCourseProgramDetailsDF = contentWithOrgDetailsDataFrame(orgDF, Seq("Course", "Program", "Blended Program", "CuratedCollections", "Curated Program"))
 
     val userEnrolmentDF = userCourseProgramCompletionDataFrame()
-    show(userEnrolmentDF, "userEnrolmentDF")
 
     val userRatingDF = userCourseRatingDataframe()
 
     //use allCourseProgramDetailsDFWithOrgName below instead of allCourseProgramDetailsDF after adding orgname alias above
     val allCourseProgramCompletionWithDetailsDF = allCourseProgramCompletionWithDetailsDataFrame(userEnrolmentDF, allCourseProgramDetailsDF, userDataDF)
-    show(allCourseProgramCompletionWithDetailsDF, "allCourseProgramCompletionWithDetailsDF")
 
     val courseBatchDF = courseBatchDataFrame()
     val relevantBatchInfoDF = allCourseProgramDetailsDF.select("courseID", "category")
-      .where(expr("category IN ('Blended Program')"))
+      .where(col("category").equalTo("Blended Program"))
       .join(courseBatchDF, Seq("courseID"), "left")
       .select("courseID", "batchID", "courseBatchName", "courseBatchStartDate", "courseBatchEndDate")
-    show(relevantBatchInfoDF, "relevantBatchInfoDF")
 
     val allCourseProgramCompletionWithDetailsWithBatchInfoDF = allCourseProgramCompletionWithDetailsDF.join(relevantBatchInfoDF, Seq("courseID", "batchID"), "left")
-    show(allCourseProgramCompletionWithDetailsWithBatchInfoDF, "allCourseProgramCompletionWithDetailsWithBatchInfoDF")
 
     val allCourseProgramCompletionWithDetailsDFWithRating = allCourseProgramCompletionWithDetailsWithBatchInfoDF.join(userRatingDF, Seq("courseID", "userID"), "left")
 
-    var df = allCourseProgramCompletionWithDetailsDFWithRating
+    val df = allCourseProgramCompletionWithDetailsDFWithRating
       .durationFormat("courseDuration")
-      .withColumn("completedOn", date_format(col("courseCompletedTimestamp"), "yyyy-MM-dd HH:mm:ss"))
-      .withColumn("enrolledOn", date_format(col("courseEnrolledTimestamp"), "yyyy-MM-dd HH:mm:ss"))
-      .withColumn("firstCompletedOn", date_format(col("firstCompletedOn"), "yyyy-MM-dd HH:mm:ss"))
-      .withColumn("lastContentAccessTimestamp", date_format(col("lastContentAccessTimestamp"), "yyyy-MM-dd HH:mm:ss"))
-      .withColumn("courseLastPublishedOn", to_date(col("courseLastPublishedOn"), "dd/MM/yyyy"))
-      .withColumn("courseBatchStartDate", to_date(col("courseBatchStartDate"), "dd/MM/yyyy"))
-      .withColumn("courseBatchEndDate", to_date(col("courseBatchEndDate"), "dd/MM/yyyy"))
+      .withColumn("completedOn", date_format(col("courseCompletedTimestamp"), dateTimeFormat))
+      .withColumn("enrolledOn", date_format(col("courseEnrolledTimestamp"), dateTimeFormat))
+      .withColumn("firstCompletedOn", date_format(col("firstCompletedOn"), dateTimeFormat))
+      .withColumn("lastContentAccessTimestamp", date_format(col("lastContentAccessTimestamp"), dateTimeFormat))
+      .withColumn("courseLastPublishedOn", to_date(col("courseLastPublishedOn"), dateFormat))
+      .withColumn("courseBatchStartDate", to_date(col("courseBatchStartDate"), dateFormat))
+      .withColumn("courseBatchEndDate", to_date(col("courseBatchEndDate"), dateFormat))
       .withColumn("completionPercentage", round(col("completionPercentage"), 2))
       .withColumn("Tag", concat_ws(", ", col("additionalProperties.tag")))
-      .withColumn("Report_Last_Generated_On", date_format(current_timestamp(), "dd/MM/yyyy HH:mm:ss a"))
+      .withColumn("Report_Last_Generated_On", currentDateTime)
       .withColumn("Certificate_Generated", expr("CASE WHEN issuedCertificateCount > 0 THEN 'Yes' ELSE 'No' END"))
       .withColumn("ArchivedOn", expr("CASE WHEN courseStatus == 'Retired' THEN lastStatusChangedOn ELSE '' END"))
-      .withColumn("ArchivedOn", to_date(col("ArchivedOn"), "dd/MM/yyyy"))
+      .withColumn("ArchivedOn", to_date(col("ArchivedOn"), dateFormat))
       .withColumn("Certificate_ID", col("certificateID"))
+      .dropDuplicates("userID", "courseID", "batchID")
 
-    df = df.distinct().dropDuplicates("userID", "courseID", "batchID")
+    allCourseProgramCompletionWithDetailsDFWithRating.persist(StorageLevel.MEMORY_ONLY)
 
     // read acbp data and filter the cbp plan based on status
     val acbpDF = acbpDetailsDF().where(col("acbpStatus") === "Live")
@@ -81,16 +78,14 @@ object UserEnrolmentModel extends AbsDashboardModel {
     val acbpAllotmentDF = explodedACBPDetails(acbpDF, userDataDF, selectColumns)
 
     // replace content list with names of the courses instead of ids
-    var acbpAllEnrolmentDF = acbpAllotmentDF
+    val acbpAllEnrolmentDF = acbpAllotmentDF
       .withColumn("courseID", explode(col("acbpCourseIDList"))).withColumn("liveCBPlan", lit(true))
+      .select(col("userOrgID"),col("courseID"),col("userID"),col("designation"),col("liveCBPlan"))
 
-    acbpAllEnrolmentDF = acbpAllEnrolmentDF.select(col("userOrgID"),col("courseID"),col("userID"),col("designation"),col("liveCBPlan"))
-    show(acbpAllEnrolmentDF, "acbpAllEnrolmentDF")
-
-    df = df.join(acbpAllEnrolmentDF, Seq("userID", "userOrgID", "courseID"), "left")
+    val enrolmentWithACBP = df.join(acbpAllEnrolmentDF, Seq("userID", "userOrgID", "courseID"), "left")
       .withColumn("live_cbp_plan_mandate", when(col("liveCBPlan").isNull, false).otherwise(col("liveCBPlan")))
 
-    val fullReportDF = df.select(
+    val fullReportDF = enrolmentWithACBP.select(
         col("userID"),
         col("userOrgID"),
         col("courseID"),
@@ -136,21 +131,26 @@ object UserEnrolmentModel extends AbsDashboardModel {
       )
       .coalesce(1)
 
-    show(df, "df")
-
     val reportPath = s"${conf.userEnrolmentReportPath}/${today}"
     // generateReport(fullReportDF, s"${reportPath}-full")
 
-    val mdoReportDF = fullReportDF.drop("userID", "userOrgID", "courseID", "courseOrgID", "issuedCertificateCount", "courseStatus", "resourceCount", "resourcesConsumed", "rawCompletionPercentage")
+    val mdoReportDF = fullReportDF
+      .select(
+        col("Full_Name"),col("Designation"),col("Email"),col("Phone_Number"),col("Group"),col("Tag"),col("Ministry"),col("Department"),
+        col("Organization"),col("Content_Provider"),col("Content_Name"),col("Content_Type"),col("Content_Duration"),col("Batch_Id"),col("Batch_Name"),
+        col("Batch_Start_Date"),col("Batch_End_Date"),col("Enrolled_On"),col("Status"),col("Content_Progress_Percentage"),col("Last_Published_On"),
+        col("Content_Retired_On"),col("Completed_On"),col("Certificate_Generated"),col("User_Rating"),col("Gender"),col("Category"),col("External_System"),
+        col("External_System_Id"),col("mdoid"),col("Certificate_ID"),col("Report_Last_Generated_On"),col("Live_CBP_Plan_Mandate")
+      )
     generateReport(mdoReportDF, reportPath, "mdoid","ConsumptionReport")
     // to be removed once new security job is created
     if (conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
     }
 
-    val warehouseDF = df
+    val warehouseDF = enrolmentWithACBP
       .withColumn("certificate_generated_on",date_format(from_utc_timestamp(to_utc_timestamp(to_timestamp(
-        col("certificateGeneratedOn"), "yyyy-MM-dd'T'HH:mm:ss.SSS"), "UTC"), "IST"), "yyyy-MM-dd HH:mm:ss"))
+        col("certificateGeneratedOn"), dateTimeWithMilliSecFormat), "UTC"), "IST"), dateTimeFormat))
       .withColumn("data_last_generated_on", currentDateTime)
       .select(
         col("userID").alias("user_id"),
@@ -173,6 +173,8 @@ object UserEnrolmentModel extends AbsDashboardModel {
         col("data_last_generated_on")
       ).dropDuplicates("user_id","batch_id","content_id")
     generateReport(warehouseDF.coalesce(1), s"${reportPath}-warehouse")
+
+    allCourseProgramCompletionWithDetailsDFWithRating.unpersist()
 
     Redis.closeRedisConnect()
 

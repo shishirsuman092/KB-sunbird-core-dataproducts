@@ -88,7 +88,7 @@ object DataWarehouseModel extends AbsDashboardModel {
 
     val kcmContentCompetencyMappingPath = s"${conf.localReportDir}/${conf.kcmReportPath}/${today}/ContentCompetencyMapping-warehouse"
     val kcmContentCompetencyMapping = readCSV(kcmContentCompetencyMappingPath)
-      .select(col("course_id"), col("competency_area_id").cast("int"), col("competency_theme_id").cast("int"), col("competency_sub_theme_id").cast("int"))
+      .select(col("course_id"), col("competency_area_id").cast("int"), col("competency_theme_id").cast("int"), col("competency_sub_theme_id").cast("int"), col("data_last_generated_on"))
     truncateWarehouseTable(conf.dwKcmContentTable)
     saveDataframeToPostgresTable_With_Append(kcmContentCompetencyMapping, dwPostgresUrl, conf.dwKcmContentTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
 

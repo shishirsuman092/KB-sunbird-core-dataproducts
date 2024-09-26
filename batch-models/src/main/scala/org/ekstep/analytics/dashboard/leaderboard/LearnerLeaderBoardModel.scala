@@ -28,7 +28,7 @@ object LearnerLeaderBoardModel extends AbsDashboardModel {
     )
 
     // Aggregate karma points data
-    val karmaPointsDataDF = userKarmaPointsDataFrame()
+    val karmaPointsDataDF = cache.load("userKarmaPoints")
       .filter(col("credit_date") >= monthStart && col("credit_date") <= monthEnd)
       .groupBy(col("userid")).agg(sum(col("points")).alias("total_points"), max(col("credit_date")).alias("last_credit_date")).cache()
 
@@ -98,7 +98,7 @@ object LearnerLeaderBoardModel extends AbsDashboardModel {
     userLeaderBoardDataDF = userLeaderBoardDataDF.withColumn("row_num", row_number().over(windowSpecRow))
 
     //read existing leaderboard data from cassandra to fetch ranks and update the previous rank column in new dataframe
-    val learnerLeaderboardDF = learnerLeaderBoardDataFrame()
+    val learnerLeaderboardDF = cache.load("learnerLeaderBoard")
 
     // final df for writing to cassandra learner leaderboard table
     val finalUserLeaderBoardDF = userLeaderBoardDataDF

@@ -38,7 +38,7 @@ object MinistryLearnerLeaderboardModel extends AbsDashboardModel {
     )
 
     // Get karma points data and filter for specific month
-    val karmaPointsDataDF = userKarmaPointsDataFrame()
+    val karmaPointsDataDF = cache.load("userKarmaPoints")
       .filter(col("credit_date") >= monthStart && col("credit_date") <= monthEnd)
       .groupBy(col("userid")).agg(sum(col("points")).alias("total_points"), max(col("credit_date")).alias("last_credit_date"))
       .cache()

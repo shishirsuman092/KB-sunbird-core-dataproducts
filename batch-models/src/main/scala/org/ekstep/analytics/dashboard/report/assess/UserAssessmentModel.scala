@@ -29,22 +29,20 @@ object UserAssessmentModel extends AbsDashboardModel {
     val (hierarchyDF, allCourseProgramDetailsWithCompDF, allCourseProgramDetailsDF,
       allCourseProgramDetailsWithRatingDF) = contentDataFrames(orgDF)
 
-    val assessmentDF = assessmentESDataFrame(Seq("Standalone Assessment"))
-    val assessWithHierarchyDF = assessWithHierarchyDataFrame(assessmentDF, hierarchyDF, orgDF)
-    val assessWithDetailsDF = assessWithHierarchyDF.drop("children")
+    val assessmentDF = assessmentESDataFrame(Seq("Standalone Assessment")).cache()
+    val assessWithHierarchyDF = assessWithHierarchyDataFrame(assessmentDF, hierarchyDF, orgDF).cache()
+    val assessWithDetailsDF = assessWithHierarchyDF.drop("children").cache()
 
     // kafka dispatch to dashboard.assessment
     kafkaDispatch(withTimestamp(assessWithDetailsDF, timestamp), conf.assessmentTopic)
 
-    val assessChildrenDF = assessmentChildrenDataFrame(assessWithHierarchyDF)
+    val assessChildrenDF = assessmentChildrenDataFrame(assessWithHierarchyDF).cache()
     val userAssessmentDF = cache.load("userAssessment")
     val userAssessChildrenDF = userAssessmentChildrenDataFrame(userAssessmentDF, assessChildrenDF)
     val userAssessChildrenDetailsDF = userAssessmentChildrenDetailsDataFrame(userAssessChildrenDF, assessWithDetailsDF,
       allCourseProgramDetailsWithRatingDF, userOrgDF)
     // kafka dispatch to dashboard.user.assessment
     kafkaDispatch(withTimestamp(userAssessChildrenDetailsDF, timestamp), conf.userAssessmentTopic)
-
-    var df = userAssessChildrenDetailsDF
 
     // get the mdoids for which the report are requesting
     // val mdoID = conf.mdoIDs
@@ -53,29 +51,23 @@ object UserAssessmentModel extends AbsDashboardModel {
     // val mdoData = mdoIDDF.join(orgDF, Seq("orgID"), "inner").select(col("orgID").alias("assessOrgID"), col("orgName"))
     // df = df.join(mdoData, Seq("assessOrgID"), "inner")
 
-    val latest = df.groupBy(col("assessChildID"), col("userID"))
+    val latest = userAssessChildrenDetailsDF.groupBy(col("assessChildID"), col("userID"))
       .agg(
         max("assessEndTimestamp").alias("assessEndTimestamp"),
         expr("COUNT(*)").alias("noOfAttempts")
       )
 
-    df = df.join(latest, Seq("assessChildID", "userID", "assessEndTimestamp"), "inner")
-
     val caseExpression = "CASE WHEN assessPass == 1 AND assessUserStatus == 'SUBMITTED' THEN 'Pass' WHEN assessPass == 0 AND assessUserStatus == 'SUBMITTED' THEN 'Fail' " +
       " ELSE 'N/A' END"
-    df = df.withColumn("Assessment_Status", expr(caseExpression))
-
     val caseExpressionCompletionStatus = "CASE WHEN assessUserStatus == 'SUBMITTED' THEN 'Completed' ELSE 'In progress' END"
-    df = df.withColumn("Overall_Status", expr(caseExpressionCompletionStatus))
 
-    df = df.withColumn("Report_Last_Generated_On", date_format(current_timestamp(), "dd/MM/yyyy HH:mm:ss a"))
-
-    df = df
+    val df = userAssessChildrenDetailsDF.join(broadcast(latest), Seq("assessChildID", "userID", "assessEndTimestamp"), "inner")
+      .withColumn("Assessment_Status", expr(caseExpression))
+      .withColumn("Overall_Status", expr(caseExpressionCompletionStatus))
+      .withColumn("Report_Last_Generated_On", currentDateTime)
       .dropDuplicates("userID", "assessID")
       .select(
         col("userID").alias("User_ID"),
-        col("assessID"),
-        col("assessOrgID"),
         col("fullName").alias("Full_Name"),
         col("assessName").alias("Assessment_Name"),
         col("Overall_Status"),
@@ -86,13 +78,10 @@ object UserAssessmentModel extends AbsDashboardModel {
         col("maskedPhone").alias("Phone"),
         col("assessOrgID").alias("mdoid"),
         col("Report_Last_Generated_On")
-      )
-    show(df)
+      ).coalesce(1)
 
-    df = df.coalesce(1)
     val reportPath = s"${conf.standaloneAssessmentReportPath}/${today}"
     // generateReport(df, s"${reportPath}-full")
-    df = df.drop("assessID", "assessOrgID")
     generateAndSyncReports(df, "mdoid",reportPath, "StandaloneAssessmentReport")
 
     Redis.closeRedisConnect()
