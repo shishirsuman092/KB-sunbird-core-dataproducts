@@ -23,7 +23,6 @@ object NationalLearningWeekModel extends AbsDashboardModel {
     val monthStart = conf.nationalLearningWeekStart
     val monthEnd = conf.nationalLearningWeekEnd
 
-    //get karma points data and filter for specific month
     val karmaPointsDataDF = userKarmaPointsDataFrame()
       .filter(col("credit_date") >= monthStart && col("credit_date") <= monthEnd)
       .groupBy(col("userid")).agg(sum(col("points")).alias("total_points"), max(col("credit_date")).alias("last_credit_date"))
@@ -45,7 +44,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
       )
 
     //join karma points details with user details and select required columns
-    val userLeaderBoardDataDF = userOrgData.join(karmaPointsDataDF, Seq("userid"), "inner")
+    val userLeaderBoardDataDF = userOrgData.join(karmaPointsDataDF, Seq("userid"), "left")
       .filter(col("org_id") =!= "")
       .select(userOrgData("userid"),
         userOrgData("org_id"),
@@ -57,13 +56,13 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         karmaPointsDataDF("last_credit_date"))
 
 
-    val filteredUserLeaderBoardDataDF = userLeaderBoardDataDF
-      .filter(col("total_points").isNotNull && col("total_points") > 0)
+    //val filteredUserLeaderBoardDataDF = userLeaderBoardDataDF
+    // .filter(col("total_points").isNotNull && col("total_points") > 0)
 
     val windowSpecRank = Window.partitionBy("org_id").orderBy(desc("total_points"))
 
     // rank the users based on the points within each org
-    val userLeaderBoardOrderedDataDF = filteredUserLeaderBoardDataDF.withColumn("rank", dense_rank().over(windowSpecRank))
+    val userLeaderBoardOrderedDataDF = userLeaderBoardDataDF.withColumn("rank", dense_rank().over(windowSpecRank))
 
     // sort them based on their fullNames for each rank group within each org
     val windowSpecRow = Window.partitionBy("org_id").orderBy(col("rank"), col("last_credit_date").asc)
@@ -71,13 +70,27 @@ object NationalLearningWeekModel extends AbsDashboardModel {
     val certificateCounyByUserDF = Redis.getMapAsDataFrame("dashboard_content_certificates_issued_nlw_by_user", Schema.enrolmentCountByUserSchema)
     val learningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_content_learning_hours_nlw_by_user", Schema.learningHoursByUserSchema)
     val extendedColsUserDF = certificateCounyByUserDF.join(learningHoursByUserDF, Seq("userID"), "inner").withColumnRenamed("userID", "userid")
-    val userStatsDataDF = extendedColsUserDF.join(finalUserLeaderBoardDataDF, Seq("userid"), "inner").withColumnRenamed("totalLearningHours", "learning_hours")
-    val selectedColUserLeaderboardDF = userStatsDataDF.select(col("userid"), col("org_id"), col("fullname"), col("designation"),col("profile_image"), col("total_points"),
-      col("last_credit_date"), col("rank"), col("row_num"), col("count"), col("learning_hours").alias("total_learning_hours")).dropDuplicates("userid")
+    val userStatsDataDF = extendedColsUserDF.join(finalUserLeaderBoardDataDF, Seq("userid"), "right").withColumnRenamed("totalLearningHours", "learning_hours")
+    val selectedColUserLeaderboardDF = userStatsDataDF
+      .select(
+        col("userid"),
+        col("org_id"),
+        col("fullname"),
+        col("designation"),
+        col("profile_image"),
+        coalesce(col("total_points"), lit(0)).alias("total_points"), // Replace null total_points with 0
+        col("last_credit_date"),
+        coalesce(col("rank"), lit(0)).alias("rank"), // Replace null rank with 0
+        col("row_num"),
+        coalesce(col("count"), lit(0)).alias("count"), // Replace null count with 0
+        coalesce(col("learning_hours"), lit(0)).alias("total_learning_hours") // Replace null learning_hours with 0
+      )
+      .dropDuplicates("userid")
     show(selectedColUserLeaderboardDF, "cols")
     // write to cassandra National Learning Week user table
+
     writeToCassandra(selectedColUserLeaderboardDF, conf.cassandraUserKeyspace, conf.cassandraNLWUserLeaderboardTable)
-    val mdoNLWLeaderBoardDF = filteredUserLeaderBoardDataDF
+    val mdoNLWLeaderBoardDF = userLeaderBoardDataDF
       .groupBy("org_id", "org_name")
       .agg(
         count("userid").as("total_users"),           // Count the number of users per org_id
@@ -91,14 +104,6 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         .when(col("total_users").between(1000, 10000), "M")
         .otherwise("S")
     )
-
-    //    val sizedDF = mdoNLWLeaderBoardDF.withColumn("size",
-    //      when(col("total_users") > 7, "XL")
-    //        .when(col("total_users") === 3, "L")
-    //        .when(col("total_users") === 2, "M")
-    //        .otherwise("S")
-    //    )
-
 
     val windowSpec2 = Window.partitionBy("size").orderBy(
       col("total_points").desc,
