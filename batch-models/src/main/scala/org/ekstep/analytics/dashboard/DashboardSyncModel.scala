@@ -235,6 +235,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     // in-progress + completed = started
     val liveRetiredCourseInProgressDF = liveRetiredCourseStartedDF.where(expr("dbCompletionStatus=1"))
     val liveRetiredCourseCompletedDF = liveRetiredCourseStartedDF.where(expr("dbCompletionStatus=2"))
+    val liveRetiredContentCompletedDF = liveRetiredContentEnrolmentDF.where(expr("dbCompletionStatus=2"))
     val liveRetiredCourseEnrolmentsCompletionsDF = liveRetiredCourseStartedDF.where(expr("dbCompletionStatus IN (0, 1, 2)"))
     // course program completed
     val liveRetiredCourseProgramCompletedDF = liveRetiredCourseProgramEnrolmentDF.where(expr("dbCompletionStatus=2"))
@@ -321,8 +322,10 @@ object DashboardSyncModel extends AbsDashboardModel {
 
     // cbp-wise enrollment/not-started/started/in-progress/completion counts
     val liveRetiredCourseEnrolmentByCBPDF = liveRetiredCourseEnrolmentDF.groupBy("courseOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
+    val liveRetiredContentCompletedByCBPDF = liveRetiredContentCompletedDF.groupBy("courseOrgID").agg(count("*").alias("count"))
     val liveRetiredCourseModeratedCourseEnrolmentByCBPDF = liveRetiredCourseModeratedCourseEnrolmentDF.groupBy("courseOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     val liveRetiredContentEnrolmentByCBPDF = liveRetiredContentEnrolmentDF.groupBy("courseOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
+    Redis.dispatchDataFrame[Long]("dashboard_content_completed_count_by_course_org", liveRetiredContentCompletedByCBPDF, "courseOrgID", "count")
     Redis.dispatchDataFrame[Long]("dashboard_enrolment_count_by_course_org", liveRetiredCourseEnrolmentByCBPDF, "courseOrgID", "count")
     Redis.dispatchDataFrame[Long]("dashboard_course_moderated_course_enrolment_count_by_course_org", liveRetiredCourseModeratedCourseEnrolmentByCBPDF, "courseOrgID", "count")
     Redis.dispatchDataFrame[Long]("dashboard_enrolment_content_by_course_org", liveRetiredContentEnrolmentByCBPDF, "courseOrgID", "count")
@@ -430,6 +433,13 @@ object DashboardSyncModel extends AbsDashboardModel {
         col("sorted_courseIDs")
       )
 
+    // average NPS
+    //val npsQuery = """SELECT dimension_channel AS orgID, COUNT(DISTINCT(uid)) as activeCount FROM \"summary-events\" WHERE dimensions_type='app' AND __time > CURRENT_TIMESTAMP - INTERVAL '24' HOUR GROUP BY 1"""
+    //var npsDF = druidDFOption(query, conf.sparkDruidRouterHost).orNull
+   // if (npsDF == null) return emptySchemaDataFrame(Schema.averageNPSSchema)
+   // npsDF = npsDF.withColumn("avgNps", expr("CAST(avgNps as LONG)"))
+    //val avgNPS = npsDF.select("avgNps").first().getLong(0)
+   // Redis.update("dashboard_nps_across_platform", avgNPS.toString)
 
     val topProgramsByCBPDF = liveCourseProgramExcludingModeratedCompletedDF
       .filter($"category" === "Program")
@@ -578,6 +588,46 @@ object DashboardSyncModel extends AbsDashboardModel {
     show(top5CoursesByCompletionByMdoDF, "top5CoursesByCompletionByMdoDF")
     Redis.dispatchDataFrame[String]("dashboard_top_5_courses_by_completion_by_org", top5CoursesByCompletionByMdoDF, "userOrgID", "jsonData")
 
+    // Top 5 Content - By completion
+    // SELECT courseID, courseName, category, courseOrgName, COUNT(userID) AS enrolled_count,
+    // SUM(CASE WHEN dbCompletionStatus=2 THEN 1 ELSE 0 END) AS \"Course Completions\"
+    // FROM \"dashboards-user-course-program-progress\"
+    // WHERE __time = (SELECT MAX(__time) FROM \"dashboards-user-course-program-progress\")
+    // AND userStatus=1 AND courseStatus IN ('Live', 'Retired') $mdo$
+    // GROUP BY 1, 2, 3, 4 ORDER BY \"Course Completions\" DESC LIMIT 5
+    val top5ContentByCompletionByCbpDF = liveRetiredContentEnrolmentDF
+      .groupBy("courseID", "courseName", "courseOrgID")
+      .agg(
+        count("userID").alias("enrolledCount"),
+        expr("SUM(CASE WHEN dbCompletionStatus=2 THEN 1 ELSE 0 END)").alias("completedCount")
+      )
+      .groupByLimit(Seq("courseOrgID"), "completedCount", 5, desc = true)
+      .withColumn("jsonData", struct("rowNum", "courseID", "courseName", "courseOrgID", "completedCount"))
+      .orderBy(col("completedCount").desc)
+      .groupBy("courseOrgID")
+      .agg(to_json(collect_list("jsonData")).alias("jsonData"))
+    show(top5ContentByCompletionByCbpDF, "top5ContentByCompletionByCbpDF")
+    Redis.dispatchDataFrame[String]("dashboard_top_5_content_by_completion_by_course_org", top5ContentByCompletionByCbpDF, "courseOrgID", "jsonData")
+
+    // Top 5 Content - By enrolments
+    // SELECT courseID, courseName, category, courseOrgName, COUNT(userID) AS enrolled_count,
+    // FROM \"dashboards-user-course-program-progress\"
+    // WHERE __time = (SELECT MAX(__time) FROM \"dashboards-user-course-program-progress\")
+    // AND userStatus=1 AND courseStatus IN ('Live', 'Retired') $mdo$
+    // GROUP BY 1, 2, 3, 4 ORDER BY \"enrolled_count\" DESC LIMIT 5
+    val top5ContentByEnrolmentsByCbpDF = liveRetiredContentEnrolmentDF
+      .groupBy("courseID", "courseName", "courseOrgID")
+      .agg(
+        count("userID").alias("enrolledCount"))
+      .groupByLimit(Seq("courseOrgID"), "enrolledCount", 5, desc = true)
+      .withColumn("jsonData", struct("rowNum", "courseID", "courseName", "courseOrgID", "enrolledCount"))
+      .orderBy(col("enrolledCount").desc)
+      .groupBy("courseOrgID")
+      .agg(to_json(collect_list("jsonData")).alias("jsonData"))
+    show(top5ContentByEnrolmentsByCbpDF, "top5ContentByEnrolmentsByCbpDF")
+    Redis.dispatchDataFrame[String]("dashboard_top_5_content_by_enrolments_by_course_org", top5ContentByEnrolmentsByCbpDF, "courseOrgID", "jsonData")
+
+
     // Top 5 Courses - By user ratings
     // SELECT courseID, courseName, category, courseOrgName, ROUND(AVG(ratingAverage), 1) AS rating_avg, SUM(ratingCount) AS rating_count
     // FROM \"dashboards-course\" WHERE __time = (SELECT MAX(__time) FROM \"dashboards-course\")
@@ -599,6 +649,39 @@ object DashboardSyncModel extends AbsDashboardModel {
     val top5CoursesByRatingJson = top5CoursesByRatingDF.toJSON.collectAsList().toString
     println(top5CoursesByRatingJson)
     Redis.update("dashboard_top_5_courses_by_rating", top5CoursesByRatingJson)
+
+    // Top 5 contents - By user ratings
+    // SELECT courseID, courseName, category, courseOrgName, ROUND(AVG(ratingAverage), 1) AS rating_avg, SUM(ratingCount) AS rating_count
+    // FROM \"dashboards-course\" WHERE __time = (SELECT MAX(__time) FROM \"dashboards-course\")
+    // AND ratingCount>0 AND ratingAverage<=5.0 AND category='Course' AND courseStatus='Live'
+    // GROUP BY 1, 2, 3, 4 ORDER BY rating_count * rating_avg DESC LIMIT 5
+    val averageRatingsDF = ratedLiveContentDF
+      .where(expr("ratingCount > 0 AND ratingAverage <= 5.0"))
+      .groupBy("courseOrgID", "courseID", "courseName")
+      .agg(round(avg("ratingAverage"), 1).alias("averageRating"), sum("ratingCount").alias("totalRatings"))
+    val top5ContentByCourseOrgDF = averageRatingsDF
+      .withColumn("rowNum", row_number().over(Window.partitionBy("courseOrgID").orderBy(col("averageRating").desc)))
+      .where(col("rowNum") <= 5).select("courseOrgID", "courseID", "courseName", "averageRating", "totalRatings")
+    val top5ContentByRatingByOrgDF = top5ContentByCourseOrgDF
+      .withColumn("jsonData", struct("courseID", "courseName", "averageRating", "totalRatings"))
+      .groupBy("courseOrgID").agg(to_json(collect_list("jsonData")).alias("jsonData"))
+    Redis.dispatchDataFrame[String]("dashboard_top_5_content_by_rating_by_course_org", top5ContentByRatingByOrgDF, "courseOrgID", "jsonData")
+
+    //Total ratings by org
+    val totalRatingsByCbp = ratedLiveContentDF.groupBy("courseOrgID").agg(count("ratingCount").alias("totalRatings"))
+    Redis.dispatchDataFrame[String]("dashboard_content_total_ratings_by_course_org", totalRatingsByCbp, "courseOrgID", "totalRatings")
+
+    //Ratings spread by org
+    val ratingsSpreadDF = ratedLiveContentDF.groupBy("courseOrgID").agg(
+      sum("count5Star").alias("count5"),
+      sum("count4Star").alias("count4"),
+      sum("count3Star").alias("count3"),
+      sum("count2Star").alias("count2"),
+      sum("count1Star").alias("count1"))
+      .select(col("courseOrgID"),
+        struct(col("count5"), col("count4"), col("count3"), col("count2"), col("count1")).alias("ratingsCount"))
+    val ratingsSpreadJsonByCbpDF = ratingsSpreadDF.select(col("courseOrgID"), to_json(col("ratingsCount")).alias("jsonData"))
+    Redis.dispatchDataFrame[String]("dashboard_content_ratings_spread_by_course_org", ratingsSpreadJsonByCbpDF, "courseOrgID", "jsonData")
 
     // Top 5 MDOs - By course completion
     // SELECT userOrgID, userOrgName, COUNT(userID) AS completed_count FROM \"dashboards-user-course-program-progress\"
