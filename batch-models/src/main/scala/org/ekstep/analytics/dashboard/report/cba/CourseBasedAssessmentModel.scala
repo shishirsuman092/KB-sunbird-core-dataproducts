@@ -100,6 +100,7 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
         col("assessIncorrect").alias("No.of Incorrect Responses"),
         col("assessBlank").alias("Unattempted Questions"),
         col("retakes").alias("No. of Retakes"),
+        col("assessEndTime"),
         col("userOrgID").alias("mdoid")
       ).repartition(1)
 
@@ -117,6 +118,7 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
       .withColumn("Assessment Duration", lit(null).cast("string"))
       .withColumn("Last Attempted Date", lit(null).cast("date"))
       .withColumn("No. of Retakes", lit(null).cast("integer"))
+      .withColumn("assessEndTime", lit(null).cast("bigint"))
       .withColumn("assessChildID", lit(null).cast("string"))
       .withColumn("Pass", when(col("result_percent") >= col("pass_percent"), lit("Yes")).otherwise(lit("No")))
       .withColumn("Tags", concat_ws(", ", col("additionalProperties.tag")))
@@ -150,6 +152,7 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
         col("incorrect_count").alias("No.of Incorrect Responses"),
         col("not_answered_count").alias("Unattempted Questions"),
         col("`No. of Retakes`"),
+        col("assessEndTime"),
         col("userOrgID").alias("mdoid")
       ).repartition(1)
 
@@ -197,21 +200,21 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
     val warehouseDF = finalDF
       .withColumn("data_last_generated_on", currentDateTime)
       .select(
-        col("userID").alias("user_id"),
-        col("course_id").alias("content_id"),
+        col("User ID").alias("user_id"),
+        col("Course ID").alias("content_id"),
         col("assessChildID").alias("assessment_id"),
-        col("assessChildName").alias("assessment_name"),
-        col("assessment_type").alias("assessment_type"),
-        col("totalAssessmentDuration").alias("assessment_duration"),
-        col("totalAssessmentDuration").alias("time_spent_by_the_user"),
+        col("Assessment Name").alias("assessment_name"),
+        col("Assessment Type").alias("assessment_type"),
+        col("Assessment Duration").alias("assessment_duration"),
+        col("Assessment Duration").alias("time_spent_by_the_user"),
         //from_unixtime(col("assessEndTime"), "dd/MM/yyyy").alias("completion_date"),
-        date_format(from_unixtime(col("assessEndTime")), dateTimeFormat).alias("completion_date"),
-        col("assessOverallResult").alias("score_achieved"),
-        col("assessMaxQuestions").alias("overall_score"),
-        col("assessPercentage").alias("cut_off_percentage"),
-        col("assessMaxQuestions").alias("total_question"),
-        col("assessIncorrect").alias("number_of_incorrect_responses"),
-        col("retakes").alias("number_of_retakes"),
+        date_format(from_unixtime(col("assessEndTime")), "yyyy-MM-dd HH:mm:ss").alias("completion_date"),
+        col("Latest Percentage Achieved").alias("score_achieved"),
+        col("Total Questions").alias("overall_score"),
+        col("Cut off Percentage").alias("cut_off_percentage"),
+        col("Total Questions").alias("total_question"),
+        col("`No.of Incorrect Responses`").alias("number_of_incorrect_responses"),
+        col("`No. of Retakes`").alias("number_of_retakes"),
         col("data_last_generated_on")
       )
     generateReport(warehouseDF.coalesce(1), s"${reportPath}-warehouse")

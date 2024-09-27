@@ -414,12 +414,14 @@ object DashboardSyncModel extends AbsDashboardModel {
       )
 
     // average NPS
-    //val npsQuery = """SELECT dimension_channel AS orgID, COUNT(DISTINCT(uid)) as activeCount FROM \"summary-events\" WHERE dimensions_type='app' AND __time > CURRENT_TIMESTAMP - INTERVAL '24' HOUR GROUP BY 1"""
-    //var npsDF = druidDFOption(query, conf.sparkDruidRouterHost).orNull
-   // if (npsDF == null) return emptySchemaDataFrame(Schema.averageNPSSchema)
-   // npsDF = npsDF.withColumn("avgNps", expr("CAST(avgNps as LONG)"))
-    //val avgNPS = npsDF.select("avgNps").first().getLong(0)
-   // Redis.update("dashboard_nps_across_platform", avgNPS.toString)
+    val npsQuery = """SELECT AVG(rating) AS avgNps FROM \"nps-upgraded-users-data\""""
+    var npsDF = druidDFOption(npsQuery, conf.sparkDruidRouterHost).orNull
+    if (npsDF == null) {
+      npsDF = Seq((0)).toDF("avgNps")
+    }
+    npsDF = npsDF.withColumn("avgNps", expr("CAST(avgNps as LONG)"))
+    val avgNPS = npsDF.select("avgNps").first().getLong(0)
+    Redis.update("dashboard_nps_across_platform", avgNPS.toString)
 
     val topProgramsByCBPDF = liveCourseProgramExcludingModeratedCompletedDF
       .filter($"category" === "Program")
