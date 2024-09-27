@@ -18,7 +18,7 @@ object UserACBPReportModel extends AbsDashboardModel {
     val today = getDate()
 
     // get user and org data frames
-    var (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
+    val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
     val orgHierarchyData = orgHierarchyDataframe()
     val userDataDF = userOrgDF
       .join(orgHierarchyData, Seq("userOrgID"), "left")
@@ -27,7 +27,6 @@ object UserACBPReportModel extends AbsDashboardModel {
       .withColumn("userPrimaryEmail", col("personalDetails.primaryEmail"))
       .withColumn("userMobile", col("personalDetails.mobile"))
       .select("userID", "fullName", "userPrimaryEmail", "userMobile", "userOrgID", "ministry_name", "dept_name", "userOrgName", "designation", "group")
-    show(userDataDF, "userDataDF")
 
     // get course details and course enrolment data frames
     val hierarchyDF = contentHierarchyDataFrame()
@@ -64,30 +63,29 @@ object UserACBPReportModel extends AbsDashboardModel {
         col("assignmentType").alias("allotment_type"),
         col("allotment_to"),
         col("courseID").alias("content_id"),
-        date_format(col("allocatedOn"), "yyyy-MM-dd HH:mm:ss").alias("allocated_on"),
-        date_format(col("completionDueDate"), "yyyy-MM-dd").alias("due_by"),
+        date_format(col("allocatedOn"), dateTimeFormat).alias("allocated_on"),
+        date_format(col("completionDueDate"), dateFormat).alias("due_by"),
         //col("allocatedOn").alias("allocated_on"),
         //col("completionDueDate").alias("due_by"),
         col("acbpStatus").alias("status"),
         col("data_last_generated_on")
       )
       .distinct().orderBy("org_id","created_by","cbPlanName")
-    show(cbPlanWarehouseDF, "cbPlanWarehouseDF")
 
     // for particular userID and course ID, choose allotment entries based on priority rules
     val acbpEnrolmentDF = acbpAllEnrolmentDF.where(col("acbpStatus") === "Live")
       .groupByLimit(Seq("userID", "courseID"), "completionDueDate", 1, desc = true)
-    show(acbpEnrolmentDF, "acbpEnrolmentDF")
     kafkaDispatch(withTimestamp(acbpEnrolmentDF, timestamp), conf.acbpEnrolmentTopic)
+
+    acbpEnrolmentDF.cache()
 
     // for enrolment report
     val enrolmentReportDataDF = acbpEnrolmentDF
       .withColumn("currentProgress", expr("CASE WHEN dbCompletionStatus=2 THEN 'Completed' WHEN dbCompletionStatus=1 THEN 'In Progress' WHEN dbCompletionStatus=0 THEN 'Not Started' ELSE 'Not Enrolled' END"))
-      .withColumn("courseCompletedTimestamp",  date_format(col("courseCompletedTimestamp"), "dd/MM/yy"))
-      .withColumn("allocatedOn",  date_format(col("allocatedOn"), "dd/MM/yy"))
-      .withColumn("completionDueDate",  date_format(col("completionDueDate"), "dd/MM/yy"))
+      .withColumn("courseCompletedTimestamp",  date_format(col("courseCompletedTimestamp"), dateFormat))
+      .withColumn("allocatedOn",  date_format(col("allocatedOn"), dateFormat))
+      .withColumn("completionDueDate",  date_format(col("completionDueDate"), dateFormat))
       .na.fill("")
-    show(enrolmentReportDataDF, "enrolmentReportDataDF")
 
     val enrolmentReportDF = enrolmentReportDataDF
       .select(
@@ -104,11 +102,9 @@ object UserACBPReportModel extends AbsDashboardModel {
         col("currentProgress").alias("Current Progress"),
         col("completionDueDate").alias("Due Date of Completion"),
         col("courseCompletedTimestamp").alias("Actual Date of Completion"),
-        col("userOrgID").alias("mdoid"),
-        date_format(current_timestamp(), "dd/MM/yyyy HH:mm:ss a").alias("Report_Last_Generated_On")
-      )
+        col("userOrgID").alias("mdoid")
+      ).withColumn("Report_Last_Generated_On", currentDateTime)
       .repartition(1)  // repartitioning here resolves a memory issue
-    show(enrolmentReportDF, "enrolmentReportDF")
 
     val reportPath = s"${conf.acbpReportPath}/${today}"
     generateReport(enrolmentReportDF.drop("mdoid"), s"${reportPath}/CBPEnrollmentReport", fileName="CBPEnrollmentReport")
@@ -129,7 +125,6 @@ object UserACBPReportModel extends AbsDashboardModel {
         expr("SUM(CASE WHEN dbCompletionStatus=2 THEN 1 ELSE 0 END)").alias("completedCount"),
         expr("SUM(CASE WHEN dbCompletionStatus=2 AND courseCompletedTimestampLong<completionDueDateLong THEN 1 ELSE 0 END)").alias("completedBeforeDueDateCount")
       )
-    show(userSummaryDataDF, "userSummaryDataDF")
 
     val userSummaryReportDF = userSummaryDataDF
       .select(
@@ -144,10 +139,8 @@ object UserACBPReportModel extends AbsDashboardModel {
         col("allocatedCount").alias("Number of CBP Courses Allocated"),
         col("completedCount").alias("Number of CBP Courses Completed"),
         col("completedBeforeDueDateCount").alias("Number of CBP Courses Completed within due date"),
-        col("userOrgID").alias("mdoid"),
-        date_format(current_timestamp(), "dd/MM/yyyy HH:mm:ss a").alias("Report_Last_Generated_On")
-      )
-    show(userSummaryReportDF, "userSummaryReportDF")
+        col("userOrgID").alias("mdoid")
+      ).withColumn("Report_Last_Generated_On", currentDateTime)
     generateReport(userSummaryReportDF.drop("mdoid"), s"${reportPath}/CBPUserSummaryReport", fileName="CBPUserSummaryReport")
     generateReport(userSummaryReportDF.coalesce(1),  s"${conf.acbpMdoSummaryReportPath}/${today}","mdoid", "CBPUserSummaryReport")
     // to be removed once new security job is created

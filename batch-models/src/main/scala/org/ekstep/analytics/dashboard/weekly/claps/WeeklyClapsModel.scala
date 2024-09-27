@@ -24,16 +24,17 @@ object WeeklyClapsModel extends AbsDashboardModel {
 //    val weekEndTime = ""
 
     //get existing weekly-claps data
-    var df = learnerStatsDataFrame()
+    val existingWeeklyClapsDF = learnerStatsDataFrame()
     // get platform engagement data from summary-events druid datasource
     val platformEngagementDF = usersPlatformEngagementDataframe(weekStart, weekEndTime)
 
-    df = df.join(platformEngagementDF, Seq("userid"), "full")
+    val joinedWithExistingDF = existingWeeklyClapsDF.join(platformEngagementDF, Seq("userid"), "full")
+      .withColumn("w4", map(
+        lit("timespent"), when(col("platformEngagementTime").isNull, 0).otherwise(col("platformEngagementTime")),
+        lit("numberOfSessions"), when(col("sessionCount").isNull, 0).otherwise(col("sessionCount"))
+      ))
 
-    df = df.withColumn("w4", map(
-      lit("timespent"), when(col("platformEngagementTime").isNull, 0).otherwise(col("platformEngagementTime")),
-      lit("numberOfSessions"), when(col("sessionCount").isNull, 0).otherwise(col("sessionCount"))
-    ))
+    var df = joinedWithExistingDF
 
     val condition = col("w4")("timespent") >= conf.cutoffTime && !col("claps_updated_this_week")
 
@@ -51,7 +52,7 @@ object WeeklyClapsModel extends AbsDashboardModel {
         col("claps_updated_this_week"),
         col("last_claps_updated_on")
       )
-      df = df.withColumn("total_claps", when(col("w4")("timespent") < conf.cutoffTime, 0).otherwise(col("total_claps")))
+        .withColumn("total_claps", when(col("w4")("timespent") < conf.cutoffTime, 0).otherwise(col("total_claps")))
         .withColumn("total_claps", when(condition, col("total_claps") + 1).otherwise(col("total_claps")))
         .withColumn("last_updated_on", lit(dataTillDate))
         .withColumn("claps_updated_this_week", lit(false))
@@ -66,7 +67,7 @@ object WeeklyClapsModel extends AbsDashboardModel {
 
     df = df.withColumn("total_claps", when(col("total_claps").isNull, 0).otherwise(col("total_claps")))
       .withColumn("claps_updated_this_week", when(col("claps_updated_this_week").isNull, false).otherwise(col("claps_updated_this_week")))
-      .withColumn("last_claps_updated_on", when(condition, date_format(current_timestamp(), "yyyy-MM-dd HH:mm:ss a")).otherwise(col("last_claps_updated_on")))
+      .withColumn("last_claps_updated_on", when(condition, currentDateTime).otherwise(col("last_claps_updated_on")))
 
     df = df.drop("platformEngagementTime","sessionCount")
 

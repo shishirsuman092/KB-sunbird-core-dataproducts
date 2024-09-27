@@ -66,7 +66,7 @@ object KarmaPointsModel extends AbsDashboardModel {
       .drop("rowNum")
     show(firstCompletionDataDF, "firstCompletionDataDF")
 
-    val coursesWithAssessmentDF = userAssessmentDataFrame()
+    val coursesWithAssessmentDF = cache.load("userAssessment")
       .where("assessUserStatus='SUBMITTED' AND assessChildID IS NOT NULL")
       .select("courseID")
       .distinct()

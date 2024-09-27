@@ -24,10 +24,10 @@ object BlendedProgramReportModel extends AbsDashboardModel {
     val today = getDate()
 
     // get user and user org data
-    var (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
+    val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
     val orgHierarchyData = orgHierarchyDataframe()
 
-    var userDataDF = userOrgDF
+    val userDataDF = userOrgDF
       .withColumn("userPrimaryEmail", col("personalDetails.primaryEmail"))
       .withColumn("userMobile", col("personalDetails.mobile"))
       .withColumn("userGender", col("personalDetails.gender"))
@@ -35,12 +35,12 @@ object BlendedProgramReportModel extends AbsDashboardModel {
       .withColumn("userDesignation", col("professionalDetails.designation"))
       .withColumn("userGroup", col("professionalDetails.group"))
       .withColumn("userTags", concat_ws(", ", col("additionalProperties.tag")))
-      .drop("personalDetails", "professionalDetails", "additionalProperties")
-    show(userDataDF, "userDataDF -1")
+      .select(col("userOrgID"),col("userID"),col("maskedEmail"),col("maskedPhone"),col("userStatus"),col("fullName"),col("userOrgName"),
+        col("userPrimaryEmail"),col("userMobile"),col("userGender"),col("userCategory"),col("userDesignation"),col("userGroup"),
+        col("userTags")
+      ).cache()
 
-    userDataDF = userDataDF
-      .join(orgHierarchyData, Seq("userOrgID"), "left")
-    show(userDataDF, "userDataDF")
+    val userOrgHierarchyDataDF = userDataDF.join(broadcast(orgHierarchyData), Seq("userOrgID"), "left").cache()
 
     // Get Blended Program data
     val blendedProgramESDF = contentESDataFrame(Seq("Blended Program"), "bp")
@@ -52,57 +52,48 @@ object BlendedProgramReportModel extends AbsDashboardModel {
       col("orgCreatedDate").alias("bpOrgCreatedDate")
     )
     val bpWithOrgDF = blendedProgramESDF.join(bpOrgDF, Seq("bpOrgID"), "left")
-    show(bpWithOrgDF, "bpWithOrgDF")
 
     // add BP batch info
     val (bpBatchDF, bpBatchSessionDF) = bpBatchDataFrame()
 
-    var bpWithBatchDF = bpWithOrgDF
-      .join(bpBatchDF, Seq("bpID"), "left")
-    show(bpWithBatchDF, "bpWithBatchDF")
-
-    val batchCreatedByDF = userDataDF.select(
+    val batchCreatedByDF = userOrgHierarchyDataDF.select(
       col("userID").alias("bpBatchCreatedBy"),
       col("fullName").alias("bpBatchCreatedByName")
     )
-    bpWithBatchDF = bpWithBatchDF.join(batchCreatedByDF, Seq("bpBatchCreatedBy"), "left")
 
-    // add BP user progress info
+    val bpWithBatchDF = bpWithOrgDF
+      .join(bpBatchDF, Seq("bpID"), "left")
+      .join(batchCreatedByDF, Seq("bpBatchCreatedBy"), "left")
 
     // get enrolment table
     val userEnrolmentDF = userCourseProgramCompletionDataFrame(extraCols = Seq("courseContentStatus"))
-    show(userEnrolmentDF, "userEnrolmentDF")
 
-    val bpUserEnrolmentDF = userEnrolmentDF.select(
-      col("userID"),
-      col("courseID").alias("bpID"),
-      col("batchID").alias("bpBatchID"),
-      col("courseEnrolledTimestamp").alias("bpEnrolledTimestamp"),
-      col("issuedCertificateCount").alias("bpIssuedCertificateCount"),
-      col("courseContentStatus").alias("bpContentStatus"),
-      col("dbCompletionStatus").alias("bpUserCompletionStatus"),
-      col("lastContentAccessTimestamp").alias("bpLastContentAccessTimestamp"),
-      col("courseCompletedTimestamp").alias("bpCompletedTimestamp")
-    )
-    show(bpUserEnrolmentDF, "bpUserEnrolmentDF")
+    val bpUserEnrolmentDF = userEnrolmentDF
+      .select(
+        col("userID"),
+        col("courseID").alias("bpID"),
+        col("batchID").alias("bpBatchID"),
+        col("courseEnrolledTimestamp").alias("bpEnrolledTimestamp"),
+        col("issuedCertificateCount").alias("bpIssuedCertificateCount"),
+        col("courseContentStatus").alias("bpContentStatus"),
+        col("dbCompletionStatus").alias("bpUserCompletionStatus"),
+        col("lastContentAccessTimestamp").alias("bpLastContentAccessTimestamp"),
+        col("courseCompletedTimestamp").alias("bpCompletedTimestamp")
+      ).cache()
 
     val bpCompletionDF = bpWithBatchDF.join(bpUserEnrolmentDF.drop("bpContentStatus"), Seq("bpID", "bpBatchID"), "inner")
-    show(bpCompletionDF, "bpCompletionDF")
 
     // get content status DF
     val bpUserContentStatusDF = bpUserEnrolmentDF
       .select(col("userID"), col("bpID"), col("bpBatchID"), explode_outer(col("bpContentStatus")))
       .withColumnRenamed("key", "bpChildID")
       .withColumnRenamed("value", "bpContentStatus")
-    show(bpUserContentStatusDF, "bpUserContentStatusDF")
 
     // add user and user org info
-    val bpCompletionWithUserDetailsDF = bpCompletionDF.join(userDataDF, Seq("userID"), "left")
-    show(bpCompletionWithUserDetailsDF, "bpCompletionWithUserDetailsDF")
+    val bpCompletionWithUserDetailsDF = userOrgHierarchyDataDF.join(bpCompletionDF, Seq("userID"), "left")
 
     // children
     val hierarchyDF = contentHierarchyDataFrame()
-    show(hierarchyDF, "hierarchyDF")
 
     val bpChildDF = bpChildDataFrame(blendedProgramESDF, hierarchyDF)
 
@@ -110,7 +101,6 @@ object BlendedProgramReportModel extends AbsDashboardModel {
     val bpCompletionWithChildrenDF = bpCompletionWithUserDetailsDF.join(bpChildDF, Seq("bpID"), "left")
       .withColumn("bpChildMode", expr("CASE WHEN LOWER(bpChildCategory) = 'offline session' THEN 'Offline' ELSE '' END"))
       .join(bpBatchSessionDF, Seq("bpID", "bpBatchID", "bpChildID"), "left")
-    show(bpCompletionWithChildrenDF, "bpCompletionWithChildrenDF")
 
     // add children batch info
     val bpChildBatchDF = bpBatchDF.select(
@@ -122,7 +112,6 @@ object BlendedProgramReportModel extends AbsDashboardModel {
       col("bpBatchLocation").alias("bpChildBatchLocation"),
       col("bpBatchCurrentSize").alias("bpChildBatchCurrentSize")
     )
-    show(bpChildBatchDF, "bpChildBatchDF")
 
     val bpChildBatchSessionDF =  bpBatchSessionDF.select(
       col("bpChildID").alias("bpChildChildID"),
@@ -134,16 +123,13 @@ object BlendedProgramReportModel extends AbsDashboardModel {
       col("bpBatchSessionStartTime").alias("bpChildBatchSessionStartTime"),
       col("bpBatchSessionEndTime").alias("bpChildBatchSessionEndTime")
     )
-    show(bpChildBatchSessionDF, "bpChildBatchSessionDF")
 
     val relevantChildBatchInfoDF = bpChildDF.select("bpChildID")
       .join(bpChildBatchDF, Seq("bpChildID"), "left")
       .join(bpChildBatchSessionDF, Seq("bpChildID", "bpChildBatchID"), "left")
       .select("bpChildID", "bpChildBatchID", "bpChildBatchName", "bpChildBatchStartDate", "bpChildBatchEndDate", "bpChildBatchLocation", "bpChildBatchCurrentSize", "bpChildBatchSessionType", "bpChildBatchSessionFacilators")
-    show(relevantChildBatchInfoDF, "relevantChildBatchInfoDF")
 
     val bpCompletionWithChildBatchInfoDF = bpCompletionWithChildrenDF.join(relevantChildBatchInfoDF, Seq("bpChildID"), "left")
-    show(bpCompletionWithChildBatchInfoDF, "bpCompletionWithChildBatchInfoDF")
 
     // add child progress info
     val bpChildUserEnrolmentDF = userEnrolmentDF.select(
@@ -154,41 +140,30 @@ object BlendedProgramReportModel extends AbsDashboardModel {
       col("lastContentAccessTimestamp").alias("bpChildLastContentAccessTimestamp"),
       col("courseCompletedTimestamp").alias("bpChildCompletedTimestamp")
     )
-    show(bpChildUserEnrolmentDF, "bpChildUserEnrolmentDF")
 
-    var bpChildrenWithProgress = bpCompletionWithChildBatchInfoDF.join(bpChildUserEnrolmentDF, Seq("userID", "bpChildID"), "left")
+    val bpChildrenWithProgress = bpCompletionWithChildBatchInfoDF.join(bpChildUserEnrolmentDF, Seq("userID", "bpChildID"), "left")
       .na.fill(0, Seq("bpChildResourceCount", "bpChildProgress"))
-    show(bpChildrenWithProgress, "bpChildrenWithProgress -2")
-
-    // add content status from map
-    bpChildrenWithProgress = bpChildrenWithProgress
       .join(bpUserContentStatusDF, Seq("userID", "bpID", "bpChildID", "bpBatchID"), "left")
       .withColumn("bpChildUserStatus", coalesce(col("bpChildUserStatus"), col("bpContentStatus")))
-      .drop("bpContentStatus")
-
-    bpChildrenWithProgress = bpChildrenWithProgress
       .withColumn("completionPercentage", expr("CASE WHEN bpChildUserStatus=2 THEN 100.0 WHEN bpChildProgress=0 OR bpChildResourceCount=0 OR bpChildUserStatus=0 THEN 0.0 ELSE 100.0 * bpChildProgress / bpChildResourceCount END"))
       .withColumn("completionPercentage", expr("CASE WHEN completionPercentage > 100.0 THEN 100.0 WHEN completionPercentage < 0.0 THEN 0.0 ELSE completionPercentage END"))
       .withColumnRenamed("completionPercentage", "bpChildProgressPercentage")
-    show(bpChildrenWithProgress, "bpChildrenWithProgress -1")
-
-    bpChildrenWithProgress = bpChildrenWithProgress
       .withColumn("bpChildAttendanceStatus", expr("CASE WHEN bpChildUserStatus=2 THEN 'Attended' ELSE 'Not Attended' END"))
       .withColumn("bpChildOfflineAttendanceStatus", expr("CASE WHEN bpChildMode='Offline' THEN bpChildAttendanceStatus ELSE '' END"))
-    show(bpChildrenWithProgress, "bpChildrenWithProgress")
+      .drop("bpContentStatus")
 
     // finalize report data frame
     val fullDF = bpChildrenWithProgress
-      .withColumn("bpEnrolledOn", to_date(col("bpEnrolledTimestamp"), "dd/MM/yyyy"))
-      .withColumn("bpBatchStartDate", to_date(col("bpBatchStartDate"), "dd/MM/yyyy"))
-      .withColumn("bpBatchEndDate", to_date(col("bpBatchEndDate"), "dd/MM/yyyy"))
-      .withColumn("bpChildBatchStartDate", to_date(col("bpChildBatchStartDate"), "dd/MM/yyyy"))
-      .withColumn("bpChildCompletedTimestamp", to_date(col("bpChildBatchStartDate"), "dd/MM/yyyy"))
+      .withColumn("bpEnrolledOn", to_date(col("bpEnrolledTimestamp"), dateFormat))
+      .withColumn("bpBatchStartDate", to_date(col("bpBatchStartDate"), dateFormat))
+      .withColumn("bpBatchEndDate", to_date(col("bpBatchEndDate"), dateFormat))
+      .withColumn("bpChildBatchStartDate", to_date(col("bpChildBatchStartDate"), dateFormat))
+      .withColumn("bpChildCompletedTimestamp", to_date(col("bpChildBatchStartDate"), dateFormat))
       .withColumn("bpChildCompletedOn", expr("CASE WHEN bpChildMode='Offline' AND bpChildUserStatus=2 THEN bpBatchSessionStartDate ELSE bpChildCompletedTimestamp END"))
-      .withColumn("bpChildLastContentAccessTimestamp", to_date(col("bpChildLastContentAccessTimestamp"), "dd/MM/yyyy"))
+      .withColumn("bpChildLastContentAccessTimestamp", to_date(col("bpChildLastContentAccessTimestamp"), dateFormat))
       .withColumn("bpChildLastAccessedOn", expr("CASE WHEN bpChildMode='Offline' THEN bpBatchSessionStartDate ELSE bpChildLastContentAccessTimestamp END"))
       .withColumn("bpChildProgressPercentage", round(col("bpChildProgressPercentage"), 2))
-      .withColumn("Report_Last_Generated_On", date_format(current_timestamp(), "dd/MM/yyyy HH:mm:ss a"))
+      .withColumn("Report_Last_Generated_On", currentDateTime)
       .withColumn("Certificate_Generated", expr("CASE WHEN bpIssuedCertificateCount > 0 THEN 'Yes' ELSE 'No' END"))
       .withColumn("bpChildOfflineStartDate", expr("CASE WHEN bpChildMode='Offline' THEN bpBatchSessionStartDate ELSE '' END"))
       .withColumn("bpChildOfflineStartTime", expr("CASE WHEN bpChildMode='Offline' THEN bpBatchSessionStartTime ELSE '' END"))
@@ -196,7 +171,6 @@ object BlendedProgramReportModel extends AbsDashboardModel {
       .withColumn("bpChildUserStatus", expr("CASE WHEN bpChildUserStatus=2 THEN 'Completed' ELSE 'Not Completed' END"))
       .durationFormat("bpChildDuration")
       .distinct()
-    show(fullDF, "fullDF")
 
     val fullReportDF = fullDF
       .select(
@@ -252,30 +226,36 @@ object BlendedProgramReportModel extends AbsDashboardModel {
       .orderBy("bpID", "userID")
       .coalesce(1)
 
-    show(fullReportDF, "fullReportDF")
-
     val reportPath = s"${conf.blendedReportPath}/${today}"
     val reportPathMDO = s"${conf.blendedReportPath}-mdo/${today}"
     val reportPathCBP = s"${conf.blendedReportPath}-cbp/${today}"
 
     // generateReport(fullReportDF, s"${reportPath}-full")
-    val reportDF = fullReportDF.drop("userID", "userOrgID", "bpID", "bpOrgID", "bpChildID", "bpBatchID", "bpIssuedCertificateCount", "bpProgramDirectorName")
-
+    val mdoReportDF = fullReportDF
+      .select(
+        col("Name"),col("Email"),col("Phone_Number"),col("Designation"),col("Group"),col("Gender"),
+        col("Category"),col("Tag"),col("Ministry"),col("Department"),col("Organization"),col("Provider_Name"),col("Program_Name"),col("Batch_Name"),
+        col("Batch_Location"),col("Batch_Start_Date"),col("Batch_End_Date"),col("Enrolled_On"),col("Component_Name"),col("Component_Type"),
+        col("Component_Mode"),col("Status"),col("Component_Duration"),col("Component_Progress_Percentage"),col("Component_Completed_On"),
+        col("Last_Accessed_On"),col("Offline_Session_Date"),col("Offline_Session_Start_Time"),col("Offline_Session_End_Time"),col("Offline_Attendance_Status"),
+        col("Instructor(s)_Name"),col("Program_Coordinator_Name"),col("Certificate_Generated"),col("mdoid"),col("Report_Last_Generated_On")
+      )
     // mdo wise
-    val mdoReportDF = reportDF.drop("maskedEmail", "maskedPhone", "contentid")
     generateReport(mdoReportDF,  reportPathMDO,"mdoid", "BlendedProgramReport")
     // to be removed once new security job is created
     if (conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", reportPathMDO)
     }
     // cbp wise
-    val cbpReportDF = fullReportDF.drop("userID", "userOrgID", "bpID", "bpChildID", "bpBatchID", "bpIssuedCertificateCount", "bpProgramDirectorName","contentid")
-      .drop("Email", "Phone_Number", "mdoid")
-      .withColumnRenamed("bpOrgID", "mdoid")
-      .withColumnRenamed("maskedEmail", "Email")
-      .withColumnRenamed("maskedPhone", "Phone_Number")
-
-    show(cbpReportDF, "cbpReportDF")
+    val cbpReportDF = fullReportDF
+      .select(
+        col("bpOrgID").alias("mdoid"),col("Name"),col("maskedEmail").alias("Email"),col("maskedPhone").alias("Phone_Number"),col("Designation"),col("Group"),
+        col("Gender"),col("Category"),col("Tag"),col("Ministry"), col("Department"),col("Organization"),col("Provider_Name"),col("Program_Name"),col("Batch_Name"),
+        col("Batch_Location"),col("Batch_Start_Date"),col("Batch_End_Date"),col("Enrolled_On"),col("Component_Name"),col("Component_Type"),col("Component_Mode"),
+        col("Status"),col("Component_Duration"),col("Component_Progress_Percentage"),col("Component_Completed_On"),col("Last_Accessed_On"),
+        col("Offline_Session_Date"),col("Offline_Session_Start_Time"),col("Offline_Session_End_Time"),col("Offline_Attendance_Status"),col("Instructor(s)_Name"),
+        col("Program_Coordinator_Name"),col("Certificate_Generated"),col("Report_Last_Generated_On")
+      )
     generateAndSyncReports(cbpReportDF, "mdoid", reportPathCBP, "BlendedProgramReport")
 
 
@@ -323,7 +303,6 @@ object BlendedProgramReportModel extends AbsDashboardModel {
       .withColumn("bpBatchAttrs", from_json(col("bpBatchAttrs"), Schema.batchAttrsSchema))
       .withColumn("bpBatchLocation", col("bpBatchAttrs.batchLocationDetails"))
       .withColumn("bpBatchCurrentSize", col("bpBatchAttrs.currentBatchSize"))
-    show(bpBatchDF, "bpBatchDF")
 
     val bpBatchSessionDF = bpBatchDF.select("bpID", "bpBatchID", "bpBatchAttrs")
       .withColumn("bpBatchSessionDetails", explode_outer(col("bpBatchAttrs.sessionDetails_v2")))
@@ -334,7 +313,6 @@ object BlendedProgramReportModel extends AbsDashboardModel {
       .withColumn("bpBatchSessionStartTime", col("bpBatchSessionDetails.startTime"))
       .withColumn("bpBatchSessionEndTime", col("bpBatchSessionDetails.endTime"))
       .drop("bpBatchAttrs", "bpBatchSessionDetails")
-    show(bpBatchSessionDF, "bpBatchSessionDF")
 
     bpBatchDF = bpBatchDF.drop("bpBatchAttrs")
 
@@ -349,7 +327,6 @@ object BlendedProgramReportModel extends AbsDashboardModel {
     val bpChildL1WithModulesDF = addHierarchyColumn(bpIDsDF, hierarchyDF, "bpID", "data", children = true, l2Children = true)
       .withColumn("bpChild", explode_outer(col("data.children")))
       .drop("identifier", "data")
-    show(bpChildL1WithModulesDF, "bpChildL1WithModulesDF")
 
     // L1 children without modules
     val bpChildL1DF = bpChildL1WithModulesDF.where(expr("bpChild.primaryCategory != 'Course Unit'"))
@@ -359,7 +336,6 @@ object BlendedProgramReportModel extends AbsDashboardModel {
       .withColumn("bpChildDuration", col("bpChild.duration"))
       .withColumn("bpChildResourceCount", col("bpChild.leafNodesCount"))
       .drop("bpChild")
-    show(bpChildL1DF, "bpChildL1DF")
 
     // L2 children (i.e. children of the modules)
     val bpChildL2DF = bpChildL1WithModulesDF.where(expr("bpChild.primaryCategory = 'Course Unit'"))
@@ -371,13 +347,9 @@ object BlendedProgramReportModel extends AbsDashboardModel {
       .withColumn("bpChildDuration", col("bpModuleChild.duration"))
       .withColumn("bpChildResourceCount", col("bpModuleChild.leafNodesCount"))
       .drop("bpModuleChild")
-    show(bpChildL2DF, "bpChildL2DF")
 
     // merge L1 and L2 children
-    val bpChildDF = bpChildL1DF.union(bpChildL2DF)
-    show(bpChildDF, "bpChildDF")
-
-    bpChildDF
+    bpChildL1DF.union(bpChildL2DF)
   }
 }
 

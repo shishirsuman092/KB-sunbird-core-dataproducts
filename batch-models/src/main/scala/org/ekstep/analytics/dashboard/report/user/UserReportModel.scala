@@ -19,27 +19,27 @@ object UserReportModel extends AbsDashboardModel {
     // get user roles data
     val userRolesDF = roleDataFrame().groupBy("userID").agg(concat_ws(", ", collect_list("role")).alias("role")) // return - userID, role
 
-    var (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
+    val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
 
     val orgHierarchyData = orgHierarchyDataframe()
-    var weeklyClapsDF = learnerStatsDataFrame()
-    var karmaPointsDF = userKarmaPointsSummaryDataFrame()
-    karmaPointsDF = karmaPointsDF.withColumnRenamed("userid", "userID")
-    var userData = userOrgDF
+    val weeklyClapsDF = learnerStatsDataFrame()
+    val karmaPointsDF = cache.load("userKarmaPointsSummary")
+      .withColumnRenamed("userid", "userID")
+    val userData = userOrgDF
       .join(userRolesDF, Seq("userID"), "left")
       .join(karmaPointsDF.select("userID","total_points"), Seq("userID"), "left")
-      .join(orgHierarchyData, Seq("userOrgID"), "left")
+      .join(broadcast(orgHierarchyData), Seq("userOrgID"), "left")
       .dropDuplicates("userID")
       .withColumn("Tag", concat_ws(", ", col("additionalProperties.tag")))
-    userData = userData
+    val userDataWithKarmaPoints = userData
       .join(weeklyClapsDF, userData("userID") === weeklyClapsDF("userid"), "left")
       .select(userData("*"), weeklyClapsDF("total_claps").alias("weekly_claps_day_before_yesterday"))
-    val fullReportDF = userData
-      .withColumn("Report_Last_Generated_On", date_format(current_timestamp(), "dd/MM/yyyy HH:mm:ss a"))
+
+    val reportPath = s"${conf.userReportPath}/${today}"
+    //generateReport(fullReportDF, s"${reportPath}-full")
+    val mdoWiseReportDF = userDataWithKarmaPoints
+      .withColumn("Report_Last_Generated_On", currentDateTime)
       .select(
-        col("userID"),
-        col("userOrgID"),
-        col("userCreatedBy"),
         col("fullName").alias("Full_Name"),
         col("professionalDetails.designation").alias("Designation"),
         col("personalDetails.primaryEmail").alias("Email"),
@@ -49,7 +49,7 @@ object UserReportModel extends AbsDashboardModel {
         col("ministry_name").alias("Ministry"),
         col("dept_name").alias("Department"),
         col("userOrgName").alias("Organization"),
-        from_unixtime(col("userCreatedTimestamp"), "dd/MM/yyyy").alias("User_Registration_Date"),
+        from_unixtime(col("userCreatedTimestamp"), dateFormat).alias("User_Registration_Date"),
         col("role").alias("Roles"),
         col("personalDetails.gender").alias("Gender"),
         col("personalDetails.category").alias("Category"),
@@ -57,22 +57,17 @@ object UserReportModel extends AbsDashboardModel {
         col("additionalProperties.externalSystemId").alias("External_System_Id"),
         col("userOrgID").alias("mdoid"),
         col("Report_Last_Generated_On"),
-        from_unixtime(col("userOrgCreatedDate"), "dd/MM/yyyy").alias("MDO_Created_On"),
+        from_unixtime(col("userOrgCreatedDate"), dateFormat).alias("MDO_Created_On"),
         col("userVerified").alias("Verified Karmayogi"),
         col("weekly_claps_day_before_yesterday")
-      )
-      .coalesce(1)
-
-    val reportPath = s"${conf.userReportPath}/${today}"
-    //generateReport(fullReportDF, s"${reportPath}-full")
-    val mdoWiseReportDF = fullReportDF.drop("userID", "userOrgID", "userCreatedBy")
+      ).coalesce(1)
     // Repartition by mdo_id and write to CSV
     generateReport(mdoWiseReportDF, reportPath,"mdoid", "UserReport")
     // to be removed once new security job is created
     if (conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
     }
-    val df_warehouse = userData
+    val df_warehouse = userDataWithKarmaPoints
       .withColumn("marked_as_not_my_user", when(col("userProfileStatus") === "NOT-MY-USER", true).otherwise(false))
       .withColumn("data_last_generated_on", currentDateTime)
       .select(
@@ -87,7 +82,7 @@ object UserReportModel extends AbsDashboardModel {
         col("professionalDetails.group").alias("groups"),
         col("Tag").alias("tag"),
         col("userVerified").alias("is_verified_karmayogi"),
-        date_format(from_unixtime(col("userCreatedTimestamp")), "yyyy-MM-dd HH:mm:ss").alias("user_registration_date"),
+        date_format(from_unixtime(col("userCreatedTimestamp")), dateTimeFormat).alias("user_registration_date"),
         col("role").alias("roles"),
         col("personalDetails.gender").alias("gender"),
         col("personalDetails.category").alias("category"),

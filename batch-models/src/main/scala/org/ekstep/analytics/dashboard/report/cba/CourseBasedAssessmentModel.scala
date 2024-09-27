@@ -21,13 +21,14 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
     val today = getDate()
 
-    var (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
+    val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
+    orgDF.cache()
     // get course details, with rating info
     val (hierarchyDF, allCourseProgramDetailsWithCompDF, allCourseProgramDetailsDF,
     allCourseProgramDetailsWithRatingDF) = contentDataFrames(orgDF, Seq("Course", "Program", "Blended Program", "Standalone Assessment", "Curated Program"), runValidation = false)
 
     val assessmentDF = assessmentESDataFrame(Seq("Course", "Standalone Assessment", "Blended Program"))
-    val assessWithHierarchyDF = assessWithHierarchyDataFrame(assessmentDF, hierarchyDF, orgDF)
+    val assessWithHierarchyDF = assessWithHierarchyDataFrame(assessmentDF, hierarchyDF, orgDF).cache()
     val assessWithDetailsDF = assessWithHierarchyDF.drop("children")
 
     val assessChildrenDF = assessmentChildrenDataFrame(assessWithHierarchyDF)
@@ -41,7 +42,7 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
     val orgHierarchyData = orgHierarchyDataframe()
 
     val userAssessChildDataDF = userAssessChildrenDetailsDF
-      .join(orgHierarchyData, Seq("userOrgID"), "left")
+      .join(broadcast(orgHierarchyData), Seq("userOrgID"), "left")
 
     val retakesDF = userAssessChildDataDF
       .groupBy("assessChildID", "userID")
@@ -50,7 +51,7 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
     val userAssessChildDataLatestDF = userAssessChildDataDF
       .groupByLimit(Seq("assessChildID", "userID"), "assessEndTimestamp", 1, desc = true)
       .drop("rowNum")
-      .join(retakesDF, Seq("assessChildID", "userID"), "left")
+      .join(broadcast(retakesDF), Seq("assessChildID", "userID"), "left")
 
     val finalDF = userAssessChildDataLatestDF
       .withColumn("userAssessmentDuration", unix_timestamp(col("assessEndTimestamp")) - unix_timestamp(col("assessStartTimestamp")))
@@ -69,7 +70,6 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
       .withColumn("Tags", concat_ws(", ", col("additionalProperties.tag")))
 
     val fullReportDFNew = finalDF
-      .withColumn("Report_Last_Generated_On", date_format(current_timestamp(), "dd/MM/yyyy HH:mm:ss a"))
       .select(
         col("userID").alias("User ID"),
         col("assessID"),
@@ -88,11 +88,11 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
         col("assessChildName").alias("Assessment Name"),
         col("assessment_type").alias("Assessment Type"),
         col("assessOrgName").alias("Assessment/Content Provider"),
-        from_unixtime(col("assessLastPublishedOn").cast("long"), "dd/MM/yyyy").alias("Assessment Publish Date"),
+        from_unixtime(col("assessLastPublishedOn").cast("long"), dateFormat).alias("Assessment Publish Date"),
         col("assessment_course_name").alias("Course Name"),
         col("course_id").alias("Course ID"),
         col("totalAssessmentDuration").alias("Assessment Duration"),
-        from_unixtime(col("assessEndTime"), "dd/MM/yyyy").alias("Last Attempted Date"),
+        from_unixtime(col("assessEndTime"), dateFormat).alias("Last Attempted Date"),
         col("assessOverallResult").alias("Latest Percentage Achieved"),
         col("assessPercentage").alias("Cut off Percentage"),
         col("Pass"),
@@ -100,20 +100,17 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
         col("assessIncorrect").alias("No.of Incorrect Responses"),
         col("assessBlank").alias("Unattempted Questions"),
         col("retakes").alias("No. of Retakes"),
-        col("userOrgID").alias("mdoid"),
-        col("Report_Last_Generated_On")
+        col("userOrgID").alias("mdoid")
       ).repartition(1)
 
 
     // Join using a single column or Seq if multiple columns
-    val userOrgHierarchyDataDF = userOrgDF.join(orgHierarchyData, Seq("userOrgID"), "left")
+    val userOrgHierarchyDataDF = userOrgDF.join(broadcast(orgHierarchyData), Seq("userOrgID"), "left")
     val oldAssessmentData = oldAssessmentDetailsDataframe()
-    val joinedDF = oldAssessmentData.join(allCourseProgramDetailsDF, Seq("courseID"), "left").select(
+    val fullReportDFOld = oldAssessmentData.join(allCourseProgramDetailsDF, Seq("courseID"), "left").select(
       oldAssessmentData.columns.map(col) ++
         Seq(col("courseName"), col("courseOrgID")): _*)
-    val oldAssessmentDataWithUserDetails = joinedDF.join(userOrgHierarchyDataDF, Seq("userID"), "left")
-    val fullReportDFOld = oldAssessmentDataWithUserDetails
-      .withColumn("Report_Last_Generated_On", date_format(current_timestamp(), "dd/MM/yyyy HH:mm:ss a"))
+      .join(userOrgHierarchyDataDF, Seq("userID"), "left")
       .withColumn("Assessment Type", lit("Learning Resource"))
       .withColumn("Total Questions", col("correct_count") + col("incorrect_count") + col("not_answered_count"))
       .withColumn("Assessment Publish Date", lit(null).cast("date"))
@@ -153,16 +150,45 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
         col("incorrect_count").alias("No.of Incorrect Responses"),
         col("not_answered_count").alias("Unattempted Questions"),
         col("`No. of Retakes`"),
-        col("userOrgID").alias("mdoid"),
-        col("Report_Last_Generated_On")
+        col("userOrgID").alias("mdoid")
       ).repartition(1)
 
     val fullReportDF = fullReportDFNew.union(fullReportDFOld)
+      .withColumn("Report_Last_Generated_On", currentDateTime)
     val reportPath = s"${conf.cbaReportPath}/${today}"
     // generateReport(fullReportDF, s"${reportPath}-full")
 
-    val mdoReportDF = fullReportDF.drop("source_id", "courseOrgID", "assessChildID", "userOrgID", "assessID", "assessOrgID")
-    generateReport(mdoReportDF.coalesce(1), reportPath,"mdoid", "UserAssessmentReport")
+    val mdoReportDF = fullReportDF
+      .select(
+        col("User ID"),
+        col("Full Name"),
+        col("Designation"),
+        col("E mail"),
+        col("Phone Number"),
+        col("Group"),
+        col("Tags"),
+        col("Ministry"),
+        col("Department"),
+        col("Organisation"),
+        col("Assessment Name"),
+        col("Assessment Type"),
+        col("Assessment/Content Provider"),
+        col("Assessment Publish Date"),
+        col("Course Name"),
+        col("Course ID"),
+        col("Assessment Duration"),
+        col("Last Attempted Date"),
+        col("Latest Percentage Achieved"),
+        col("Cut off Percentage"),
+        col("Pass"),
+        col("Total Questions"),
+        col("No.of Incorrect Responses"),
+        col("Unattempted Questions"),
+        col("No. of Retakes"),
+        col("mdoid"),
+        col("Report_Last_Generated_On")
+      ).coalesce(1)
+    generateReport(mdoReportDF, reportPath,"mdoid", "UserAssessmentReport")
     // to be removed once new security job is created
     if (conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
@@ -179,7 +205,7 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
         col("totalAssessmentDuration").alias("assessment_duration"),
         col("totalAssessmentDuration").alias("time_spent_by_the_user"),
         //from_unixtime(col("assessEndTime"), "dd/MM/yyyy").alias("completion_date"),
-        date_format(from_unixtime(col("assessEndTime")), "yyyy-MM-dd HH:mm:ss").alias("completion_date"),
+        date_format(from_unixtime(col("assessEndTime")), dateTimeFormat).alias("completion_date"),
         col("assessOverallResult").alias("score_achieved"),
         col("assessMaxQuestions").alias("overall_score"),
         col("assessPercentage").alias("cut_off_percentage"),

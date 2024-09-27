@@ -605,15 +605,15 @@ object DashboardUtil extends Serializable {
   }
 
   def getDate(): String = {
-    val dateFormat: DateTimeFormatter = DateTimeFormat.forPattern("yyyy-MM-dd").withZone(DateTimeZone.forOffsetHoursMinutes(5, 30));
-    dateFormat.print(System.currentTimeMillis());
+    val dateFormatData: DateTimeFormatter = DateTimeFormat.forPattern(dateFormat).withZone(DateTimeZone.forOffsetHoursMinutes(5, 30));
+    dateFormatData.print(System.currentTimeMillis());
   }
 
   def getThisWeekDates(): (String, String, String, String) = {
     val istTimeZone = DateTimeZone.forID("Asia/Kolkata")
     val currentDate = DateTime.now(istTimeZone)
-    val dateFormatter: DateTimeFormatter = DateTimeFormat.forPattern("yyyy-MM-dd").withZone(istTimeZone)
-    val formatter: DateTimeFormatter = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss").withZone(istTimeZone)
+    val dateFormatter: DateTimeFormatter = DateTimeFormat.forPattern(dateFormat).withZone(istTimeZone)
+    val formatter: DateTimeFormatter = DateTimeFormat.forPattern(dateTimeFormat).withZone(istTimeZone)
     val dataTillDate = currentDate.minusDays(1)
     val startOfWeek = dataTillDate.withDayOfWeek(DateTimeConstants.MONDAY).withTimeAtStartOfDay()
     val endOfWeek = startOfWeek.plusDays(6).withTime(23, 59, 59, 999)
@@ -623,6 +623,7 @@ object DashboardUtil extends Serializable {
   val dateTimeWithAMPMFormat = "yyyy-MM-dd HH:mm:ss a"
   val currentDateTime = date_format(current_timestamp(), dateTimeWithAMPMFormat)
   val dateTimeFormat = "yyyy-MM-dd HH:mm:ss"
+  val dateTimeWithMilliSecFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS"
   val dateFormat = "yyyy-MM-dd"
   val timeFormat = "HH:mm:ss"
 
@@ -723,8 +724,7 @@ object DashboardUtil extends Serializable {
   }
 
   def druidDFOption(query: String, host: String, resultFormat: String = "object", limit: Int = 10000)(implicit spark: SparkSession): Option[DataFrame] = {
-    var result = druidSQLAPI(query, host, resultFormat, limit)
-    result = result.trim()
+    val result = druidSQLAPI(query, host, resultFormat, limit).trim()
     // return empty data frame if result is an empty string
     if (result == "") {
       println(s"ERROR: druidSQLAPI returned empty string")
@@ -786,15 +786,13 @@ object DashboardUtil extends Serializable {
     if (arrayFields.nonEmpty) {
       dfr = dfr.option("es.read.field.as.array.include", arrayFields.mkString(","))
     }
-    var df = dfr.option("query", query).load(index)
-    df = df.select(fields.map(f => col(f)):_*).persist(StorageLevel.MEMORY_ONLY) // select only the fields we need and persist
-    df
+    dfr.option("query", query).load(index)
+      .select(fields.map(f => col(f)):_*).persist(StorageLevel.MEMORY_ONLY) // select only the fields we need and persist
   }
 
   def saveDataframeToPostgresTable_With_Append(df: DataFrame, dwPostgresUrl: String, tableName: String,
                                                dbUserName: String, dbCredential: String)(implicit spark: SparkSession): Unit = {
 
-    println("inside write method")
     df.write
       .mode(SaveMode.Append)
       .option("url", dwPostgresUrl)
@@ -876,28 +874,28 @@ object DashboardUtil extends Serializable {
   }
 
 
-  def checkAvailableColumns(df: DataFrame, expectedColumnsInput: List[String]) : DataFrame = {
-    expectedColumnsInput.foldLeft(df) {
-      (df, column) => {
-        if(!df.columns.contains(column)) {
-          df.withColumn(column, lit(null).cast(StringType))
-        } else df
-      }
-    }
-  }
+//  def checkAvailableColumns(df: DataFrame, expectedColumnsInput: List[String]) : DataFrame = {
+//    expectedColumnsInput.foldLeft(df) {
+//      (df, column) => {
+//        if(!df.columns.contains(column)) {
+//          df.withColumn(column, lit(null).cast(StringType))
+//        } else df
+//      }
+//    }
+//  }
 
   /**
    * return parsed int or zero if parsing fails
    * @param s string to parse
    * @return int or zero
    */
-  def intOrZero(s: String): Int = {
-    try {
-      s.toInt
-    } catch {
-      case e: Exception => 0
-    }
-  }
+//  def intOrZero(s: String): Int = {
+//    try {
+//      s.toInt
+//    } catch {
+//      case e: Exception => 0
+//    }
+//  }
 
   /***
    * Validate if return value from one code block is equal to the return value from other block. Uses blocks so that the

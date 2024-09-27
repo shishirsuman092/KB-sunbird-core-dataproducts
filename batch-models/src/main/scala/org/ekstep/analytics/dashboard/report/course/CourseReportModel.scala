@@ -131,13 +131,11 @@ object CourseReportModel extends AbsDashboardModel {
       .where(expr("category IN ('Blended Program')"))
       .join(courseBatchDF, Seq("courseID"), "left")
       .select("courseID", "batchID", "courseBatchName", "courseBatchStartDate", "courseBatchEndDate")
-    show(relevantBatchInfoDF, "relevantBatchInfoDF")
 
     // Join course details with batch information
     val curatedCourseDataDFWithBatchInfo = allCBPAndAggDF
       .coalesce(1)
       .join(relevantBatchInfoDF, Seq("courseID"), "left")
-    show(curatedCourseDataDFWithBatchInfo, "curatedCourseDataDFWithBatchInfo")
 
     // Final report DataFrame
     val fullDF = curatedCourseDataDFWithBatchInfo
