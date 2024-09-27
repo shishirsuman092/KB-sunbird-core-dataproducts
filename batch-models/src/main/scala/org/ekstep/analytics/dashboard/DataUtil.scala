@@ -251,7 +251,9 @@ object DataUtil extends Serializable {
       StructField("userID", StringType),
       StructField("count", StringType)
     ))
-
+    val averageNPSSchema: StructType = StructType(Seq(
+      StructField("avgNps",  IntegerType, nullable = true)
+    ))
     val learningHoursByUserSchema: StructType = StructType(Seq(
       StructField("userID", StringType),
       StructField("totalLearningHours", StringType)
