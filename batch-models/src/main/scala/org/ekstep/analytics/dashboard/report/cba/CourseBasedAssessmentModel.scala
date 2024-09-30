@@ -213,8 +213,8 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
         col("Total Questions").alias("overall_score"),
         col("Cut off Percentage").alias("cut_off_percentage"),
         col("Total Questions").alias("total_question"),
-        col("`No.of Incorrect Responses`").alias("number_of_incorrect_responses"),
-        col("`No. of Retakes`").alias("number_of_retakes"),
+        col("No.of Incorrect Responses").alias("number_of_incorrect_responses"),
+        col("No. of Retakes").alias("number_of_retakes"),
         col("data_last_generated_on")
       )
     generateReport(warehouseDF.coalesce(1), s"${reportPath}-warehouse")
