@@ -1503,10 +1503,10 @@ object DataUtil extends Serializable {
   /**
    * Reading old assessment details
    */
-  def oldAssessmentDetailsDataframe()(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): DataFrame = {
-    val df = cache.load("oldAssessmentDetails").withColumnRenamed("user_id", "userID").withColumnRenamed("parent_source_id", "courseID")
-    df
-  }
+//  def oldAssessmentDetailsDataframe()(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): DataFrame = {
+//    val df = cache.load("oldAssessmentDetails").withColumnRenamed("user_id", "userID").withColumnRenamed("parent_source_id", "courseID")
+//    df
+//  }
   /* telemetry data frames */
 
   def loggedInMobileUserDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
