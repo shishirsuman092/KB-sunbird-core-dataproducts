@@ -90,7 +90,7 @@ object BlendedProgramReportModel extends AbsDashboardModel {
       .withColumnRenamed("value", "bpContentStatus")
 
     // add user and user org info
-    val bpCompletionWithUserDetailsDF = userOrgHierarchyDataDF.join(bpCompletionDF, Seq("userID"), "left")
+    val bpCompletionWithUserDetailsDF = userOrgHierarchyDataDF.join(bpCompletionDF, Seq("userID"), "right")
 
     // children
     val hierarchyDF = contentHierarchyDataFrame()
