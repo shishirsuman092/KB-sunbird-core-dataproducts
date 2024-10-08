@@ -197,7 +197,7 @@ object DashboardSyncModel extends AbsDashboardModel {
 
     // enrollment/not-started/started/in-progress/completion count, live and retired courses
     val liveRetiredContentEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("courseStatus IN ('Live', 'Retired') AND userStatus=1"))
-    val liveRetiredCourseEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category='Course' AND courseStatus IN ('Live', 'Retired')")).cache()
+    val liveRetiredCourseEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category='Course' AND courseStatus IN ('Live', 'Retired') AND userOrgID IS NOT NULL")).cache()
     val liveRetiredCourseProgramEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category IN ('Course', 'Program') AND courseStatus IN ('Live', 'Retired') AND userStatus=1"))
     val liveRetiredCourseProgramExcludingModeratedEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category IN ('Course', 'Program', 'Blended Program', 'CuratedCollections', 'Standalone Assessment', 'Curated Program') AND courseStatus IN ('Live', 'Retired') AND userStatus=1"))
     val liveRetiredCourseModeratedCourseEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category IN ('Course', 'Moderated Course') AND courseStatus IN ('Live', 'Retired') AND userStatus=1"))
@@ -221,6 +221,9 @@ object DashboardSyncModel extends AbsDashboardModel {
     val twelveMonthsAgoLocalDateTime = twelveMonthsAgo.atStartOfDay()
     // Get the epoch time in milliseconds with IST offset
     val twelveMonthsAgoEpochMillis = twelveMonthsAgoLocalDateTime.toEpochSecond(java.time.ZoneOffset.ofHoursMinutes(5, 30))
+    println("=====================")
+    println(twelveMonthsAgoEpochMillis)
+    println("======================================")
     val liveRetiredCourseEnrolmentsInLast12MonthsDF = allCourseProgramCompletionWithDetailsDF.where(expr(s"category='Course' AND courseStatus IN ('Live', 'Retired') AND userStatus=1 AND courseEnrolledTimestamp >= ${twelveMonthsAgoEpochMillis}"))
     // started + not-started = enrolled
     val liveRetiredCourseNotStartedDF = liveRetiredCourseEnrolmentDF.where(expr("dbCompletionStatus=0"))
@@ -354,7 +357,8 @@ object DashboardSyncModel extends AbsDashboardModel {
     val nationalLearningWeekEndDateTimeEpoch = nationalLearningWeekEndOffsetDateTime.toEpochSecond
 
     /* total enrolments that week across all types of content */
-    val enrolmentContentNLWDF = liveRetiredContentEnrolmentDF.filter($"courseEnrolledTimestamp".isNotNull && $"courseEnrolledTimestamp" =!= "" && $"courseEnrolledTimestamp".between(nationalLearningWeekStartDateTimeEpoch, nationalLearningWeekEndDateTimeEpoch))
+    println(liveRetiredContentEnrolmentDF.count())
+    val enrolmentContentNLWDF = liveRetiredContentEnrolmentDF.filter($"courseEnrolledTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseEnrolledTimestamp" <= nationalLearningWeekEndDateTimeEpoch)
     val enrolmentContentNLWCountDF = enrolmentContentNLWDF.agg(count("*").alias("count"))
     val enrolmentContentNLWCount = enrolmentContentNLWCountDF.select("count").first().getLong(0)
     Redis.update("dashboard_content_enrolment_nlw_count", enrolmentContentNLWCount.toString)
@@ -368,7 +372,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     val previousDayEnd = currentDate.atStartOfDay().minusSeconds(1).atOffset(zoneOffset)
     val previousDayStartString = previousDayStart.format(certificateDateTimeFormatter)
     val previousDayEndString = previousDayEnd.format(certificateDateTimeFormatter)
-    val certificateGeneratedYdayDF = liveRetiredContentEnrolmentDF.filter($"certificateGeneratedOn".isNotNull && $"certificateGeneratedOn" =!= "" && $"certificateGeneratedOn".between(previousDayStartString, previousDayEndString))
+    val certificateGeneratedYdayDF = liveRetiredContentEnrolmentDF.filter($"certificateGeneratedOn" >= previousDayStartString && $"certificateGeneratedOn" <= previousDayEndString)
     val certificateGeneratedYdayCountDF = certificateGeneratedYdayDF.agg(count("*").alias("count"))
     val certificateGeneratedYdayCount = certificateGeneratedYdayCountDF.select("count").first().getLong(0)
     Redis.update("dashboard_content_certificates_generated_yday_nlw_count", certificateGeneratedYdayCount.toString)
@@ -377,20 +381,45 @@ object DashboardSyncModel extends AbsDashboardModel {
     /* total certificates issued that week across all types of content */
     val nationalLearningWeekStartDateTimeString = nationalLearningWeekStartOffsetDateTime.format(certificateDateTimeFormatter)
     val nationalLearningWeekEndDateTimeString = nationalLearningWeekEndOffsetDateTime.format(certificateDateTimeFormatter)
-    val certificateGeneratedInNLWDF = liveRetiredContentEnrolmentDF.filter($"certificateGeneratedOn".isNotNull && $"certificateGeneratedOn" =!= "" && $"certificateGeneratedOn".between(nationalLearningWeekStartDateTimeString, nationalLearningWeekEndDateTimeString))
+    println("=================")
+    println(nationalLearningWeekStartDateTimeString)
+    val certificateGeneratedInNLWDF = liveRetiredContentEnrolmentDF.filter($"certificateGeneratedOn" >= nationalLearningWeekStartDateTimeString && $"certificateGeneratedOn" <= nationalLearningWeekEndDateTimeString)
     val certificateGeneratedInNLWCountDF = certificateGeneratedInNLWDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     val certificateGeneratedInNLWCount = certificateGeneratedInNLWCountDF.select("count").first().getLong(0)
     Redis.update("dashboard_content_certificates_generated_nlw_count", certificateGeneratedInNLWCount.toString)
 
     /* total number of events published that week */
-    // Redis.update("dashboard_events_published_nlw_count", eventsPublishedInNLWCount.toString)
+    val primaryCategory = "Event"
+    val shouldClause = s"""{"match":{"contentType":"${primaryCategory}"}}"""
+    val fields = Seq("identifier", "name", "startDate", "createdFor")
+    val arrayFields = Seq("createdFor")
+
+    // Corrected the split method
+    val startDate = nationalLearningWeekStartString.split(" ")(0)
+    val endDate = nationalLearningWeekEndString.split(" ")(0)
+
+    val dateConditions = s"""{"range": {"startDate": {"gte": "${startDate}", "lte": "${endDate}"}}}"""
+    val fieldsClause = fields.map(f => s""""${f}"""").mkString(",")
+
+    val events_query = s"""{"_source":[${fieldsClause}],"query":{"bool":{"should":[${shouldClause}],"filter":[${dateConditions}]}}}"""
+
+    val eventsPublishedInNLWDF = elasticSearchDataFrame(conf.sparkElasticsearchConnectionHost, "compositesearch", events_query, fields, arrayFields)
+    println(eventsPublishedInNLWDF.count())
+
+    // Make sure this Redis call is valid in your context
+    val eventsPublishedInNLWCount = eventsPublishedInNLWDF.count()
+    Redis.update("dashboard_events_published_nlw_count", eventsPublishedInNLWCount.toString())
+
     /* certificates issued by user that week across all types of content*/
     val certificateGeneratedInNLWByUserDF = certificateGeneratedInNLWDF.groupBy("userID").agg(count("*").alias("count"))
     Redis.dispatchDataFrame[String]("dashboard_content_certificates_issued_nlw_by_user", certificateGeneratedInNLWByUserDF, "userID", "count")
 
     /* learning hours by user that week across all types of content*/
-    val enrolmentContentDurationNLWByUserDF = cbpCompletionWithDetailsDF.filter("userID IS NOT NULL AND TRIM(userID) != ''").groupBy("userID").agg(sum(expr("(completionPercentage / 100) * courseDuration")).alias("totalLearningSeconds"))
+    println("This is the problem start")
+    show(cbpCompletionWithDetailsDF.select(col("courseEnrolledTimestamp")))
+    val enrolmentContentDurationNLWByUserDF = cbpCompletionWithDetailsDF.filter($"courseEnrolledTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseEnrolledTimestamp" <= nationalLearningWeekEndDateTimeEpoch && $"userID" =!= "").groupBy("userID").agg(sum(expr("(completionPercentage / 100) * courseDuration")).alias("totalLearningSeconds"))
       .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2)).select("userID", "totalLearningHours")
+    println("This is the problem end")
     Redis.dispatchDataFrame[String]("dashboard_content_learning_hours_nlw_by_user", enrolmentContentDurationNLWByUserDF, "userID", "totalLearningHours")
     // get the count for each courseID
     val topContentCountDF = liveCourseProgramExcludingModeratedCompletedDF.groupBy("courseID").agg(count("*").alias("count"))
@@ -414,20 +443,56 @@ object DashboardSyncModel extends AbsDashboardModel {
       )
 
     // average NPS
-    val npsQuery = """SELECT AVG(rating) AS avgNps FROM \"nps-upgraded-users-data\""""
+    val npsQuery = raw"""SELECT ROUND(((SUM(CASE WHEN rating IN (9, 10) THEN 1 ELSE 0 END) - SUM(CASE WHEN rating IN (0, 1, 2, 3, 4, 5, 6) THEN 1 ELSE 0 END)) * 1.0) / COUNT(rating) * 100, 1) AS avgNps FROM \"nps-upgraded-users-data\" WHERE submitted = true"""
     var npsDF = druidDFOption(npsQuery, conf.sparkDruidRouterHost).orNull
     if (npsDF == null) {
       npsDF = Seq((0)).toDF("avgNps")
     }
-    npsDF = npsDF.withColumn("avgNps", expr("CAST(avgNps as LONG)"))
-    val avgNPS = npsDF.select("avgNps").first().getLong(0)
-    Redis.update("dashboard_nps_across_platform", avgNPS.toString)
+    val avgNPS = npsDF.select("avgNps").first().getDouble(0)
+    // Convert the Double to a String
+    val avgNPSString = avgNPS.toString
 
+    // Update Redis with the string representation of avgNPS
+    Redis.update("dashboard_nps_across_platform", avgNPSString)
+
+    // competency coverage
+    val categories = Seq("Course", "Program", "Blended Program", "CuratedCollections", "Standalone Assessment", "Curated Program")
+    val cbpDetails = allCourseProgramESDataFrame(categories)
+      .where("courseStatus IN ('Live', 'Retired')")
+      .select("courseID", "competencyAreaId", "competencyThemeId", "competencySubThemeId", "courseName", "courseOrgID")
+    // explode area, theme and sub theme seperately
+    val areaExploded = cbpDetails.select(col("courseID"), expr("posexplode_outer(competencyAreaId) as (pos, competency_area_id)")).repartition(col("courseID"))
+    val themeExploded = cbpDetails.select(col("courseID"), expr("posexplode_outer(competencyThemeId) as (pos, competency_theme_id)")).repartition(col("courseID"))
+    val subThemeExploded = cbpDetails.select(col("courseID"), expr("posexplode_outer(competencySubThemeId) as (pos, competency_sub_theme_id)")).repartition(col("courseID"))
+    // Joining area, theme and subtheme based on position
+    val competencyJoinedDF = areaExploded.join(themeExploded, Seq("courseID", "pos")).join(subThemeExploded, Seq("courseID", "pos"))
+    // joining with cbpDetails for getting courses with no competencies mapped to it
+    val competencyContentMappingDF = cbpDetails
+      .join(competencyJoinedDF, Seq("courseID"), "left")
+      .dropDuplicates(Seq("courseID", "competency_area_id", "competency_theme_id", "competency_sub_theme_id", "courseOrgID"))
+    val contentMappingDF = competencyContentMappingDF.select(col("courseID").alias("course_id"), col("competency_area_id"), col("competency_theme_id"), col("competency_sub_theme_id"), col("courseOrgID"))
+    val areaWiseCountsDF = contentMappingDF.groupBy("courseOrgID", "competency_area_id").agg(countDistinct("competency_theme_id").alias("area_count")).filter(expr("competency_area_id IS NOT NULL"))
+    val totalCountDF = contentMappingDF.groupBy("courseOrgID").agg(coalesce(countDistinct("competency_theme_id"), lit(0)).alias("total_count"))
+    // Create a mapping for competency_area_id to descriptive keys
+    val mappedAreaWiseCountsDF = areaWiseCountsDF.withColumn("mapped_area_id", when(col("competency_area_id") === 56, "Functional")
+      .when(col("competency_area_id") === 1, "Behavioural")
+      .when(col("competency_area_id") === 145, "Domain")
+      .otherwise(col("competency_area_id")))
+
+    val resultDF = mappedAreaWiseCountsDF.join(totalCountDF, "courseOrgID").groupBy("courseOrgID").agg(
+      struct(
+        first("total_count").alias("total"),  // Get the total_count
+        map_from_entries(collect_list(struct(
+          col("mapped_area_id").alias("key"),
+          col("area_count").alias("value")
+        ))).alias("area_count_map") // Create the map from the new column
+      ).alias("jsonData")
+    )
+    Redis.dispatchDataFrame[String]("dashboard_competency_coverage_by_org", resultDF, "courseOrgID", "jsonData")
     val topProgramsByCBPDF = liveCourseProgramExcludingModeratedCompletedDF
       .filter($"category" === "Program")
-    val ecount2DF = topProgramsByCBPDF.groupBy("courseOrgID", "courseID")
-      .agg(countDistinct("userID").as("user_enrolment_count"))
-//    val windowSpec2 = Window.partitionBy("courseOrgID").orderBy(col("user_enrolment_count").desc)
+    val ecount2DF = topProgramsByCBPDF.groupBy("courseOrgID", "courseID").agg(countDistinct("userID").as("user_enrolment_count"))
+    //  val windowSpec2 = Window.partitionBy("courseOrgID").orderBy(col("user_enrolment_count").desc)
     val sortedDF2 = ecount2DF
       .groupBy("courseOrgID")
       .agg(
@@ -445,7 +510,7 @@ object DashboardSyncModel extends AbsDashboardModel {
       .filter($"category" === "Standalone Assessment")
     val ecount3DF = topAssessmentsByCBPDF.groupBy("courseOrgID", "courseID")
       .agg(countDistinct("userID").as("user_enrolment_count"))
-//    val windowSpec3 = Window.partitionBy("courseOrgID").orderBy(col("user_enrolment_count").desc)
+    //    val windowSpec3 = Window.partitionBy("courseOrgID").orderBy(col("user_enrolment_count").desc)
     val sortedDF3 = ecount3DF
       .groupBy("courseOrgID")
       .agg(
@@ -642,11 +707,11 @@ object DashboardSyncModel extends AbsDashboardModel {
 
     //Ratings spread by org
     val ratingsSpreadDF = ratedLiveContentDF.groupBy("courseOrgID").agg(
-      sum("count5Star").alias("count5"),
-      sum("count4Star").alias("count4"),
-      sum("count3Star").alias("count3"),
-      sum("count2Star").alias("count2"),
-      sum("count1Star").alias("count1"))
+        sum("count5Star").alias("count5"),
+        sum("count4Star").alias("count4"),
+        sum("count3Star").alias("count3"),
+        sum("count2Star").alias("count2"),
+        sum("count1Star").alias("count1"))
       .select(col("courseOrgID"),
         struct(col("count5"), col("count4"), col("count3"), col("count2"), col("count1")).alias("ratingsCount"))
     val ratingsSpreadJsonByCbpDF = ratingsSpreadDF.select(col("courseOrgID"), to_json(col("ratingsCount")).alias("jsonData"))
@@ -919,13 +984,13 @@ object DashboardSyncModel extends AbsDashboardModel {
       .join(allCourseProgramDetailsWithRatingDF, col("activityid").equalTo(col("courseID")), "inner")
       .filter(col("review").isNotNull && col("rating").>=("4.5"))
       .select(
-      col("activityid").alias("courseID"),
-      col("courseOrgID"),
-      col("activitytype"),
-      col("rating"),
-      col("userid").alias("userID"),
-      col("review")
-    ).orderBy(col("courseOrgID"))
+        col("activityid").alias("courseID"),
+        col("courseOrgID"),
+        col("activitytype"),
+        col("rating"),
+        col("userid").alias("userID"),
+        col("review")
+      ).orderBy(col("courseOrgID"))
 
     // assign rank
     val windowSpec = Window.partitionBy("courseOrgID").orderBy(col("rating").desc)

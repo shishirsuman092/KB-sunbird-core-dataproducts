@@ -157,8 +157,8 @@ object TestUtil extends Serializable {
       "commsConsolePrarambhTags" -> "rojgaar,rozgaar,rozgar",
       "commsConsolePrarambhCbpIds" -> "do_113882965067743232154,do_1137468666262241281756,do_1139032976499261441156",
       "commsConsolePrarambhNCount" -> "2",
-      "nationalLearningWeekStart" -> "",
-      "nationalLearningWeekEnd" -> "",
+      "nationalLearningWeekStart" -> "2024-06-01 00:00:00",
+      "nationalLearningWeekEnd" -> "2024-07-15 23:59:59",
       "cassandraNLWUserLeaderboardTable" -> "nlw_user_leaderboard",
       "cassandraNLWMdoLeaderboardTable" -> "nlw_mdo_leaderboard",
 

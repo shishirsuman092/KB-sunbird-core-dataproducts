@@ -56,10 +56,6 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         karmaPointsDataDF("total_points"),
         karmaPointsDataDF("last_credit_date"))
 
-
-    //val filteredUserLeaderBoardDataDF = userLeaderBoardDataDF
-    // .filter(col("total_points").isNotNull && col("total_points") > 0)
-
     val windowSpecRank = Window.partitionBy("org_id").orderBy(desc("total_points"))
 
     // rank the users based on the points within each org
