@@ -626,7 +626,6 @@ object DashboardUtil extends Serializable {
   val dateTimeWithMilliSecFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS"
   val dateFormat = "yyyy-MM-dd"
   val timeFormat = "HH:mm:ss"
-
   /* Util functions */
   def csvWrite(df: DataFrame, path: String, header: Boolean = true, saveMode: SaveMode = SaveMode.Overwrite): Unit = {
     // spark 2.4.x has a bug where the csv does not get written with header row if the data frame is empty, this is a workaround
