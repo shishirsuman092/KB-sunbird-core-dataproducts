@@ -426,6 +426,7 @@ object DataUtil extends Serializable {
         col("createdby").alias("userCreatedBy"),
         col("personalDetails"),
         col("professionalDetails"),
+        col("employmentDetails"),
         col("userVerified"),
         col("userMandatoryFieldsExists"),
         col("userProfileImgUrl"),
