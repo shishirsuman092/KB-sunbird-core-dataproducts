@@ -44,6 +44,9 @@ object DataUtil extends Serializable {
       StructField("designation", StringType, nullable = true),
       StructField("group", StringType, nullable = true)
     ))
+    val employmentDetailsSchema: StructType = StructType(Seq(
+      StructField("departmentName", StringType, nullable = true)
+    ))
     val personalDetailsSchema: StructType = StructType(Seq(
       StructField("phoneVerified", StringType, nullable = true),
       StructField("gender", StringType, nullable = true),
@@ -56,7 +59,7 @@ object DataUtil extends Serializable {
       StructField("externalSystemId", StringType, nullable = true),
       StructField("externalSystem", StringType, nullable = true)
     ))
-    def makeProfileDetailsSchema(competencies: Boolean = false, additionalProperties: Boolean = false, professionalDetails: Boolean = false): StructType = {
+    def makeProfileDetailsSchema(competencies: Boolean = false, additionalProperties: Boolean = false, professionalDetails: Boolean = false,employmentDetails: Boolean = false): StructType = {
       val fields = ListBuffer(
         StructField("verifiedKarmayogi", BooleanType, nullable = true),
         StructField("mandatoryFieldsExists", BooleanType, nullable = true),
@@ -73,6 +76,9 @@ object DataUtil extends Serializable {
       }
       if (professionalDetails) {
         fields.append(StructField("professionalDetails", ArrayType(professionalDetailsSchema), nullable = true))
+      }
+      if (employmentDetails) {
+        fields.append(StructField("professionalDetails", ArrayType(employmentDetailsSchema), nullable = true))
       }
       StructType(fields)
     }
@@ -386,12 +392,13 @@ object DataUtil extends Serializable {
    *         userVerified, userMandatoryFieldsExists, userPhoneVerified)
    */
   def userDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
-    val profileDetailsSchema = Schema.makeProfileDetailsSchema(additionalProperties = true, professionalDetails = true)
+    val profileDetailsSchema = Schema.makeProfileDetailsSchema(additionalProperties = true, professionalDetails = true,employmentDetails = true)
     val userDF = cache.load("user")
       .na.fill("", Seq("rootorgid", "firstname", "lastname"))
       .na.fill("{}", Seq("profiledetails"))
       .withColumn("profileDetails", from_json(col("profiledetails"), profileDetailsSchema))
       .withColumn("personalDetails", col("profileDetails.personalDetails"))
+      .withColumn("employmentDetails", col("profileDetails.employmentDetails"))
       .withColumn("professionalDetails", explode_outer(col("profileDetails.professionalDetails")))
       .withColumn("userVerified", when(col("profileDetails.verifiedKarmayogi").isNull, false).otherwise(col("profileDetails.verifiedKarmayogi")))
       .withColumn("userMandatoryFieldsExists", col("profileDetails.mandatoryFieldsExists"))
@@ -419,6 +426,7 @@ object DataUtil extends Serializable {
         col("createdby").alias("userCreatedBy"),
         col("personalDetails"),
         col("professionalDetails"),
+        col("employmentDetails"),
         col("userVerified"),
         col("userMandatoryFieldsExists"),
         col("userProfileImgUrl"),
