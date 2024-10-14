@@ -99,6 +99,9 @@ object CourseReportModel extends AbsDashboardModel {
     val reportPath = s"${conf.courseReportPath}/${today}"
     generateReport(distinctDF.coalesce(1), s"${reportPath}-resource-warehouse")
 
+    // changes for creating avro file for warehouse
+    warehouseCache.write(distinctDF.coalesce(1), "content-resource")
+
     // Compute user ratings and join with course details
     val userRatingDF = userCourseRatingDataframe().groupBy("courseID").agg(avg(col("userRating")).alias("rating"))
     val cbpDetailsDF = allCourseProgramDetailsDF.join(broadcast(userRatingDF), Seq("courseID"), "left")
@@ -203,6 +206,9 @@ object CourseReportModel extends AbsDashboardModel {
         col("data_last_generated_on")
       )
     generateReport(df_warehouse.coalesce(1), s"${reportPath}-warehouse")
+
+    warehouseCache.write(df_warehouse.coalesce(1), "content")
+
     Redis.closeRedisConnect()
   }
 }
