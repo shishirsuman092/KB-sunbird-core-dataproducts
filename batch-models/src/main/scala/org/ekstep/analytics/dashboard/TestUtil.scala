@@ -167,17 +167,7 @@ object TestUtil extends Serializable {
       "localReportDir" -> "/mount/data/analytics/reports",
       "directoriesToSelect" -> "blended-program-report-mdo,cbp-report-mdo-summary,course-report,cba-report,cbp-report-mdo-enrolment,user-report,user-enrollment-report",
       "password" -> "123456",
-      "bqScriptPath" -> "/mount/data/analytics/bq_scripts",
-      "assessmentScriptFileName" -> "assessment_details.sh",
-      "bpEnrolmentsScriptFileName" -> "bp_enrolments.sh",
-      "cbPlanScriptFileName" -> "cb_plan.sh",
-      "contentScriptFileName" -> "content.sh",
-      "contentResourceScriptFileName" -> "content_resource.sh",
-      "kcmContentMappingScriptFileName" -> "kcm_content_mapping.sh",
-      "kcmDictionaryScriptFileName" -> "kcm_directory.sh",
-      "orgHierarchyScriptFileName" -> "org_hierarchy.sh",
-      "userDetailScriptFileName" -> "user_detail.sh",
-      "userEnrolmentsScriptFileName" -> "user_enrolments.sh",
+      "bqScriptPath" -> "/mount/data/analytics/bq-scripts.sh",
 
       "sideOutput" -> sideOutput
     )

@@ -172,17 +172,7 @@ case class DashboardConfig (
                              // to enable/disable report sync
                              reportSyncEnable: Boolean,
                              // script path to push data to bq
-                             bqScriptPath: String,
-                             assessmentScriptFileName: String,
-                             bpEnrolmentsScriptFileName: String,
-                             cbPlanScriptFileName: String,
-                             contentScriptFileName: String,
-                             contentResourceScriptFileName: String,
-                             kcmContentMappingScriptFileName: String,
-                             kcmDictionaryScriptFileName: String,
-                             orgHierarchyScriptFileName: String,
-                             userDetailScriptFileName: String,
-                             userEnrolmentsScriptFileName: String
+                             bqScriptPath: String
                            ) extends Serializable
 
 object DashboardConfigParser extends Serializable {
@@ -369,17 +359,7 @@ object DashboardConfigParser extends Serializable {
       // config to enable disable report sync
       reportSyncEnable = getConfigModelParam(config, "reportSyncEnable", "true").toBoolean,
       // Bq script changes
-      bqScriptPath = getConfigModelParam(config, "bqScriptPath", "/mount/data/analytics/bq_scripts"),
-      assessmentScriptFileName = getConfigModelParam(config, "assessmentScriptFileName", "assessment_details.sh"),
-      bpEnrolmentsScriptFileName = getConfigModelParam(config, "bpEnrolmentsScriptFileName", "bp_enrolments.sh"),
-      cbPlanScriptFileName = getConfigModelParam(config, "cbPlanScriptFileName", "cb_plan.sh"),
-      contentScriptFileName = getConfigModelParam(config, "contentScriptFileName", "content.sh"),
-      contentResourceScriptFileName = getConfigModelParam(config, "contentResourceScriptFileName", "content_resource.sh"),
-      kcmContentMappingScriptFileName = getConfigModelParam(config, "kcmContentMappingScriptFileName", "kcm_content_mapping.sh"),
-      kcmDictionaryScriptFileName = getConfigModelParam(config, "kcmDictionaryScriptFileName", "kcm_dictionary.sh"),
-      orgHierarchyScriptFileName = getConfigModelParam(config, "orgHierarchyScriptFileName", "org_hierarchy.sh"),
-      userDetailScriptFileName = getConfigModelParam(config, "userDetailScriptFileName", "user_detail.sh"),
-      userEnrolmentsScriptFileName = getConfigModelParam(config, "userEnrolmentsScriptFileName", "user_enrolments.sh")
+      bqScriptPath = getConfigModelParam(config, "bqScriptPath", "/mount/data/analytics/bq-scripts.sh")
     )
   }
   /* Config functions end */
