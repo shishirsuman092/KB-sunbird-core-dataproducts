@@ -80,6 +80,8 @@ object KCMModel extends AbsDashboardModel {
 
     generateReport(competencyDetailsDF.coalesce(1), s"${reportPathCompetencyHierarchy}-warehouse")
 
+    warehouseCache.write(competencyDetailsDF.coalesce(1), "kcm_dictionary")
+
     // Competency reporting
     val competencyReporting = competencyContentMappingDF.join(competencyDetailsDF, Seq("competency_area_id", "competency_theme_id", "competency_sub_theme_id"))
       .select(
