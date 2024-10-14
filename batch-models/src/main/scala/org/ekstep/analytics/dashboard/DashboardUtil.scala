@@ -548,6 +548,8 @@ object DashboardUtil extends Serializable {
 
   val cache: AvroFSCache = new AvroFSCache("/mount/data/analytics/cache", "uncompressed")
 
+  val warehouseCache: AvroFSCache = new AvroFSCache("/mount/data/analytics/warehouse", "uncompressed")
+
   object Test extends Serializable {
     /**
      * ONLY FOR TESTING!!, do not use to create spark context in model or job

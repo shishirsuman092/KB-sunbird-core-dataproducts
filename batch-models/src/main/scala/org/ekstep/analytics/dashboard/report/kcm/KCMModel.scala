@@ -42,6 +42,9 @@ object KCMModel extends AbsDashboardModel {
 
     generateReport(contentMappingDF.coalesce(1), s"${reportPathContentCompetencyMapping}-warehouse")
 
+    // changes for creating avro file for warehouse
+    warehouseCache.write(contentMappingDF.coalesce(1), "KCM-content-mapping")
+
     // Competency details data with hierarchy
     val jsonSchema = MapType(StringType, StringType)
     // fetch data from data_node(competency details) and node_mapping(hierarchy)
