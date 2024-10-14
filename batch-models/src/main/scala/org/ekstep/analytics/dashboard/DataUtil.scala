@@ -271,6 +271,18 @@ object DataUtil extends Serializable {
       StructField("endDate", StringType, nullable = true),
       StructField("contentList", ArrayType(StringType), nullable = true)
     ))
+    val anonymousAssessmentContentAccessUserCountSchema: StructType = StructType(Seq(
+      StructField("user_count", IntegerType, nullable = true)
+    ))
+    val userDayCountWallOfFameSchema: StructType = StructType(Seq(
+      StructField("day_count", IntegerType, nullable = true),
+      StructField("actor_id", StringType, nullable = true)
+    ))
+    val mobileVersionsSchema: StructType = StructType(Seq(
+      StructField("user_count", IntegerType, nullable = true),
+      StructField("context_pdata_ver", StringType, nullable = true),
+      StructField("context_pdata_pid", StringType, nullable = true)
+    ))
 
 //    val solutionIdDataSchema: StructType = StructType(Seq(
 //      StructField("createdBy", StringType, nullable = true),
@@ -1537,6 +1549,39 @@ object DataUtil extends Serializable {
     if (df == null) return emptySchemaDataFrame(Schema.userActualTimeSpentLearningSchema)
     df
   }
+
+  //Anonymous Assessment KPIs START
+  def loggedInUserAccessCountDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
+    val query = """SELECT COUNT(DISTINCT(actor_id)) AS user_count FROM \"telemetry-events-syncts\" WHERE eid='IMPRESSION' AND actor_type = 'User' AND edata_uri IN('app/toc/do_1141533857591132161321/overview', 'app/toc/do_1141525365329264641663/overview','app/toc/do_1141527106280980481664/overview', 'app/toc/do_1141533540853432321675/overview' ) AND context_env = 'Learn'"""
+    val df = druidDFOption(query, conf.sparkDruidRouterHost, limit = 1000000).orNull
+    if (df == null) return emptySchemaDataFrame(Schema.anonymousAssessmentContentAccessUserCountSchema)
+    df
+  }
+
+  def nonLoggedInUserAccessCountDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
+    val query = """SELECT COUNT(*) AS user_count FROM \"telemetry-events-syncts\" WHERE eid='IMPRESSION' and actor_type = 'AnonymousUser' AND context_env = 'Learn' AND edata_uri IN('public/toc/do_1141533857591132161321/overview', 'public/toc/do_1141525365329264641663/overview','public/toc/do_1141527106280980481664/overview', 'public/toc/do_1141533540853432321675/overview')"""
+    val df = druidDFOption(query, conf.sparkDruidRouterHost, limit = 1000000).orNull
+    if (df == null) return emptySchemaDataFrame(Schema.anonymousAssessmentContentAccessUserCountSchema)
+    df
+  }
+  // Anonymous Assessment KPIs END
+
+  // Monthly once request START
+  def userDayCountWallOfFameDataFrame(fromDate: String, toDate: String)(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
+    val query = raw"""SELECT COUNT(DISTINCT(DATE_TRUNC('DAY', MILLIS_TO_TIMESTAMP(ets)))) as day_count,actor_id FROM \"telemetry-events-syncts\" WHERE MILLIS_TO_TIMESTAMP(ets) >= TIMESTAMP '${fromDate}' and MILLIS_TO_TIMESTAMP(ets) < TIMESTAMP '${toDate}' and actor_type = 'User' AND eid IN ('IMPRESSION') AND REGEXP_LIKE(actor_id, ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}') GROUP BY 2 ORDER BY 1 DESC"""
+    val df = druidDFOption(query, conf.sparkDruidRouterHost, limit = 1000000).orNull
+    if (df == null) return emptySchemaDataFrame(Schema.userDayCountWallOfFameSchema)
+    df
+  }
+
+  // mobile team request for the mobile versions active last month( ios and android)
+  def mobileVersionsDataFrame(fromDate: String)(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
+    val query = raw"""SELECT context_pdata_ver, context_pdata_pid, COUNT(DISTINCT(actor_id)) AS user_count FROM \"telemetry-events-syncts\" WHERE __time > TIMESTAMP '${fromDate}' AND context_pdata_pid IN('karmayogi-mobile-android','karmayogi-mobile-ios') GROUP BY 1,2 """
+    val df = druidDFOption(query, conf.sparkDruidRouterHost, limit = 1000000).orNull
+    if (df == null) return emptySchemaDataFrame(Schema.mobileVersionsSchema)
+    df
+  }
+  // Monthly once request END
 
   /**
    * Get user engagement data - timespent and number of sessions from druid summary-events for the current week (Mon - sun)
