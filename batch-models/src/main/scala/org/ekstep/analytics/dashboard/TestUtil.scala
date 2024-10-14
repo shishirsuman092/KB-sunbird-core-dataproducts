@@ -123,6 +123,7 @@ object TestUtil extends Serializable {
       "cassandraOldAssesmentTable" -> "user_assessment_master",
       "cassandraNLWMdoLeaderboardTable" -> "nlw_mdo_leaderboard",
       "cassandraNLWUserLeaderboardTable" -> "nlw_user_leaderboard",
+      "cassandraPublicUserAssessmentDataTable" -> "public_user_assessment_data",
 
       "mongoDatabase" -> "nodebb",
       "mongoDBCollection" -> "objects",
@@ -161,6 +162,8 @@ object TestUtil extends Serializable {
       "nationalLearningWeekEnd" -> "2024-07-15 23:59:59",
       "cassandraNLWUserLeaderboardTable" -> "nlw_user_leaderboard",
       "cassandraNLWMdoLeaderboardTable" -> "nlw_mdo_leaderboard",
+      "anonymousAssessmentLoggedInUserContentIDs" -> "do_1141533540853432321675,do_1141533857591132161321,do_1141525365329264641663,do_1141527106280980481664",
+      "anonymousAssessmentNonLoggedInUserAssessmentIDs" -> "do_11415336159226265611",
 
       "prefixDirectoryPath" -> "standalone-reports",
       "destinationDirectoryPath" -> "standalone-reports/merged",

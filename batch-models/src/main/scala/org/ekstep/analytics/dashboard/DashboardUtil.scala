@@ -79,6 +79,7 @@ case class DashboardConfig (
                              cassandraLearnerLeaderBoardTable: String,
                              cassandraLearnerLeaderBoardLookupTable: String,
                              cassandraMDOLearnerLeaderboardTable: String,
+                             cassandraPublicUserAssessmentDataTable: String,
 
                              //warehouse tables;
                              appPostgresHost: String,
@@ -161,6 +162,10 @@ case class DashboardConfig (
                              cassandraNLWUserLeaderboardTable: String,
                              cassandraNLWMdoLeaderboardTable: String,
                              cassandraOldAssesmentTable: String,
+
+                             // Anonymous Assessment
+                             anonymousAssessmentLoggedInUserContentIDs: String,
+                             anonymousAssessmentNonLoggedInUserAssessmentIDs: String,
 
 
                              prefixDirectoryPath: String,
@@ -278,6 +283,7 @@ object DashboardConfigParser extends Serializable {
       cassandraLearnerLeaderBoardLookupTable = getConfigModelParam(config, "cassandraLearnerLeaderBoardLookupTable"),
       cassandraMDOLearnerLeaderboardTable = getConfigModelParam(config, "cassandraMDOLearnerLeaderboardTable"),
       cassandraOldAssesmentTable = getConfigModelParam(config, "cassandraOldAssesmentTable"),
+      cassandraPublicUserAssessmentDataTable = getConfigModelParam(config, "cassandraPublicUserAssessmentDataTable"),
 
       // redis keys
       redisRegisteredOfficerCountKey = "mdo_registered_officer_count",
@@ -353,6 +359,10 @@ object DashboardConfigParser extends Serializable {
       destinationDirectoryPath = getConfigModelParam(config, "destinationDirectoryPath"),
       directoriesToSelect = getConfigModelParam(config, "directoriesToSelect"),
       password = getConfigModelParam(config, "password"),
+
+      //Anonymous Assessment
+      anonymousAssessmentLoggedInUserContentIDs = getConfigModelParam(config, "anonymousAssessmentLoggedInUserContentIDs"),
+      anonymousAssessmentNonLoggedInUserAssessmentIDs = getConfigModelParam(config, "anonymousAssessmentNonLoggedInUserAssessmentIDs"),
 
       // for weekly claps
       cutoffTime = getConfigModelParam(config, "cutoffTime", "60.0").toFloat,

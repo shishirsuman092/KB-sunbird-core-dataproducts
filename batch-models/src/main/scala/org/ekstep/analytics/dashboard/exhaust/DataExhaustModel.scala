@@ -24,12 +24,12 @@ object DataExhaustModel extends AbsDashboardModel {
    */
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
     val enrolmentDF = cassandraTableAsDataFrame(conf.cassandraCourseKeyspace, conf.cassandraUserEnrolmentsTable)
-    show(enrolmentDF, "enrolmentDF")
     cache.write(enrolmentDF, "enrolment")
+    enrolmentDF.unpersist()
 
     val batchDF = cassandraTableAsDataFrame(conf.cassandraCourseKeyspace, conf.cassandraCourseBatchTable)
-    show(batchDF, "batchDF")
     cache.write(batchDF, "batch")
+    batchDF.unpersist()
 
     val userAssessmentDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraUserAssessmentTable)
       .select(
@@ -87,28 +87,28 @@ object DataExhaustModel extends AbsDashboardModel {
       col("assessResult"), col("assessTotal"),col("assessStartTimestamp"),
       col("assessEndTimestamp")
     )
-    show(finalAssessmentDF, "userAssessmentDF")
     cache.write(finalAssessmentDF, "userAssessment")
+    userAssessmentDF.unpersist()
 
     val hierarchyDF = cassandraTableAsDataFrame(conf.cassandraHierarchyStoreKeyspace, conf.cassandraContentHierarchyTable)
-    show(hierarchyDF, "hierarchyDF")
     cache.write(hierarchyDF, "hierarchy")
+    hierarchyDF.unpersist()
 
     val ratingSummaryDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraRatingSummaryTable)
-    show(ratingSummaryDF, "ratingSummaryDF")
     cache.write(ratingSummaryDF, "ratingSummary")
+    ratingSummaryDF.unpersist()
 
     val acbpDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraAcbpTable)
-    show(acbpDF, "acbpDF")
     cache.write(acbpDF, "acbp")
+    acbpDF.unpersist()
 
     val ratingDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraRatingsTable)
-    show(ratingDF, "ratingDF")
     cache.write(ratingDF, "rating")
+    ratingDF.unpersist()
 
     val roleDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraUserRolesTable)
-    show(roleDF, "roleDF")
     cache.write(roleDF, "role")
+    roleDF.unpersist()
 
     // ES content
     val primaryCategories = Seq("Course","Program","Blended Program","Curated Program","Standalone Assessment","CuratedCollections","Moderated Course")
@@ -118,11 +118,9 @@ object DataExhaustModel extends AbsDashboardModel {
     val fieldsClause = fields.map(f => s""""${f}"""").mkString(",")
     val query = s"""{"_source":[${fieldsClause}],"query":{"bool":{"should":[${shouldClause}]}}}"""
     val esContentDF = elasticSearchDataFrame(conf.sparkElasticsearchConnectionHost, "compositesearch", query, fields, arrayFields)
-    show(esContentDF, "esContentDF")
     cache.write(esContentDF, "esContent")
 
     val orgDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraOrgTable)
-    show(orgDF, "orgDF")
     cache.write(orgDF, "org")
 
     // org hierarchy
@@ -154,30 +152,29 @@ object DataExhaustModel extends AbsDashboardModel {
       .drop("orgType")
       .dropDuplicates(Seq("mdo_id"))
       .repartition(16)
-    show(orgHierarchyDF, "orgHierarchyDF")
     cache.write(orgHierarchyDF, "orgHierarchy")
-    show(orgPostgresDF, "orgCompleteHierarchyDF")
     cache.write(orgPostgresDF, "orgCompleteHierarchy")
+    orgDF.unpersist()
 
     val userDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraUserTable)
-    show(userDF, "userDF")
     cache.write(userDF, "user")
+    userDF.unpersist()
 
     val learnerLeaderboardDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraLearnerLeaderBoardTable)
-    show(learnerLeaderboardDF, "learnerLeaderboardDF")
     cache.write(learnerLeaderboardDF, "learnerLeaderBoard")
+    learnerLeaderboardDF.unpersist()
 
     val userKarmaPointsDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraKarmaPointsTable)
-    show(userKarmaPointsDF, "Karma Points data")
     cache.write(userKarmaPointsDF, "userKarmaPoints")
+    userKarmaPointsDF.unpersist()
 
     val userKarmaPointsSummaryDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraKarmaPointsSummaryTable)
-    show(userKarmaPointsSummaryDF, "userKarmaPointsSummaryDF")
     cache.write(userKarmaPointsSummaryDF, "userKarmaPointsSummary")
+    userKarmaPointsSummaryDF.unpersist()
 
     val oldAssessmentDetailsDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraOldAssesmentTable)
-    show(oldAssessmentDetailsDF, "oldAssessmentDetailsDF")
     cache.write(oldAssessmentDetailsDF, "oldAssessmentDetails")
+    oldAssessmentDetailsDF.unpersist()
   }
 }
 

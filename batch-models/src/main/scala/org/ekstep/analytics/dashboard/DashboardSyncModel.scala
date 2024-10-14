@@ -526,6 +526,38 @@ object DashboardSyncModel extends AbsDashboardModel {
 
     Redis.dispatchDataFrame[String]("dashboard_top_10_courses_by_completion_by_course_org", combinedDFByCBP, "courseOrgID:content", "sorted_courseIDs")
 
+    // Anonymous Assessment KPIs START
+    val courseIDs = conf.anonymousAssessmentLoggedInUserContentIDs.split(",").toSeq
+    val anonymousAssessmentIDs = conf.anonymousAssessmentNonLoggedInUserAssessmentIDs.split(",").toSeq
+    val loggedInEnrolmentData = cache.load("enrolment")
+      .where(expr("active=true"))
+      .select(col("status"), col("userid"), col("courseid"), col("issued_certificates"))
+      .filter(col("courseid").isin(courseIDs: _*))
+
+    val nonLoggedInUserConpletionWIthAssessmentData = cassandraTableAsDataFrame(conf.cassandraUserKeyspace,conf.cassandraPublicUserAssessmentDataTable)
+      .select(col("userid"), col("status"), col("issued_certificates"), col("assessmentid"))
+      .filter(col("assessmentid").isin(anonymousAssessmentIDs: _*))
+
+    val nonLoggedInUserAccessCount = nonLoggedInUserAccessCountDataFrame().select(col("user_count")).first().getLong(0)
+    val loggedInUserAccessCount = loggedInUserAccessCountDataFrame().select(col("user_count")).first().getLong(0)
+    val loggedInUserEnrolmentsCount = loggedInEnrolmentData
+      .filter(col("status").isin(0, 1, 2)).agg(count("userid").alias("distinct_user_count"))
+      .select(col("distinct_user_count")).first().getLong(0)
+    val loggedInUserCompletionWithCertificateCount = loggedInEnrolmentData
+      .filter(col("status") === 2 && size(col("issued_certificates")) > 0).agg(count("userid").alias("distinct_user_count"))
+      .select(col("distinct_user_count")).first().getLong(0)
+    val nonLoggedInUserCompletionWithCertificateCount = nonLoggedInUserConpletionWIthAssessmentData
+      .filter(col("status") === "SUBMITTED" && size(col("issued_certificates")) > 0).agg(count("userid").alias("distinct_user_count"))
+      .select(col("distinct_user_count")).first().getLong(0)
+
+    Redis.update("dashboards_lu_assessment_access_count", loggedInUserAccessCount.toString)
+    Redis.update("dashboards_lu_assessment_enrolment_count", loggedInUserEnrolmentsCount.toString)
+    Redis.update("dashboards_lu_assessment_certification_count", loggedInUserCompletionWithCertificateCount.toString)
+    Redis.update("dashboards_nlu_anonymous_assessment_access_count", nonLoggedInUserAccessCount.toString)
+    Redis.update("dashboards_nlu_anonymous_assessment_certification_count", nonLoggedInUserCompletionWithCertificateCount.toString)
+
+    // Anonymous Assessment KPIs END
+
     // DSR new keys monthly active users and certificate issued yesterday
     val averageMonthlyActiveUsersCount = averageMonthlyActiveUsersDataFrame()
     Redis.update("dashboard_average_monthly_active_users_last_30_days", averageMonthlyActiveUsersCount.toString)

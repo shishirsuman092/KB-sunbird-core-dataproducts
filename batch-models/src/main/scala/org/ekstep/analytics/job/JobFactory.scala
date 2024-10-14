@@ -27,6 +27,7 @@ import org.ekstep.analytics.dashboard.weekly.claps.WeeklyClapsJob
 import org.ekstep.analytics.dashboard.ministrymetrics.MinistryMetricsJob
 import org.ekstep.analytics.dashboard.ministryleaderboard.MinistryLearnerLeaderboardJob
 import org.ekstep.analytics.dashboard.nationallearningweek.NationalLearningWeekJob
+import org.ekstep.analytics.dashboard.report.monthly.requests.MonthlyRequestJob
 import org.ekstep.analytics.dashboard.survey.npsUpgrade.NpsUpgradeJob
 
 import scala.reflect.runtime.universe
@@ -123,6 +124,8 @@ object JobFactory {
         MinistryLearnerLeaderboardJob
       case "national-learning-week" =>
         NationalLearningWeekJob
+      case "monthly-requests" =>
+        MonthlyRequestJob
       case _ =>
         reflectModule(jobType);
     }
