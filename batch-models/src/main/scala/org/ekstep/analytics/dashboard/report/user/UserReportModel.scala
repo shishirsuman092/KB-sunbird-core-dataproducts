@@ -96,6 +96,9 @@ object UserReportModel extends AbsDashboardModel {
 
     generateReport(df_warehouse.coalesce(1), s"${reportPath}-warehouse")
 
+    // changes for creating avro file for warehouse
+    warehouseCache.write(df_warehouse.coalesce(1), conf.dwUserTable)
+
     Redis.closeRedisConnect()
 
   }

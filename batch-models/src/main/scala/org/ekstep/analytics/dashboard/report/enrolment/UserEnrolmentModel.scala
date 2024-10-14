@@ -174,6 +174,9 @@ object UserEnrolmentModel extends AbsDashboardModel {
       ).dropDuplicates("user_id","batch_id","content_id")
     generateReport(warehouseDF.coalesce(1), s"${reportPath}-warehouse")
 
+    // changes for creating avro file for warehouse
+    warehouseCache.write(warehouseDF.coalesce(1), conf.dwEnrollmentsTable)
+
     allCourseProgramCompletionWithDetailsDFWithRating.unpersist()
 
     Redis.closeRedisConnect()

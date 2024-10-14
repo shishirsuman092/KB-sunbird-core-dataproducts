@@ -170,6 +170,7 @@ object TestUtil extends Serializable {
       "localReportDir" -> "/mount/data/analytics/reports",
       "directoriesToSelect" -> "blended-program-report-mdo,cbp-report-mdo-summary,course-report,cba-report,cbp-report-mdo-enrolment,user-report,user-enrollment-report",
       "password" -> "123456",
+      "bqScriptPath" -> "/mount/data/analytics/bq-scripts.sh",
 
       "sideOutput" -> sideOutput
     )

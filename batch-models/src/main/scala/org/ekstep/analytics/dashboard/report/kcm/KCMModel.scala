@@ -42,6 +42,9 @@ object KCMModel extends AbsDashboardModel {
 
     generateReport(contentMappingDF.coalesce(1), s"${reportPathContentCompetencyMapping}-warehouse")
 
+    // changes for creating avro file for warehouse
+    warehouseCache.write(contentMappingDF.coalesce(1), conf.dwKcmContentTable)
+
     // Competency details data with hierarchy
     val jsonSchema = MapType(StringType, StringType)
     // fetch data from data_node(competency details) and node_mapping(hierarchy)
@@ -76,6 +79,8 @@ object KCMModel extends AbsDashboardModel {
     show(competencyDetailsDF, "Competency details dataframe")
 
     generateReport(competencyDetailsDF.coalesce(1), s"${reportPathCompetencyHierarchy}-warehouse")
+
+    warehouseCache.write(competencyDetailsDF.coalesce(1), conf.dwKcmDictionaryTable)
 
     // Competency reporting
     val competencyReporting = competencyContentMappingDF.join(competencyDetailsDF, Seq("competency_area_id", "competency_theme_id", "competency_sub_theme_id"))

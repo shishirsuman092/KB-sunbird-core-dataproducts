@@ -1,6 +1,7 @@
 package org.ekstep.analytics.job
 
 import org.ekstep.analytics.dashboard.DashboardSyncJob
+import org.ekstep.analytics.dashboard.bq.BqDataJob
 import org.ekstep.analytics.dashboard.exhaust.DataExhaustJob
 import org.ekstep.analytics.dashboard.karma.points.KarmaPointsJob
 import org.ekstep.analytics.dashboard.leaderboard.LearnerLeaderBoardJob
@@ -73,6 +74,8 @@ object JobFactory {
         BlendedProgramReportJob
       case "data-warehouse-sync" =>
         DataWarehouseJob
+      case "bq-data-push" =>
+        BqDataJob
       case "weekly-claps" =>
         WeeklyClapsJob
       case "comms-console" =>

@@ -175,7 +175,9 @@ case class DashboardConfig (
                              // for weekly claps
                              cutoffTime: Float,
                              // to enable/disable report sync
-                             reportSyncEnable: Boolean
+                             reportSyncEnable: Boolean,
+                             // script path to push data to bq
+                             bqScriptPath: String
                            ) extends Serializable
 
 object DashboardConfigParser extends Serializable {
@@ -365,7 +367,9 @@ object DashboardConfigParser extends Serializable {
       // for weekly claps
       cutoffTime = getConfigModelParam(config, "cutoffTime", "60.0").toFloat,
       // config to enable disable report sync
-      reportSyncEnable = getConfigModelParam(config, "reportSyncEnable", "true").toBoolean
+      reportSyncEnable = getConfigModelParam(config, "reportSyncEnable", "true").toBoolean,
+      // Bq script changes
+      bqScriptPath = getConfigModelParam(config, "bqScriptPath", "/mount/data/analytics/bq-scripts.sh")
     )
   }
   /* Config functions end */
@@ -557,6 +561,8 @@ object DashboardUtil extends Serializable {
   }
 
   val cache: AvroFSCache = new AvroFSCache("/mount/data/analytics/cache", "uncompressed")
+
+  val warehouseCache: AvroFSCache = new AvroFSCache("/mount/data/analytics/warehouse", "uncompressed")
 
   object Test extends Serializable {
     /**
