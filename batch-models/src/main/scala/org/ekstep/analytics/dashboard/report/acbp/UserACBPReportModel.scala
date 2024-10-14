@@ -150,7 +150,7 @@ object UserACBPReportModel extends AbsDashboardModel {
     syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
 
     // changes for creating avro file for warehouse
-    warehouseCache.write(cbPlanWarehouseDF.coalesce(1), "acbp")
+    warehouseCache.write(cbPlanWarehouseDF.coalesce(1), conf.dwCBPlanTable)
 
     Redis.closeRedisConnect()
   }

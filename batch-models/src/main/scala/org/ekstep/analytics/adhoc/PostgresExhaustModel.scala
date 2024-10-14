@@ -25,49 +25,49 @@ object PostgresExhaustModel extends AbsDashboardModel {
     // org hierarchy
     val dwPostgresUrl = s"jdbc:postgresql://${conf.dwPostgresHost}/${conf.dwPostgresSchema}"
     val orgPostgresDF = postgresTableAsDataFrame(dwPostgresUrl, conf.dwOrgTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
-    warehouseCache.write(orgPostgresDF, "orgHierarchy")
+    warehouseCache.write(orgPostgresDF, conf.dwOrgTable)
 
     // assessment detail
     val assessmentDetailPostgresDF = postgresTableAsDataFrame(dwPostgresUrl, conf.dwAssessmentTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
-    warehouseCache.write(assessmentDetailPostgresDF, "assessmentDetail")
+    warehouseCache.write(assessmentDetailPostgresDF, conf.dwAssessmentTable)
 
     // bp_enrolments
     val bpEnrolmentsPostgresDF = postgresTableAsDataFrame(dwPostgresUrl, conf.dwBPEnrollmentsTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
-    warehouseCache.write(bpEnrolmentsPostgresDF, "bpEnrolments")
+    warehouseCache.write(bpEnrolmentsPostgresDF, conf.dwBPEnrollmentsTable)
 
     // cb_plan.sh
     val cbPlanPostgresDF = postgresTableAsDataFrame(dwPostgresUrl, conf.dwCBPlanTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
-    warehouseCache.write(cbPlanPostgresDF, "cbPlan")
+    warehouseCache.write(cbPlanPostgresDF, conf.dwCBPlanTable)
 
     // content
     val coursePostgresDF = postgresTableAsDataFrame(dwPostgresUrl, conf.dwCourseTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
-    warehouseCache.write(coursePostgresDF, "content")
+    warehouseCache.write(coursePostgresDF, conf.dwCourseTable)
 
     // content_resource
     val contentResourcePostgresDF = postgresTableAsDataFrame(dwPostgresUrl, conf.dwContentResourceTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
-    warehouseCache.write(contentResourcePostgresDF, "contentResource")
+    warehouseCache.write(contentResourcePostgresDF, conf.dwContentResourceTable)
 
     // kcm_content_mapping
     val kcmContentPostgresDF = postgresTableAsDataFrame(dwPostgresUrl, conf.dwKcmContentTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
-    warehouseCache.write(kcmContentPostgresDF, "kcmContentMapping")
+    warehouseCache.write(kcmContentPostgresDF, conf.dwKcmContentTable)
 
     // kcm_dictionary
     val kcmDictionaryPostgresDF = postgresTableAsDataFrame(dwPostgresUrl, conf.dwKcmDictionaryTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
-    warehouseCache.write(kcmDictionaryPostgresDF, "kcmDictionary")
+    warehouseCache.write(kcmDictionaryPostgresDF, conf.dwKcmDictionaryTable)
 
     // user_detail
     val userDetailPostgresDF = postgresTableAsDataFrame(dwPostgresUrl, conf.dwUserTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
-    warehouseCache.write(userDetailPostgresDF, "userDetail")
+    warehouseCache.write(userDetailPostgresDF, conf.dwUserTable)
 
     // user_enrolments
     val userEnrolmentsPostgresDF = postgresTableAsDataFrame(dwPostgresUrl, conf.dwEnrollmentsTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
-    warehouseCache.write(userEnrolmentsPostgresDF, "userEnrolments")
+    warehouseCache.write(userEnrolmentsPostgresDF, conf.dwEnrollmentsTable)
 
     // root path to bq scripts
     val bqScriptPath = conf.bqScriptPath
 
     // execute the scripts
-    bqScriptPath !;
+    bqScriptPath!;
   }
 }
 

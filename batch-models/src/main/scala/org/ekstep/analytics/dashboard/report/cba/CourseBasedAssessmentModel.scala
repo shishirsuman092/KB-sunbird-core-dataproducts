@@ -219,7 +219,7 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
     generateReport(warehouseDF.coalesce(1), s"${reportPath}-warehouse")
 
     // changes for creating avro file for warehouse
-    warehouseCache.write(warehouseDF.coalesce(1), "cba")
+    warehouseCache.write(warehouseDF.coalesce(1), conf.dwAssessmentTable)
 
     Redis.closeRedisConnect()
 

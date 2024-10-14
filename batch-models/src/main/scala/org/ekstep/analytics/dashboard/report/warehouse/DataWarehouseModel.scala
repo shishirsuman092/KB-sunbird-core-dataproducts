@@ -84,7 +84,7 @@ object DataWarehouseModel extends AbsDashboardModel {
       .withColumn("mdo_created_on", to_date(col("mdo_created_on"))).cache()
     generateReport(orgDwDf.coalesce(1), s"${conf.orgHierarchyReportPath}/${today}-warehouse")
 
-    warehouseCache.write(orgDwDf.coalesce(1), "org_hierarchy")
+    warehouseCache.write(orgDwDf.coalesce(1), conf.dwOrgTable)
 
     truncateWarehouseTable(conf.dwOrgTable)
     saveDataframeToPostgresTable_With_Append(orgDwDf, dwPostgresUrl, conf.dwOrgTable, conf.dwPostgresUsername, conf.dwPostgresCredential)

@@ -175,7 +175,7 @@ object UserEnrolmentModel extends AbsDashboardModel {
     generateReport(warehouseDF.coalesce(1), s"${reportPath}-warehouse")
 
     // changes for creating avro file for warehouse
-    warehouseCache.write(warehouseDF.coalesce(1), "user-enrolment")
+    warehouseCache.write(warehouseDF.coalesce(1), conf.dwEnrollmentsTable)
 
     allCourseProgramCompletionWithDetailsDFWithRating.unpersist()
 
