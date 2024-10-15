@@ -78,7 +78,7 @@ object DataUtil extends Serializable {
         fields.append(StructField("professionalDetails", ArrayType(professionalDetailsSchema), nullable = true))
       }
       if (employmentDetails) {
-        fields.append(StructField("professionalDetails", ArrayType(employmentDetailsSchema), nullable = true))
+        fields.append(StructField("employmentDetails", ArrayType(employmentDetailsSchema), nullable = true))
       }
       StructType(fields)
     }
