@@ -33,9 +33,7 @@ object ZipReportsWithSecurityModel extends AbsDashboardModel {
    */
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
 
-    // Start of merging folders
 
-    // Define variables for source, destination directories and date.
     val prefixDirectoryPath = s"${conf.localReportDir}/${conf.prefixDirectoryPath}"
     val destinationPath = s"${conf.localReportDir}/${conf.destinationDirectoryPath}"
     val directoriesToSelect = conf.directoriesToSelect.split(",").toSet
@@ -105,6 +103,21 @@ object ZipReportsWithSecurityModel extends AbsDashboardModel {
       }
     }
 
+    def zipReports(zipFilePath: String, sourceFolder: File, password: String): Unit = {
+      if (!sourceFolder.isDirectory) {
+        println(" ERROR : zip path is not directory")
+      } else {
+        // Create a password-protected zip file for the mdoid folder
+        val combinedZipFile = new ZipFile(zipFilePath + "/reports.zip", password.toCharArray)
+        val parameters = new ZipParameters()
+        parameters.setEncryptFiles(true)
+        parameters.setEncryptionMethod(EncryptionMethod.ZIP_STANDARD)
+        // Add all files within the source folder to the zip file
+        sourceFolder.listFiles().foreach { file => combinedZipFile.addFile(file, parameters)
+        }
+      }
+    }
+
     // Start traversing the source directory
     traverseDirectory(new File(prefixDirectoryPath))
 
@@ -155,12 +168,51 @@ object ZipReportsWithSecurityModel extends AbsDashboardModel {
     } catch {
       case e: Exception => println(s"Error deleting directory: ${e.getMessage}")
     }
+
+    // End of zipping the reports and syncing to blob store
+    // start zipping warehouse reports
+    val today = getDate()
+    val warehousePath: String = s"${conf.localReportDir}/${conf.warehouseReportPath}/${today}"
+    val warehouseReportMap: Map[String, String] = Map("user_detail" -> s"${conf.localReportDir}/${conf.userReportPath}/${today}-warehouse",
+      "course" -> s"${conf.localReportDir}/${conf.courseReportPath}/${today}-warehouse",
+      "assessment_details" -> s"${conf.localReportDir}/${conf.cbaReportPath}/${today}-warehouse",
+      "bp_enrolments" -> s"${conf.localReportDir}/${conf.blendedReportPath}/${today}-warehouse",
+      "content_resource" -> s"${conf.localReportDir}/${conf.courseReportPath}/${today}-resource-warehouse",
+      "cb_plan" -> s"${conf.localReportDir}/${conf.acbpReportPath}/${today}-warehouse",
+      "org_hierarchy" -> s"${conf.localReportDir}/${conf.orgHierarchyReportPath}/${today}-warehouse",
+      "kcm_content_competency_mapping" -> s"${conf.localReportDir}/${conf.kcmReportPath}/${today}/ContentCompetencyMapping-warehouse",
+      "kcm_competency_hierarchy" -> s"${conf.localReportDir}/${conf.kcmReportPath}/${today}/CompetencyHierarchy-warehouse",
+      "enrolment_details" -> s"${conf.localReportDir}/${conf.userEnrolmentReportPath}/${today}-warehouse"
+    )
+    // copy all warehouse files to separate directory for zipping
+    // TODO file format will change to AVRO in future
+    warehouseReportMap.foreach(x => {
+      val inputCsvDir = new File(x._2)
+      if (inputCsvDir.isDirectory) {
+        inputCsvDir.listFiles().foreach(file => {
+          if (file.getName.endsWith(".csv")) {
+            FileUtils.copyFile(file, new File(warehousePath.concat("/").concat(x._1).concat(".csv")))
+          }
+        })
+      }
+    })
+    // zip warehouse report
+    zipReports(warehousePath, Paths.get(warehousePath).toFile, s"${conf.password}")
+    // delete files
+    new File(warehousePath).listFiles().foreach { file =>
+      if (file.isFile && file.getName != "reports.zip") {
+        file.delete()
+      }
+    }
+    // end of zipping of warehouse reports
+    // upload zip to cloud storage
+    syncReports(warehousePath, s"${conf.destinationFullReportPath}/${today}")
+    //deleting the tmp merged folder
+    try {
+      FileUtils.deleteDirectory(new File(destinationPath))
+      FileUtils.deleteDirectory(new File(warehousePath))
+    } catch {
+      case e: Exception => println(s"Error deleting directory: ${e.getMessage}")
+    }
   }
 }
-
-
-
-
-
-
-
