@@ -177,7 +177,9 @@ case class DashboardConfig (
                              // to enable/disable report sync
                              reportSyncEnable: Boolean,
                              // script path to push data to bq
-                             bqScriptPath: String
+                             bqScriptPath: String,
+                             warehouseReportPath: String,
+                             destinationFullReportPath: String
                            ) extends Serializable
 
 object DashboardConfigParser extends Serializable {
@@ -369,7 +371,10 @@ object DashboardConfigParser extends Serializable {
       // config to enable disable report sync
       reportSyncEnable = getConfigModelParam(config, "reportSyncEnable", "true").toBoolean,
       // Bq script changes
-      bqScriptPath = getConfigModelParam(config, "bqScriptPath", "/mount/data/analytics/bq-scripts.sh")
+      bqScriptPath = getConfigModelParam(config, "bqScriptPath", "/mount/data/analytics/bq-scripts.sh"),
+      // warehouse report path
+      warehouseReportPath = getConfigModelParam(config, "warehouseReportPath", "warehouse"),
+      destinationFullReportPath = getConfigModelParam(config, "destinationFullReportPath", "destinationFullReportPath")
     )
   }
   /* Config functions end */
