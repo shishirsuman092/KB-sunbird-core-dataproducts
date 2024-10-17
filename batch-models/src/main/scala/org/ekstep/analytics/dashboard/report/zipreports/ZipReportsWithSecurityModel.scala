@@ -34,28 +34,11 @@ object ZipReportsWithSecurityModel extends AbsDashboardModel {
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
 
 
-    //fetch the org hierarchy
-    var (orgNamesDF, userDF, userOrgDF) = getOrgUserDataFrames()
-    val orgHierarchyDF = getDetailedHierarchy(userOrgDF)
-    // Start of merging folders
-
-    // Define variables for source, destination directories and date.
     val prefixDirectoryPath = s"${conf.localReportDir}/${conf.prefixDirectoryPath}"
     val destinationPath = s"${conf.localReportDir}/${conf.destinationDirectoryPath}"
     val directoriesToSelect = conf.directoriesToSelect.split(",").toSet
     val specificDate = getDate()
     val kcmFolderPath = s"${conf.localReportDir}/${conf.kcmReportPath}/${specificDate}/ContentCompetencyMapping"
-
-    def getOrgName(orgID: String, orgDF: DataFrame): String = {
-      val resultDF =  orgDF.filter(col("orgID") === orgID).select("orgName")
-      if (resultDF.isEmpty) {
-        // Return a default value if no rows are found
-        "NotFound"
-      } else {
-        resultDF.first().getString(0)
-      }
-    }
-
 
     // Method to traverse all the report folders within the source folder and check for specific date folder
     def traverseDirectory(directory: File): Unit = {
@@ -120,80 +103,6 @@ object ZipReportsWithSecurityModel extends AbsDashboardModel {
       }
     }
 
-    // Start traversing the source directory
-    traverseDirectory(new File(prefixDirectoryPath))
-    // End of merging folders
-
-
-    // Traverse through source directory to create individual zip files (mdo-wise)
-    val mdoidFolders = new File(destinationPath).listFiles().filter(file => file.getName.startsWith("mdoid=0"))
-    if (mdoidFolders != null) {
-      mdoidFolders.foreach { mdoidFolder =>
-        if (mdoidFolder.isDirectory) { // Check if it's a directory
-          val folderName = mdoidFolder.getName
-          val orgID = folderName.split("=")(1)
-          val orgFileName = getOrgName(orgID, orgNamesDF)
-          val sanitizedOrgFileName = orgFileName.replaceAll("[/\\\\]", "_")
-          val zipFilePath = s"${mdoidFolder}"
-          // Create a password-protected zip file for the mdoid folder
-          val zipFile = new ZipFile(zipFilePath+"/"+sanitizedOrgFileName+".zip")
-          val parameters = new ZipParameters()
-          parameters.setCompressionMethod(CompressionMethod.DEFLATE)
-          // Add all files within the mdoid folder to the zip file
-          mdoidFolder.listFiles().foreach { file =>
-            zipFile.addFile(file, parameters)
-          }
-          // Delete the csvs keeping only the zip file from mdo folders
-          mdoidFolder.listFiles().foreach { file =>
-            print("Deleting csvs withing this: " +mdoidFolder)
-            if (file.getName.toLowerCase.endsWith(".csv")) {
-              file.delete()
-            }
-          }
-          // Upload the zip file to blob storage
-          val mdoid = mdoidFolder.getName
-          println(s"Individual ZIP file created for $mdoid: $zipFilePath")
-        }
-      }
-    } else {
-      println("No mdoid folders found in the given directory.")
-    }
-
-    // merge the zip files based on hierarchy and then zip the final report
-    // Method to copy a zip file to the destination directory
-    def copyZipFile(sourceZipPath: String, destinationZipPath: String): Unit = {
-      try {
-        Files.copy(Paths.get(sourceZipPath), Paths.get(destinationZipPath), StandardCopyOption.REPLACE_EXISTING)
-      } catch {
-        case e: Exception => println(s"Failed to copy $sourceZipPath: ${e.getMessage}")
-      }
-    }
-
-    // Method to process each ministryID
-    def processMinistryFolder(ministryID: String, ids: Array[String], baseDir: String): Unit = {
-      val ministryDir = new File(s"$baseDir/mdoid=$ministryID")
-      if (!ministryDir.exists()) {
-        ministryDir.mkdirs()
-      }
-
-      ids.drop(1) // Drop the first element and process the rest
-        .filter(id => id != null && id.trim.nonEmpty)
-        .foreach { id =>
-          val orgFileName = getOrgName(id, orgNamesDF)
-          val sanitizedOrgFileName = orgFileName.replaceAll("[/\\\\]", "_")
-          val sourceZipFilePath = s"$baseDir/mdoid=$id/$sanitizedOrgFileName.zip"
-          val destinationZipFilePath = s"$ministryDir/$sanitizedOrgFileName.zip"
-
-          // Copy the zip file
-          val sourceFile = new File(sourceZipFilePath)
-          if (sourceFile.exists()) {
-            copyZipFile(sourceZipFilePath, destinationZipFilePath)
-          } else {
-            println(s"Source zip file $sourceZipFilePath does not exist.")
-          }
-        }
-    }
-
     def zipReports(zipFilePath: String, sourceFolder: File, password: String): Unit = {
       if (!sourceFolder.isDirectory) {
         println(" ERROR : zip path is not directory")
@@ -209,53 +118,55 @@ object ZipReportsWithSecurityModel extends AbsDashboardModel {
       }
     }
 
-    // Main function to execute the merging process
-    def mergeMdoidFolders(orgHierarchy: DataFrame, baseDir: String): Unit = {
-      orgHierarchy.collect().foreach { row =>
-        val ministryID = row.getAs[String]("ministryID")
-        val allIDs = row.getAs[String]("allIDs")
-        val ids = allIDs.split(",").map(_.trim)
+    // Start traversing the source directory
+    traverseDirectory(new File(prefixDirectoryPath))
 
-        if (ids.length > 1) {
-          // Process the ministry folder based on allIDs
-          processMinistryFolder(ministryID, ids, baseDir)
-        }
-      }
-    }
+    // End of merging folders
 
-    // Main execution
-    mergeMdoidFolders(orgHierarchyDF, destinationPath)
-    //  Start of zipping the reports and syncing to blob store
-    //  Define variables for source, blobStorage directories and password.
+    // Start of zipping the reports and syncing to blob store
+    // Define variables for source, blobStorage directories and password.
     val password = conf.password
+    // Traverse through source directory to create individual zip files (mdo-wise)
+    val mdoidFolders = new File(destinationPath).listFiles()
     if (mdoidFolders != null) {
       mdoidFolders.foreach { mdoidFolder =>
         if (mdoidFolder.isDirectory) { // Check if it's a directory
           val zipFilePath = s"${mdoidFolder}"
           // Create a password-protected zip file for the mdoid folder
-          val combinedZipFile = new ZipFile(zipFilePath+"/reports.zip", password.toCharArray)
+          val zipFile = new ZipFile(zipFilePath+"/reports.zip", password.toCharArray)
           val parameters = new ZipParameters()
           parameters.setEncryptFiles(true)
           parameters.setEncryptionMethod(EncryptionMethod.ZIP_STANDARD)
           // Add all files within the mdoid folder to the zip file
           mdoidFolder.listFiles().foreach { file =>
-            combinedZipFile.addFile(file, parameters)
+            zipFile.addFile(file, parameters)
           }
-          val mdoid = mdoidFolder.getName
-          println(s"Hierarchical password protected zip created for $mdoid: $zipFilePath")
+          // Delete the csvs keeping only the zip file from mdo folders
           mdoidFolder.listFiles().foreach { file =>
-            if (file.isFile && file.getName != "reports.zip") {
+            print("Deleting csvs withing this: " +mdoidFolder)
+            if (file.getName.toLowerCase.endsWith(".csv")) {
               file.delete()
             }
           }
           // Upload the zip file to blob storage
-          val zipReporthPath = s"${conf.destinationDirectoryPath}/$mdoid"
+          val mdoid = mdoidFolder.getName
+
           //sync reports
+          val zipReporthPath = s"${conf.destinationDirectoryPath}/$mdoid"
           syncReports(zipFilePath, zipReporthPath)
+
+          println(s"Password-protected ZIP file created and uploaded for $mdoid: $zipFilePath")
         }
       }
     } else {
       println("No mdoid folders found in the given directory.")
+    }
+    // End of zipping the reports and syncing to blob store
+    //deleting the tmp merged folder
+    try {
+      FileUtils.deleteDirectory(new File(destinationPath))
+    } catch {
+      case e: Exception => println(s"Error deleting directory: ${e.getMessage}")
     }
 
     // End of zipping the reports and syncing to blob store
@@ -305,10 +216,3 @@ object ZipReportsWithSecurityModel extends AbsDashboardModel {
     }
   }
 }
-
-
-
-
-
-
-
