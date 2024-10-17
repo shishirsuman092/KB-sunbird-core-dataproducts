@@ -2,7 +2,6 @@ package org.ekstep.analytics.dashboard.bq
 
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.SparkSession
-import org.ekstep.analytics.dashboard.DashboardUtil.getDate
 import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig}
 import org.ekstep.analytics.framework.FrameworkContext
 import sys.process._
