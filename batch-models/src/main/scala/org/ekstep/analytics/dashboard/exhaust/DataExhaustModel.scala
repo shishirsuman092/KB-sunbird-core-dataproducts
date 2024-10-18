@@ -187,8 +187,7 @@ object DataExhaustModel extends AbsDashboardModel {
     val eventDetailsDF = eventDataDF
       .withColumn("event_provider_mdo_id", explode_outer(col("createdFor")))
       .withColumn("recording_link", explode_outer(col("recordedLinks")))
-      .withColumn("event_start_datetime", date_format(to_timestamp(concat(col("startDate"), lit(" "), substring_index(col("startTime"), "+", 1)), dateTimeFormat), dateTimeFormat))
-      .withColumn("startDateTime",concat(substring(col("startDate"), 1,10), lit(" "), substring(col("startTime"), 1, 8)))
+      .withColumn("event_start_datetime",concat(substring(col("startDate"), 1,10), lit(" "), substring(col("startTime"), 1, 8)))
       .withColumn("presenters", lit("No presenters available"))
       .durationFormat("duration")
       .select(
