@@ -175,6 +175,53 @@ object DataExhaustModel extends AbsDashboardModel {
     val oldAssessmentDetailsDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraOldAssesmentTable)
     cache.write(oldAssessmentDetailsDF, "oldAssessmentDetails")
     oldAssessmentDetailsDF.unpersist()
+
+    //NLW event data
+    val objectType = Seq("Event")
+    val shouldClauseRequired = objectType.map(pc => s"""{"match":{"objectType.raw":"${pc}"}}""").mkString(",")
+    val fieldsRequired = Seq("identifier", "name", "objectType", "status", "startDate", "startTime", "duration", "registrationLink" ,"createdFor", "recordedLinks")
+    val arrayFieldsRequired = Seq("createdFor","recordedLinks")
+    val fieldsClauseRequired = fieldsRequired.map(f => s""""${f}"""").mkString(",")
+    val eventQuery = s"""{"_source":[${fieldsClauseRequired}],"query":{"bool":{"should":[${shouldClauseRequired}]}}}"""
+    val eventDataDF = elasticSearchDataFrame(conf.sparkElasticsearchConnectionHost, "compositesearch", eventQuery, fieldsRequired, arrayFieldsRequired)
+    val eventDetailsDF = eventDataDF
+      .withColumn("event_provider_mdo_id", explode_outer(col("createdFor")))
+      .withColumn("recording_link", explode_outer(col("recordedLinks")))
+      .withColumn("event_start_datetime", date_format(to_timestamp(concat(col("startDate"), lit(" "), substring_index(col("startTime"), "+", 1)), dateTimeFormat), dateTimeFormat))
+      .withColumn("startDateTime",concat(substring(col("startDate"), 1,10), lit(" "), substring(col("startTime"), 1, 8)))
+      .withColumn("presenters", lit("No presenters available"))
+      .durationFormat("duration")
+      .select(
+        col("identifier").alias("event_id"),
+        col("name").alias("event_name"),
+        col("event_provider_mdo_id"),
+        col("event_start_datetime"),
+        col("duration"),
+        col("status").alias("event_status"),
+        col("objectType").alias("event_type"),
+        col("presenters"),
+        col("recording_link"),
+        col("registrationLink").alias("video_link")
+      ).dropDuplicates("event_id")
+      .na.fill(0.0, Seq("duration"))
+    cache.write(eventDetailsDF, "eventDetails")
+
+    val caseExpression = "CASE WHEN ISNULL(status) THEN 'not-enrolled' WHEN status == 0 THEN 'not-started' WHEN status == 1 THEN 'in-progress' ELSE 'completed' END"
+    val eventsEnrolmentDF = cassandraTableAsDataFrame(conf.cassandraCourseKeyspace, conf.cassandraUserEntityEnrolmentTable)
+      .withColumn("certificate_id", when(col("issued_certificates").isNull, "").otherwise( col("issued_certificates")(size(col("issued_certificates")) - 1).getItem("identifier")))
+      .withColumn("enrolled_on_datetime", date_format(to_utc_timestamp(col("enrolled_date"), "Asia/Kolkata"), dateTimeFormat))
+      .withColumn("status", expr(caseExpression))
+      .select(
+        col("userid").alias("user_id"),
+        col("contentid").alias("event_id"),
+        col("status"),
+        col("enrolled_on_datetime"),
+        col("certificate_id"),
+        col("completionpercentage").alias("completion_percentage")
+      )
+    cache.write(eventsEnrolmentDF, "eventEnrolmentDetails")
+    eventsEnrolmentDF.unpersist()
+
   }
 }
 
