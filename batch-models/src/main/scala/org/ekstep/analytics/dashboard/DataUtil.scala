@@ -404,7 +404,7 @@ object DataUtil extends Serializable {
    *         userVerified, userMandatoryFieldsExists, userPhoneVerified)
    */
   def userDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
-    val profileDetailsSchema = Schema.makeProfileDetailsSchema(additionalProperties = true, professionalDetails = true)
+    val profileDetailsSchema = Schema.makeProfileDetailsSchema(additionalProperties = true, professionalDetails = true, employmentDetails = true)
     var userDF = cache.load("user")
       .select(
         col("id").alias("userID"),
@@ -423,6 +423,7 @@ object DataUtil extends Serializable {
       .na.fill("{}", Seq("userProfileDetails"))
       .withColumn("profileDetails", from_json(col("userProfileDetails"), profileDetailsSchema))
       .withColumn("personalDetails", col("profileDetails.personalDetails"))
+      .withColumn("employmentDetails", col("profileDetails.employmentDetails"))
       .withColumn("professionalDetails", explode_outer(col("profileDetails.professionalDetails")))
       .withColumn("userVerified", when(col("profileDetails.verifiedKarmayogi").isNull, false).otherwise(col("profileDetails.verifiedKarmayogi")))
       .withColumn("userMandatoryFieldsExists", col("profileDetails.mandatoryFieldsExists"))
