@@ -80,6 +80,7 @@ case class DashboardConfig (
                              cassandraLearnerLeaderBoardLookupTable: String,
                              cassandraMDOLearnerLeaderboardTable: String,
                              cassandraPublicUserAssessmentDataTable: String,
+                             cassandraUserEntityEnrolmentTable: String,
 
                              //warehouse tables;
                              appPostgresHost: String,
@@ -103,6 +104,8 @@ case class DashboardConfig (
                              dwCBPlanTable: String,
                              postgresCompetencyTable: String,
                              postgresCompetencyHierarchyTable: String,
+                             dwEventsTable: String,
+                             dwEventsEnrolmentTable: String,
 
                              // redis keys
                              redisRegisteredOfficerCountKey: String, redisTotalOfficerCountKey: String, redisOrgNameKey: String,
@@ -257,6 +260,8 @@ object DashboardConfigParser extends Serializable {
       dwCBPlanTable = getConfigModelParam(config, "dwCBPlanTable"),
       postgresCompetencyTable = getConfigModelParam(config, "postgresCompetencyTable"),
       postgresCompetencyHierarchyTable = getConfigModelParam(config, "postgresCompetencyHierarchyTable"),
+      dwEventsTable = getConfigModelParam(config, "dwEventsTable"),
+      dwEventsEnrolmentTable = getConfigModelParam(config, "dwEventsEnrolmentTable"),
 
       // cassandra key spaces
       cassandraUserKeyspace = getConfigModelParam(config, "cassandraUserKeyspace"),
@@ -286,6 +291,7 @@ object DashboardConfigParser extends Serializable {
       cassandraMDOLearnerLeaderboardTable = getConfigModelParam(config, "cassandraMDOLearnerLeaderboardTable"),
       cassandraOldAssesmentTable = getConfigModelParam(config, "cassandraOldAssesmentTable"),
       cassandraPublicUserAssessmentDataTable = getConfigModelParam(config, "cassandraPublicUserAssessmentDataTable"),
+      cassandraUserEntityEnrolmentTable = getConfigModelParam(config, "cassandraUserEntityEnrolmentTable"),
 
       // redis keys
       redisRegisteredOfficerCountKey = "mdo_registered_officer_count",
