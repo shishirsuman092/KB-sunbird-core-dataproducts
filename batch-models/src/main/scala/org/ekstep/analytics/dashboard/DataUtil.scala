@@ -78,7 +78,7 @@ object DataUtil extends Serializable {
         fields.append(StructField("professionalDetails", ArrayType(professionalDetailsSchema), nullable = true))
       }
       if (employmentDetails) {
-        fields.append(StructField("professionalDetails", ArrayType(employmentDetailsSchema), nullable = true))
+        fields.append(StructField("employmentDetails", ArrayType(employmentDetailsSchema), nullable = true))
       }
       StructType(fields)
     }
@@ -404,27 +404,8 @@ object DataUtil extends Serializable {
    *         userVerified, userMandatoryFieldsExists, userPhoneVerified)
    */
   def userDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
-    val profileDetailsSchema = Schema.makeProfileDetailsSchema(additionalProperties = true, professionalDetails = true,employmentDetails = true)
-    val userDF = cache.load("user")
-      .na.fill("", Seq("rootorgid", "firstname", "lastname"))
-      .na.fill("{}", Seq("profiledetails"))
-      .withColumn("profileDetails", from_json(col("profiledetails"), profileDetailsSchema))
-      .withColumn("personalDetails", col("profileDetails.personalDetails"))
-      .withColumn("employmentDetails", col("profileDetails.employmentDetails"))
-      .withColumn("professionalDetails", explode_outer(col("profileDetails.professionalDetails")))
-      .withColumn("userVerified", when(col("profileDetails.verifiedKarmayogi").isNull, false).otherwise(col("profileDetails.verifiedKarmayogi")))
-      .withColumn("userMandatoryFieldsExists", col("profileDetails.mandatoryFieldsExists"))
-      .withColumn("userProfileImgUrl", col("profileDetails.profileImageUrl"))
-      .withColumn("userProfileStatus", col("profileDetails.profileStatus"))
-      .withColumn("userPhoneVerified", expr("LOWER(personalDetails.phoneVerified) = 'true'"))
-      .withColumn("fullName", concat_ws(" ", col("firstname"), col("lastname")))
-
-    val completeUserDF = userDF.withColumn("additionalProperties",
-        if (userDF.columns.contains("profileDetails.additionalPropertis")) {
-          col("profileDetails.additionalPropertis")
-        } else {
-          col("profileDetails.additionalProperties")
-        })
+    val profileDetailsSchema = Schema.makeProfileDetailsSchema(additionalProperties = true, professionalDetails = true, employmentDetails = true)
+    var userDF = cache.load("user")
       .select(
         col("id").alias("userID"),
         col("firstname").alias("firstName"),
@@ -433,26 +414,37 @@ object DataUtil extends Serializable {
         col("maskedphone").alias("maskedPhone"),
         col("rootorgid").alias("userOrgID"),
         col("status").alias("userStatus"),
+        col("profiledetails").alias("userProfileDetails"),
         col("createddate").alias("userCreatedTimestamp"),
         col("updateddate").alias("userUpdatedTimestamp"),
-        col("createdby").alias("userCreatedBy"),
-        col("personalDetails"),
-        col("professionalDetails"),
-        col("employmentDetails"),
-        col("userVerified"),
-        col("userMandatoryFieldsExists"),
-        col("userProfileImgUrl"),
-        col("userProfileStatus"),
-        col("userPhoneVerified"),
-        col("fullName"),
-        col("additionalProperties")
+        col("createdby").alias("userCreatedBy")
       )
+      .na.fill("", Seq("userOrgID", "firstName", "lastName"))
+      .na.fill("{}", Seq("userProfileDetails"))
+      .withColumn("profileDetails", from_json(col("userProfileDetails"), profileDetailsSchema))
+      .withColumn("personalDetails", col("profileDetails.personalDetails"))
+      .withColumn("employmentDetails", col("profileDetails.employmentDetails"))
+      .withColumn("professionalDetails", explode_outer(col("profileDetails.professionalDetails")))
+      .withColumn("userVerified", when(col("profileDetails.verifiedKarmayogi").isNull, false).otherwise(col("profileDetails.verifiedKarmayogi")))
+      .withColumn("userMandatoryFieldsExists", col("profileDetails.mandatoryFieldsExists"))
+      .withColumn("userProfileImgUrl", col("profileDetails.profileImageUrl"))
+      .withColumn("userProfileStatus", col("profileDetails.profileStatus"))
+      .withColumn("userPhoneVerified", expr("LOWER(personalDetails.phoneVerified) = 'true'"))
+      .withColumn("fullName", concat_ws(" ", col("firstName"), col("lastName")))
 
-    val finalDF = timestampStringToLong(completeUserDF, Seq("userCreatedTimestamp", "userUpdatedTimestamp"))
+    userDF = userDF
+      .withColumn("additionalProperties",
+        if (userDF.columns.contains("profileDetails.additionalPropertis")) {
+          col("profileDetails.additionalPropertis")
+        } else {
+          col("profileDetails.additionalProperties")
+        })
+      .drop("profileDetails", "userProfileDetails")
 
-    finalDF
+    userDF = timestampStringToLong(userDF, Seq("userCreatedTimestamp", "userUpdatedTimestamp"))
+
+    userDF
   }
-
   /**
    * de-normalize user data with org data
    *

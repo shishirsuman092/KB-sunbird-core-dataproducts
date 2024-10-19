@@ -93,6 +93,8 @@ object TestUtil extends Serializable {
       "dwKcmContentTable" -> "kcm_content_mapping",
       "dwCBPlanTable" -> "cb_plan",
       "dwContentResourceTable" -> "content_resource",
+      "dwEventsTable" -> "events",
+      "dwEventsEnrolmentTable" -> "events_enrolment",
 
       "cassandraUserKeyspace" -> "sunbird",
       "cassandraCourseKeyspace" -> "sunbird_courses",
@@ -124,6 +126,7 @@ object TestUtil extends Serializable {
       "cassandraNLWMdoLeaderboardTable" -> "nlw_mdo_leaderboard",
       "cassandraNLWUserLeaderboardTable" -> "nlw_user_leaderboard",
       "cassandraPublicUserAssessmentDataTable" -> "public_user_assessment_data",
+      "cassandraUserEntityEnrolmentTable" -> "user_entity_enrolments",
 
       "mongoDatabase" -> "nodebb",
       "mongoDBCollection" -> "objects",

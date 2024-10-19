@@ -112,5 +112,13 @@ object DataWarehouseModel extends AbsDashboardModel {
       .filter(col("content_id").isNotNull)
     truncateWarehouseTable(conf.dwEnrollmentsTable)
     saveDataframeToPostgresTable_With_Append(enrollmentDetails, dwPostgresUrl, conf.dwEnrollmentsTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
+
+    val eventsDataDF = cache.load("eventDetails")
+    val eventsEnrolmentDataDF = cache.load("eventEnrolmentDetails")
+    truncateWarehouseTable(conf.dwEventsTable)
+    truncateWarehouseTable(conf.dwEventsEnrolmentTable)
+    saveDataframeToPostgresTable_With_Append(eventsDataDF, dwPostgresUrl, conf.dwEventsTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
+    saveDataframeToPostgresTable_With_Append(eventsEnrolmentDataDF, dwPostgresUrl, conf.dwEventsEnrolmentTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
+
   }
 }

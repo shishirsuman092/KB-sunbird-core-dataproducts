@@ -7,6 +7,7 @@ import org.ekstep.analytics.framework.FrameworkContext
 import sys.process._
 
 object BqDataModel extends AbsDashboardModel {
+  override def name() = "BqDataModel"
   override def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
     // root path to bq scripts
     val bqScriptPath = conf.bqScriptPath

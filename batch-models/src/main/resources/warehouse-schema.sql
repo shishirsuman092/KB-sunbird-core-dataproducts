@@ -158,6 +158,31 @@ CREATE TABLE kcm_dictionary(
    competency_sub_theme_description TEXT
 );
 
+-- Table: events_table
+CREATE TABLE events(
+   event_id VARCHAR(255) PRIMARY KEY NOT NULL,
+   event_name TEXT,
+   event_provider_mdo_id  VARCHAR(255),
+   event_start_datetime VARCHAR(255),
+   duration VARCHAR(255),
+   event_status VARCHAR(255),
+   event_type VARCHAR(255),
+   presenters TEXT,
+   video_link TEXT,
+   recording_link TEXT
+);
+
+-- Table: events_enrolment_table
+CREATE TABLE events_enrolment(
+   user_id VARCHAR(255),
+   event_id VARCHAR(255),
+   enrolled_on_datetime  VARCHAR(255),
+   status VARCHAR(255),
+   certificate_id TEXT,
+   completion_percentage FLOAT,
+   PRIMARY KEY(user_id, event_id)
+);
+
 -- Create PostgreSQL user and grant privileges
 CREATE USER postgres WITH PASSWORD 'Password@12345678';
 
@@ -168,6 +193,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON content TO postgres;
 GRANT SELECT, INSERT, UPDATE, DELETE ON assessment_detail TO postgres;
 GRANT SELECT, INSERT, UPDATE, DELETE ON bp_enrolments TO postgres;
 GRANT SELECT, INSERT, UPDATE, DELETE ON cb_plan TO postgres;
+GRANT SELECT, INSERT, UPDATE, DELETE ON events TO postgres;
+GRANT SELECT, INSERT, UPDATE, DELETE ON events_enrolment TO postgres;
 
 ALTER TABLE user_enrolments ADD COLUMN live_cbp_plan_mandate boolean;
 ALTER TABLE user_enrolments ADD COLUMN certificate_id VARCHAR(255);
