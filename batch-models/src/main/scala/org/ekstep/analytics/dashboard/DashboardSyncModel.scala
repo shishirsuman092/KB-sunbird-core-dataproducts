@@ -356,16 +356,38 @@ object DashboardSyncModel extends AbsDashboardModel {
     val nationalLearningWeekStartDateTimeEpoch = nationalLearningWeekStartOffsetDateTime.toEpochSecond
     val nationalLearningWeekEndDateTimeEpoch = nationalLearningWeekEndOffsetDateTime.toEpochSecond
 
+    val eventsEnrolmentDataDF = cache.load("eventEnrolmentDetails")
+    /* total certificates issued yesterday across all types of content */
+    val certificateDateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")
+    val eventsDateTimeFormatter=DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+
+    val nationalLearningWeekStartDate = nationalLearningWeekStartOffsetDateTime.format(eventsDateTimeFormatter)
+    val nationalLearningWeekEndDate = nationalLearningWeekEndOffsetDateTime.format(eventsDateTimeFormatter)
+    println("nationalLearningWeekStartDate",nationalLearningWeekStartDate)
+    println("nationalLearningWeekEndDate",nationalLearningWeekEndDate)
+
+    // NLW events enrollment data Filter the DataFrame where enrolled_on_datetime is within NLW
+    val eventEnrolledDF = eventsEnrolmentDataDF
+      .filter(col("enrolled_on_datetime") >= nationalLearningWeekStartDate && col("enrolled_on_datetime") <= nationalLearningWeekEndDate)
+
+    // Count the distinct certificate_ids
+    val eventEnrolledCountDF = eventEnrolledDF
+      .agg(count("event_id").alias("event_count"))
+
+    // Retrieve the count
+    val enrolmentEventNLWCount = eventEnrolledCountDF
+      .select("event_count")
+      .first()
+      .getLong(0)
+
     /* total enrolments that week across all types of content */
     println(liveRetiredContentEnrolmentDF.count())
     val enrolmentContentNLWDF = liveRetiredContentEnrolmentDF.filter($"courseEnrolledTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseEnrolledTimestamp" <= nationalLearningWeekEndDateTimeEpoch)
     val enrolmentContentNLWCountDF = enrolmentContentNLWDF.agg(count("*").alias("count"))
     val enrolmentContentNLWCount = enrolmentContentNLWCountDF.select("count").first().getLong(0)
-    Redis.update("dashboard_content_enrolment_nlw_count", enrolmentContentNLWCount.toString)
 
-
-    /* total certificates issued yesterday across all types of content */
-    val certificateDateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")
+    val totalEnrollmentNLWCount= enrolmentEventNLWCount + enrolmentContentNLWCount
+    Redis.update("dashboard_content_enrolment_nlw_count", totalEnrollmentNLWCount.toString)
 
     // Calculate start and end of the previous day as OffsetDateTime
     val previousDayStart = currentDate.minusDays(1).atStartOfDay().atOffset(zoneOffset)
@@ -375,18 +397,69 @@ object DashboardSyncModel extends AbsDashboardModel {
     val certificateGeneratedYdayDF = liveRetiredContentEnrolmentDF.filter($"certificateGeneratedOn" >= previousDayStartString && $"certificateGeneratedOn" <= previousDayEndString)
     val certificateGeneratedYdayCountDF = certificateGeneratedYdayDF.agg(count("*").alias("count"))
     val certificateGeneratedYdayCount = certificateGeneratedYdayCountDF.select("count").first().getLong(0)
-    Redis.update("dashboard_content_certificates_generated_yday_nlw_count", certificateGeneratedYdayCount.toString)
+    val previousStart = previousDayStart.format(eventsDateTimeFormatter)
+    val previousEnd = previousDayEnd.format(eventsDateTimeFormatter)
 
+    //Redis.update("dashboard_content_certificates_generated_yday_nlw_count", certificateGeneratedYdayCount.toString)
+
+    // NLW events data Filter the DataFrame where status is 'completed' and the enrolled_on_datetime is within yesterday's range
+    val eventCertificatesGeneratedYdayDF = eventsEnrolmentDataDF
+      .filter(col("status") === "completed")
+      .filter(col("enrolled_on_datetime") >= previousStart && col("enrolled_on_datetime") <= previousEnd)
+      .filter(col("certificate_id").isNotNull) // Ensuring the certificate_id exists
+
+    // Count the distinct certificate_ids
+    val eventCertificateGeneratedYdayCountDF = eventCertificatesGeneratedYdayDF
+      .agg(countDistinct("certificate_id").alias("event_certificate_count"))
+
+    // Retrieve the count
+    val eventCertificateGeneratedYdayCount = eventCertificateGeneratedYdayCountDF
+      .select("event_certificate_count")
+      .first()
+      .getLong(0)
+
+    // dashboard_event_certificates_generated_yday_nlw_count contains event count
+    Redis.update("dashboard_event_certificates_generated_yday_nlw_count", eventCertificateGeneratedYdayCount.toString)
+
+    //Total number of certificated yeasterday both event+content
+    val totalCertificatesGeneratedYdayCount = certificateGeneratedYdayCount + eventCertificateGeneratedYdayCount
+
+   // dashboard_content_only_certificates_generated_yday_nlw_count contains content counts
+    Redis.update("dashboard_content_only_certificates_generated_yday_nlw_count", certificateGeneratedYdayCount.toString)
+
+    //dashboard_content_certificates_generated_yday_nlw_count contains content+event count
+    Redis.update("dashboard_content_certificates_generated_yday_nlw_count", totalCertificatesGeneratedYdayCount.toString)
+
+    println("dashboard_event_certificates_generated_yday_nlw_count",eventCertificateGeneratedYdayCount.toString)
+    println("dashboard_content_only_certificates_generated_yday_nlw_count", certificateGeneratedYdayCount.toString)
+    println("dashboard_content_certificates_generated_yday_nlw_count",totalCertificatesGeneratedYdayCount.toString)
 
     /* total certificates issued that week across all types of content */
     val nationalLearningWeekStartDateTimeString = nationalLearningWeekStartOffsetDateTime.format(certificateDateTimeFormatter)
     val nationalLearningWeekEndDateTimeString = nationalLearningWeekEndOffsetDateTime.format(certificateDateTimeFormatter)
     println("=================")
     println(nationalLearningWeekStartDateTimeString)
+
+    val eventCertificatesGeneratedNLWDF = eventsEnrolmentDataDF
+      .filter(col("status") === "completed")
+      .filter(col("enrolled_on_datetime") >= nationalLearningWeekStartDate && col("enrolled_on_datetime") <= nationalLearningWeekStartDate)
+      .filter(col("certificate_id").isNotNull) // Ensuring the certificate_id exists
+
+    // Count the distinct certificate_ids
+    val eventCertificateGeneratedNLWCountDF = eventCertificatesGeneratedNLWDF
+      .agg(countDistinct("certificate_id").alias("event_certificate_count"))
+
+    // Retrieve the count
+    val eventCertificateGeneratedNLWCount = eventCertificateGeneratedNLWCountDF
+      .select("event_certificate_count")
+      .first()
+      .getLong(0)
+
     val certificateGeneratedInNLWDF = liveRetiredContentEnrolmentDF.filter($"certificateGeneratedOn" >= nationalLearningWeekStartDateTimeString && $"certificateGeneratedOn" <= nationalLearningWeekEndDateTimeString)
     val certificateGeneratedInNLWCountDF = certificateGeneratedInNLWDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     val certificateGeneratedInNLWCount = certificateGeneratedInNLWCountDF.select("count").first().getLong(0)
-    Redis.update("dashboard_content_certificates_generated_nlw_count", certificateGeneratedInNLWCount.toString)
+    val totalCertificatesIssuedInNLW = certificateGeneratedInNLWCount + eventCertificateGeneratedNLWCount
+    Redis.update("dashboard_content_certificates_generated_nlw_count", totalCertificatesIssuedInNLW.toString)
 
     /* total number of events published that week */
     val primaryCategory = "Event"
