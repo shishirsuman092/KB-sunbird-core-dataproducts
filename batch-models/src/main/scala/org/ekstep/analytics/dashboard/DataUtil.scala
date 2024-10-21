@@ -59,12 +59,13 @@ object DataUtil extends Serializable {
       StructField("externalSystemId", StringType, nullable = true),
       StructField("externalSystem", StringType, nullable = true)
     ))
-    def makeProfileDetailsSchema(competencies: Boolean = false, additionalProperties: Boolean = false, professionalDetails: Boolean = false,employmentDetails: Boolean = false): StructType = {
+    def makeProfileDetailsSchema(competencies: Boolean = false, additionalProperties: Boolean = false, professionalDetails: Boolean = false): StructType = {
       val fields = ListBuffer(
         StructField("verifiedKarmayogi", BooleanType, nullable = true),
         StructField("mandatoryFieldsExists", BooleanType, nullable = true),
         StructField("profileImageUrl", StringType, nullable = true),
         StructField("personalDetails", personalDetailsSchema, nullable = true),
+        StructField("employmentDetails", employmentDetailsSchema, nullable = true),
         StructField("profileStatus", StringType, nullable = true)
       )
       if (competencies) {
@@ -76,9 +77,6 @@ object DataUtil extends Serializable {
       }
       if (professionalDetails) {
         fields.append(StructField("professionalDetails", ArrayType(professionalDetailsSchema), nullable = true))
-      }
-      if (employmentDetails) {
-        fields.append(StructField("employmentDetails", ArrayType(employmentDetailsSchema), nullable = true))
       }
       StructType(fields)
     }
@@ -404,7 +402,7 @@ object DataUtil extends Serializable {
    *         userVerified, userMandatoryFieldsExists, userPhoneVerified)
    */
   def userDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
-    val profileDetailsSchema = Schema.makeProfileDetailsSchema(additionalProperties = true, professionalDetails = true, employmentDetails = true)
+    val profileDetailsSchema = Schema.makeProfileDetailsSchema(additionalProperties = true, professionalDetails = true)
     var userDF = cache.load("user")
       .select(
         col("id").alias("userID"),
