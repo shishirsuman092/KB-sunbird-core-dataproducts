@@ -367,8 +367,8 @@ object DashboardSyncModel extends AbsDashboardModel {
     val certificateDateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")
 
     // Calculate start and end of the previous day as OffsetDateTime
-    val previousDayStart = currentDate.minusDays(3).atStartOfDay().atOffset(zoneOffset)
-    val previousDayEnd = currentDate.atStartOfDay().minusSeconds(3).atOffset(zoneOffset)
+    val previousDayStart = currentDate.minusDays(1).atStartOfDay().atOffset(zoneOffset)
+    val previousDayEnd = currentDate.atStartOfDay().minusSeconds(1).atOffset(zoneOffset)
     val previousDayStartString = previousDayStart.format(certificateDateTimeFormatter)
     val previousDayEndString = previousDayEnd.format(certificateDateTimeFormatter)
     val certificateGeneratedYdayDF = liveRetiredContentEnrolmentDF.filter($"certificateGeneratedOn" >= previousDayStartString && $"certificateGeneratedOn" <= previousDayEndString)
