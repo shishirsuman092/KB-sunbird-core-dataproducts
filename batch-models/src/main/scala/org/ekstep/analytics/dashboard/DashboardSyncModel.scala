@@ -363,20 +363,54 @@ object DashboardSyncModel extends AbsDashboardModel {
     val enrolmentContentNLWCount = enrolmentContentNLWCountDF.select("count").first().getLong(0)
     Redis.update("dashboard_content_enrolment_nlw_count", enrolmentContentNLWCount.toString)
 
-
     /* total certificates issued yesterday across all types of content */
     val certificateDateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")
 
     // Calculate start and end of the previous day as OffsetDateTime
-    val previousDayStart = currentDate.minusDays(1).atStartOfDay().atOffset(zoneOffset)
-    val previousDayEnd = currentDate.atStartOfDay().minusSeconds(1).atOffset(zoneOffset)
+    val previousDayStart = currentDate.minusDays(3).atStartOfDay().atOffset(zoneOffset)
+    val previousDayEnd = currentDate.atStartOfDay().minusSeconds(3).atOffset(zoneOffset)
     val previousDayStartString = previousDayStart.format(certificateDateTimeFormatter)
     val previousDayEndString = previousDayEnd.format(certificateDateTimeFormatter)
     val certificateGeneratedYdayDF = liveRetiredContentEnrolmentDF.filter($"certificateGeneratedOn" >= previousDayStartString && $"certificateGeneratedOn" <= previousDayEndString)
     val certificateGeneratedYdayCountDF = certificateGeneratedYdayDF.agg(count("*").alias("count"))
     val certificateGeneratedYdayCount = certificateGeneratedYdayCountDF.select("count").first().getLong(0)
-    Redis.update("dashboard_content_certificates_generated_yday_nlw_count", certificateGeneratedYdayCount.toString)
+    val previousStart = previousDayStart.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+    val previousEnd = previousDayEnd.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
 
+    //Redis.update("dashboard_content_certificates_generated_yday_nlw_count", certificateGeneratedYdayCount.toString)
+
+    // NLW events data Filter the DataFrame where status is 'completed' and the enrolled_on_datetime is within yesterday's range
+    val eventsEnrolmentDataDF = cache.load("eventEnrolmentDetails")
+    val eventCertificatesGeneratedYdayDF = eventsEnrolmentDataDF
+      .filter(col("status") === "completed")
+      .filter(col("enrolled_on_datetime") >= previousStart && col("enrolled_on_datetime") <= previousEnd)
+      .filter(col("certificate_id").isNotNull) // Ensuring the certificate_id exists
+
+    // Count the distinct certificate_ids
+    val eventCertificateGeneratedYdayCountDF = eventCertificatesGeneratedYdayDF
+      .agg(countDistinct("certificate_id").alias("event_certificate_count"))
+
+    // Retrieve the count
+    val eventCertificateGeneratedYdayCount = eventCertificateGeneratedYdayCountDF
+      .select("event_certificate_count")
+      .first()
+      .getLong(0)
+
+    // dashboard_event_certificates_generated_yday_nlw_count contains event count
+    Redis.update("dashboard_event_certificates_generated_yday_nlw_count", eventCertificateGeneratedYdayCount.toString)
+
+    //Total number of certificated yeasterday both event+content
+    val totalCertificatesGeneratedYdayCount = certificateGeneratedYdayCount + eventCertificateGeneratedYdayCount
+
+   // dashboard_content_only_certificates_generated_yday_nlw_count contains content counts
+    Redis.update("dashboard_content_only_certificates_generated_yday_nlw_count", certificateGeneratedYdayCount.toString)
+
+    //dashboard_content_certificates_generated_yday_nlw_count contains content+event count
+    Redis.update("dashboard_content_certificates_generated_yday_nlw_count", totalCertificatesGeneratedYdayCount.toString)
+
+    println("dashboard_event_certificates_generated_yday_nlw_count",eventCertificateGeneratedYdayCount.toString)
+    println("dashboard_content_only_certificates_generated_yday_nlw_count", certificateGeneratedYdayCount.toString)
+    println("dashboard_content_certificates_generated_yday_nlw_count",totalCertificatesGeneratedYdayCount.toString)
 
     /* total certificates issued that week across all types of content */
     val nationalLearningWeekStartDateTimeString = nationalLearningWeekStartOffsetDateTime.format(certificateDateTimeFormatter)

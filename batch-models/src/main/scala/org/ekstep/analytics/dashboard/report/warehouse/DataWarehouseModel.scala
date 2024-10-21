@@ -120,5 +120,8 @@ object DataWarehouseModel extends AbsDashboardModel {
     saveDataframeToPostgresTable_With_Append(eventsDataDF, dwPostgresUrl, conf.dwEventsTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
     saveDataframeToPostgresTable_With_Append(eventsEnrolmentDataDF, dwPostgresUrl, conf.dwEventsEnrolmentTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
 
+   //Writing event and event_enrollment data into warehouse cache
+    warehouseCache.write(eventsDataDF, "event_details")
+    warehouseCache.write(eventsEnrolmentDataDF, "event_enrolment_details")
   }
 }
