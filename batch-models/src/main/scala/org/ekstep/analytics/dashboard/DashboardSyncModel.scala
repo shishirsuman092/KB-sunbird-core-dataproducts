@@ -442,7 +442,7 @@ object DashboardSyncModel extends AbsDashboardModel {
 
     val eventCertificatesGeneratedNLWDF = eventsEnrolmentDataDF
       .filter(col("status") === "completed")
-      .filter(col("enrolled_on_datetime") >= nationalLearningWeekStartDate && col("enrolled_on_datetime") <= nationalLearningWeekStartDate)
+      .filter(col("enrolled_on_datetime") >= nationalLearningWeekStartDate && col("enrolled_on_datetime") <= nationalLearningWeekEndDate)
       .filter(col("certificate_id").isNotNull) // Ensuring the certificate_id exists
 
     // Count the distinct certificate_ids
