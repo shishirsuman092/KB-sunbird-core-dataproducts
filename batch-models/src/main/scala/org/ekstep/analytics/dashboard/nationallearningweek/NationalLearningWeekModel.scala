@@ -99,7 +99,8 @@ object NationalLearningWeekModel extends AbsDashboardModel {
       when(col("total_users") > 50000, "XL")
         .when(col("total_users").between(10000, 50000), "L")
         .when(col("total_users").between(1000, 10000), "M")
-        .otherwise("S")
+        .when(col("total_users").between(500, 1000), "S")
+        .otherwise("XS")
     )
 
     val windowSpec2 = Window.partitionBy("size").orderBy(
