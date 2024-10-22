@@ -485,7 +485,9 @@ object DashboardSyncModel extends AbsDashboardModel {
 
     /* certificates issued by user that week across all types of content*/
     val certificateGeneratedInNLWByUserDF = certificateGeneratedInNLWDF.groupBy("userID").agg(count("*").alias("count"))
+    val eventCertificateGeneratedInNLWByUserDF = eventCertificatesGeneratedNLWDF.groupBy("userID").agg(count("*").alias("count"))
     Redis.dispatchDataFrame[String]("dashboard_content_certificates_issued_nlw_by_user", certificateGeneratedInNLWByUserDF, "userID", "count")
+    Redis.dispatchDataFrame[String]("dashboard_event_certificates_issued_nlw_by_user", eventCertificateGeneratedInNLWByUserDF, "userID", "count")
 
     /* learning hours by user that week across all types of content*/
     println("This is the problem start")
