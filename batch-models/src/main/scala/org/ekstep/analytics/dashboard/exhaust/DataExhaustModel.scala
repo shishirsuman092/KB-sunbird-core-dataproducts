@@ -210,15 +210,22 @@ object DataExhaustModel extends AbsDashboardModel {
       .withColumn("certificate_id", when(col("issued_certificates").isNull, "").otherwise( col("issued_certificates")(size(col("issued_certificates")) - 1).getItem("identifier")))
       .withColumn("enrolled_on_datetime", date_format(to_utc_timestamp(col("enrolled_date"), "Asia/Kolkata"), dateTimeFormat))
       .withColumn("status", expr(caseExpression))
+      .withColumn("progress_details", from_json(col("lrc_progressdetails"), Schema.eventProgressDetailSchema))
       .select(
         col("userid").alias("user_id"),
         col("contentid").alias("event_id"),
         col("status"),
         col("enrolled_on_datetime"),
+        col("progress_details"),
         col("certificate_id"),
         col("completionpercentage").alias("completion_percentage")
       )
-    cache.write(eventsEnrolmentDF, "eventEnrolmentDetails")
+    val eventsEnrolmentWithDurationDF = eventsEnrolmentDF.withColumn("event_duration",
+      when(col("progress_details").isNotNull, col("progress_details.max_size")).otherwise(null)
+    ).withColumn("duration",
+      when(col("progress_details").isNotNull, col("progress_details.duration")).otherwise(null)
+    ).drop(col("progress_details"))
+    cache.write(eventsEnrolmentWithDurationDF, "eventEnrolmentDetails")
     eventsEnrolmentDF.unpersist()
 
   }
