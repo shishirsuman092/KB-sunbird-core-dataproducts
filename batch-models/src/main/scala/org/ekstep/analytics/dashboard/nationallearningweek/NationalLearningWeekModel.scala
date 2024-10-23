@@ -63,13 +63,13 @@ object NationalLearningWeekModel extends AbsDashboardModel {
     // sort them based on their fullNames for each rank group within each org
     val windowSpecRow = Window.partitionBy("org_id").orderBy(col("rank"), col("last_credit_date").asc)
     val finalUserLeaderBoardDataDF = userLeaderBoardOrderedDataDF.withColumn("row_num", row_number.over(windowSpecRow))
-    val certificateCounyByUserDF = Redis.getMapAsDataFrame("dashboard_content_certificates_issued_nlw_by_user", Schema.enrolmentCountByUserSchema)
-    val eventCertificateCounyByUserDF = Redis.getMapAsDataFrame("dashboard_event_certificates_issued_nlw_by_user", Schema.eventEnrolmentCountByUserSchema)
+    val certificateCountByUserDF = Redis.getMapAsDataFrame("dashboard_content_certificates_issued_nlw_by_user", Schema.enrolmentCountByUserSchema)
+    val eventCertificateCountByUserDF = Redis.getMapAsDataFrame("dashboard_event_certificates_issued_nlw_by_user", Schema.eventEnrolmentCountByUserSchema)
     val learningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_content_learning_hours_nlw_by_user", Schema.learningHoursByUserSchema)
     val eventLearningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_event_learning_hours_nlw_by_user", Schema.eventLearningHoursByUserSchema)
-    val extendedColsUserDF = certificateCounyByUserDF.join(learningHoursByUserDF, Seq("userID"), "inner").withColumnRenamed("userID", "userid")
+    val extendedColsUserDF = certificateCountByUserDF.join(learningHoursByUserDF, Seq("userID"), "inner").withColumnRenamed("userID", "userid")
 
-    val extendedColsUserEventDF = eventCertificateCounyByUserDF.join(eventLearningHoursByUserDF, Seq("user_id"), "inner").withColumnRenamed("user_id", "userid")
+    val extendedColsUserEventDF = eventCertificateCountByUserDF.join(eventLearningHoursByUserDF, Seq("user_id"), "inner").withColumnRenamed("user_id", "userid")
 
     val extendedColsUserContentEventDF = extendedColsUserEventDF.join(extendedColsUserDF, Seq("userid"), "outer")
       .withColumn("totalEventLearningHours1", coalesce(col("totalEventLearningHours").cast("double"), lit(0.00)))
