@@ -1474,6 +1474,16 @@ object DataUtil extends Serializable {
     orgDesignationListDF
   }
 
+  def marketPlaceEnrolments()(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): DataFrame = {
+    val df = cache.load("externalCourseEnrolments")
+    df
+  }
+
+  def marketPlaceContentDF()(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): DataFrame = {
+    val df = cache.load("externalContent")
+    df
+  }
+
 //  def mdoIDsDF(mdoID: String)(implicit spark: SparkSession, sc: SparkContext): DataFrame = {
 //    val mdoIDs = mdoID.split(",").map(_.toString).distinct
 //    val rdd = sc.parallelize(mdoIDs)

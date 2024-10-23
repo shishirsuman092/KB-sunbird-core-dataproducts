@@ -156,6 +156,14 @@ object DataExhaustModel extends AbsDashboardModel {
     cache.write(orgPostgresDF, "orgCompleteHierarchy")
     orgDF.unpersist()
 
+    val marketPlaceContentDF = postgresTableAsDataFrame(appPostgresUrl, "cios_content_entity", conf.appPostgresUsername, conf.appPostgresCredential)
+    cache.write(marketPlaceContentDF, "externalContent")
+    marketPlaceContentDF.unpersist()
+
+    val marketPlaceEnrolmentsDF = cassandraTableAsDataFrame("sunbird_courses", "user_external_enrolments")
+    cache.write(marketPlaceEnrolmentsDF, "externalCourseEnrolments")
+    marketPlaceEnrolmentsDF.unpersist()
+
     val userDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraUserTable)
     cache.write(userDF, "user")
     userDF.unpersist()

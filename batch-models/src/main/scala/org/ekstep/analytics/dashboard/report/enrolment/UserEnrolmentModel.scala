@@ -3,6 +3,7 @@ package org.ekstep.analytics.dashboard.report.enrolment
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.types._
 import org.apache.spark.storage.StorageLevel
 import org.ekstep.analytics.dashboard.DashboardUtil._
 import org.ekstep.analytics.dashboard.DataUtil._
@@ -47,6 +48,48 @@ object UserEnrolmentModel extends AbsDashboardModel {
       .join(courseBatchDF, Seq("courseID"), "left")
       .select("courseID", "batchID", "courseBatchName", "courseBatchStartDate", "courseBatchEndDate")
 
+    val ciosDataSchema = new StructType().add("content", new StructType()
+      .add("name", StringType)
+      .add("duration", StringType)
+      .add("lastUpdatedOn", StringType)
+      .add("contentPartner", new StructType()
+        .add("id", StringType)
+        .add("contentPartnerName", StringType)))
+
+    val marketPlaceContentsDF = marketPlaceContentDF()
+    val parsedDF = marketPlaceContentsDF.withColumn("parsed_data", from_json(col("cios_data"), ciosDataSchema))
+    val marketPlaceEnrolmentsDF = marketPlaceEnrolments().withColumnRenamed("courseid", "content_id")
+    // Extract the desired fields
+    val extractedDF = parsedDF.select(col("content_id"),
+      col("parsed_data.content.name").as("courseName"),
+      col("parsed_data.content.duration").as("courseDuration"),
+      col("parsed_data.content.lastUpdatedOn").as("courseLastPublishedOn"),
+      col("parsed_data.content.contentPartner.id").as("courseOrgID"),
+      col("parsed_data.content.contentPartner.contentPartnerName").as("courseOrgName"),
+      lit("External Content").as("category"),
+      lit("LIVE").as("courseStatus"))
+
+    var marketPlaceContentEnrolmentsDF = extractedDF.join(marketPlaceEnrolmentsDF, Seq("content_id"), "inner").durationFormat("courseDuration")
+      .withColumn("courseCompletedTimestamp", col("completedon"))
+      .withColumn("courseEnrolledTimestamp", col("enrolled_date"))
+      .withColumn("lastContentAccessTimestamp", lit("Not Available"))
+      .withColumn("userRating", lit("Not Available"))
+      .withColumn("live_cbp_plan_mandate", lit(false))
+      .withColumn("batchID", lit("Not Available"))
+      .withColumn("issuedCertificateCount", size(col("issued_certificates")))
+      .withColumn("certificate_generated", expr("CASE WHEN issuedCertificateCount > 0 THEN 'Yes' ELSE 'No' END"))
+      .withColumn("certificateGeneratedOn", when(col("issued_certificates").isNull, "").otherwise( col("issued_certificates")(size(col("issued_certificates")) - 1).getItem("lastIssuedOn")))
+      .withColumn("firstCompletedOn", when(col("issued_certificates").isNull, "").otherwise(when(size(col("issued_certificates")) > 0, col("issued_certificates")(0).getItem("lastIssuedOn")).otherwise("")))
+      .withColumn("certificateID", when(col("issued_certificates").isNull, "").otherwise( col("issued_certificates")(size(col("issued_certificates")) - 1).getItem("identifier")))
+      .withColumn("Report_Last_Generated_On", currentDateTime)
+      .withColumnRenamed("userid", "userID")
+      .withColumnRenamed("content_id", "courseID")
+      .withColumnRenamed("progress", "courseProgress")
+      .withColumnRenamed("status", "dbCompletionStatus")
+      .na.fill(0, Seq("courseProgress", "issuedCertificateCount"))
+      .na.fill("", Seq("certificateGeneratedOn"))
+
+    val marketPlaceEnrolmentsWithUserDetailsDF = marketPlaceContentEnrolmentsDF.join(userDataDF, Seq("userID"), "left").durationFormat("courseDuration").withColumn("Tag", concat_ws(", ", col("additionalProperties.tag")))
     val allCourseProgramCompletionWithDetailsWithBatchInfoDF = allCourseProgramCompletionWithDetailsDF.join(relevantBatchInfoDF, Seq("courseID", "batchID"), "left")
 
     val allCourseProgramCompletionWithDetailsDFWithRating = allCourseProgramCompletionWithDetailsWithBatchInfoDF.join(userRatingDF, Seq("courseID", "userID"), "left")
@@ -134,21 +177,81 @@ object UserEnrolmentModel extends AbsDashboardModel {
     val reportPath = s"${conf.userEnrolmentReportPath}/${today}"
     // generateReport(fullReportDF, s"${reportPath}-full")
 
-    val mdoReportDF = fullReportDF
-      .select(
-        col("Full_Name"),col("Designation"),col("Email"),col("Phone_Number"),col("Group"),col("Tag"),col("Ministry"),col("Department"),
-        col("Organization"),col("Content_Provider"),col("Content_Name"),col("Content_Type"),col("Content_Duration"),col("Batch_Id"),col("Batch_Name"),
-        col("Batch_Start_Date"),col("Batch_End_Date"),col("Enrolled_On"),col("Status"),col("Content_Progress_Percentage"),col("Last_Published_On"),
-        col("Content_Retired_On"),col("Completed_On"),col("Certificate_Generated"),col("User_Rating"),col("Gender"),col("Category"),col("External_System"),
-        col("External_System_Id"),col("mdoid"),col("Certificate_ID"),col("Report_Last_Generated_On"),col("Live_CBP_Plan_Mandate")
-      )
+    val mdoMarketplaceReport = marketPlaceEnrolmentsWithUserDetailsDF.select(
+      col("fullName").alias("Full_Name"),
+      col("professionalDetails.designation").alias("Designation"),
+      col("personalDetails.primaryEmail").alias("Email"),
+      col("personalDetails.mobile").alias("Phone_Number"),
+      col("professionalDetails.group").alias("Group"),
+      col("Tag"),
+      col("ministry_name").alias("Ministry"),
+      col("dept_name").alias("Department"),
+      col("userOrgName").alias("Organization"),
+      col("courseOrgName").alias("Content_Provider"),
+      col("courseName").alias("Content_Name"),
+      col("category").alias("Content_Type"),
+      col("courseDuration").alias("Content_Duration"),
+      col("batchID").alias("Batch_Id"),
+      lit("Not Available").alias("Batch_Name"),
+      lit(null).cast("date").alias("Batch_Start_Date"),
+      lit(null).cast("date").alias("Batch_End_Date"),
+      col("enrolled_date").alias("Enrolled_On"),
+      col("dbCompletionStatus").alias("Status"),
+      col("completionpercentage").alias("Content_Progress_Percentage"),
+      col("courseLastPublishedOn").alias("Last_Published_On"),
+      lit(null).cast("date").alias("Content_Retired_On"),
+      col("completedon").alias("Completed_On"),
+      col("certificate_generated").alias("Certificate_Generated"),
+      col("userRating").alias("User_Rating"),
+      col("personalDetails.gender").alias("Gender"),
+      lit("External Content").as("category"),
+      col("additionalProperties.externalSystem").alias("External_System"),
+      col("additionalProperties.externalSystemId").alias("External_System_Id"),
+      col("userOrgID").alias("mdoid"),
+      col("certificateID").alias("Certificate_ID"),
+      col("Report_Last_Generated_On"),
+      col("live_cbp_plan_mandate").alias("Live_CBP_Plan_Mandate")
+    )
+    val mdoPlatformReport = fullReportDF.select(
+      col("Full_Name"),col("Designation"),col("Email"),col("Phone_Number"),col("Group"),col("Tag"),col("Ministry"),col("Department"),
+      col("Organization"),col("Content_Provider"),col("Content_Name"),col("Content_Type"),col("Content_Duration"),col("Batch_Id"),col("Batch_Name"),
+      col("Batch_Start_Date"),col("Batch_End_Date"),col("Enrolled_On"),col("Status"),col("Content_Progress_Percentage"),col("Last_Published_On"),
+      col("Content_Retired_On"),col("Completed_On"),col("Certificate_Generated"),col("User_Rating"),col("Gender"),col("Category"),col("External_System"),
+      col("External_System_Id"),col("mdoid"),col("Certificate_ID"),col("Report_Last_Generated_On"),col("Live_CBP_Plan_Mandate")
+    )
+
+    val mdoReportDF = mdoPlatformReport.union(mdoMarketplaceReport)
     generateReport(mdoReportDF, reportPath, "mdoid","ConsumptionReport")
     // to be removed once new security job is created
     if (conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
     }
+    val marketPlaceWarehouseDF = marketPlaceEnrolmentsWithUserDetailsDF
+      .withColumn("certificate_generated_on",date_format(from_utc_timestamp(to_utc_timestamp(to_timestamp(
+        col("certificateGeneratedOn"), dateTimeWithMilliSecFormat), "UTC"), "IST"), dateTimeFormat))
+      .withColumn("data_last_generated_on", currentDateTime)
+      .select(
+        col("userID").alias("user_id"),
+        col("batchID").alias("batch_id"),
+        col("courseID").alias("content_id"),
+        col("enrolled_date").alias("enrolled_on"),
+        col("completionpercentage").alias("content_progress_percentage"),
+        col("courseProgress").alias("resource_count_consumed"),
+        col("dbCompletionStatus").alias("user_consumption_status"),
+        col("firstCompletedOn").alias("first_completed_on"),
+        col("firstCompletedOn").alias("first_certificate_generated_on"),
+        col("completedon").alias("last_completed_on"),
+        col("certificate_generated_on").alias("last_certificate_generated_on"),
+        col("lastContentAccessTimestamp").alias("content_last_accessed_on"),
+        col("certificate_generated").alias("certificate_generated"),
+        col("issuedCertificateCount").alias("number_of_certificate"),
+        col("userRating").alias("user_rating"),
+        col("certificateID").alias("certificate_id"),
+        col("live_cbp_plan_mandate"),
+        col("data_last_generated_on")
+      ).dropDuplicates("user_id","batch_id","content_id")
 
-    val warehouseDF = enrolmentWithACBP
+    val platformWarehouseDF = enrolmentWithACBP
       .withColumn("certificate_generated_on",date_format(from_utc_timestamp(to_utc_timestamp(to_timestamp(
         col("certificateGeneratedOn"), dateTimeWithMilliSecFormat), "UTC"), "IST"), dateTimeFormat))
       .withColumn("data_last_generated_on", currentDateTime)
@@ -172,6 +275,8 @@ object UserEnrolmentModel extends AbsDashboardModel {
         col("live_cbp_plan_mandate"),
         col("data_last_generated_on")
       ).dropDuplicates("user_id","batch_id","content_id")
+
+    val warehouseDF = platformWarehouseDF.union(marketPlaceWarehouseDF)
     generateReport(warehouseDF.coalesce(1), s"${reportPath}-warehouse")
 
     // changes for creating avro file for warehouse
