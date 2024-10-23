@@ -439,6 +439,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     val nationalLearningWeekEndDateTimeString = nationalLearningWeekEndOffsetDateTime.format(certificateDateTimeFormatter)
     println("=================")
     println(nationalLearningWeekStartDateTimeString)
+    println(nationalLearningWeekEndDateTimeString)
 
     val eventCertificatesGeneratedNLWDF = eventsEnrolmentDataDF
       .filter(col("status") === "completed")
@@ -460,6 +461,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     val certificateGeneratedInNLWCount = certificateGeneratedInNLWCountDF.select("count").first().getLong(0)
     val totalCertificatesIssuedInNLW = certificateGeneratedInNLWCount + eventCertificateGeneratedNLWCount
     Redis.update("dashboard_content_certificates_generated_nlw_count", totalCertificatesIssuedInNLW.toString)
+    println("dashboard_content_certificates_generated_nlw_count |"+ totalCertificatesIssuedInNLW.toString+"|-|"+certificateGeneratedInNLWCount.toString+"|-|"+eventCertificateGeneratedNLWCount.toString)
 
     /* total number of events published that week */
     val primaryCategory = "Event"
@@ -482,14 +484,24 @@ object DashboardSyncModel extends AbsDashboardModel {
     // Make sure this Redis call is valid in your context
     val eventsPublishedInNLWCount = eventsPublishedInNLWDF.count()
     Redis.update("dashboard_events_published_nlw_count", eventsPublishedInNLWCount.toString())
+    println("dashboard_events_published_nlw_count "+ eventsPublishedInNLWCount.toString())
 
     /* certificates issued by user that week across all types of content*/
     val certificateGeneratedInNLWByUserDF = certificateGeneratedInNLWDF.groupBy("userID").agg(count("*").alias("count"))
+    val eventCertificateGeneratedInNLWByUserDF = eventCertificatesGeneratedNLWDF.groupBy("user_id").agg(count("*").alias("count"))
     Redis.dispatchDataFrame[String]("dashboard_content_certificates_issued_nlw_by_user", certificateGeneratedInNLWByUserDF, "userID", "count")
+    Redis.dispatchDataFrame[String]("dashboard_event_certificates_issued_nlw_by_user", eventCertificateGeneratedInNLWByUserDF, "user_id", "count")
 
     /* learning hours by user that week across all types of content*/
     println("This is the problem start")
-    show(cbpCompletionWithDetailsDF.select(col("courseEnrolledTimestamp")))
+
+    // NLW event consumption
+    val eventTotalLearningNLWByUserDF = eventsEnrolmentDataDF.filter(col("duration").isNotNull)
+      .groupBy("user_id").agg(sum("duration").alias("totalLearningSeconds"))
+      .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2)).select("user_id", "totalLearningHours")
+    Redis.dispatchDataFrame[String]("dashboard_event_learning_hours_nlw_by_user", eventTotalLearningNLWByUserDF, "user_id", "totalLearningHours")
+
+
     val enrolmentContentDurationNLWByUserDF = cbpCompletionWithDetailsDF.filter($"courseEnrolledTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseEnrolledTimestamp" <= nationalLearningWeekEndDateTimeEpoch && $"userID" =!= "").groupBy("userID").agg(sum(expr("(completionPercentage / 100) * courseDuration")).alias("totalLearningSeconds"))
       .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2)).select("userID", "totalLearningHours")
     println("This is the problem end")

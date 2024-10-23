@@ -262,6 +262,14 @@ object DataUtil extends Serializable {
       StructField("userID", StringType),
       StructField("totalLearningHours", StringType)
     ))
+    val eventEnrolmentCountByUserSchema: StructType = StructType(Seq(
+      StructField("user_id", StringType),
+      StructField("count", StringType)
+    ))
+    val eventLearningHoursByUserSchema: StructType = StructType(Seq(
+      StructField("user_id", StringType),
+      StructField("totalLearningHours", StringType)
+    ))
     val cbplanDraftDataSchema: StructType = StructType(Seq(
       StructField("name", StringType, nullable = true),
       StructField("assignmentType", StringType, nullable = true),
@@ -330,6 +338,13 @@ object DataUtil extends Serializable {
 //      StructField("rating", IntegerType, nullable = true),
 //      StructField("review", StringType, nullable = true)
 //    ))
+    // eventProgressDetailSchema
+    val eventProgressDetailSchema: StructType = StructType(Seq(
+      StructField("max_size", StringType, nullable = false),
+      StructField("mimeType", StringType, nullable = false),
+      StructField("duration", IntegerType, nullable = true),
+      StructField("stateMetaData", IntegerType, nullable = true)
+    ))
 
   }
 
