@@ -189,13 +189,14 @@ object DataExhaustModel extends AbsDashboardModel {
       .withColumn("recording_link", explode_outer(col("recordedLinks")))
       .withColumn("event_start_datetime",concat(substring(col("startDate"), 1,10), lit(" "), substring(col("startTime"), 1, 8)))
       .withColumn("presenters", lit("No presenters available"))
-      .durationFormat("duration")
+      .withColumn("durationInSecs", col("duration")*60)
+      .durationFormat("durationInSecs")
       .select(
         col("identifier").alias("event_id"),
         col("name").alias("event_name"),
         col("event_provider_mdo_id"),
         col("event_start_datetime"),
-        col("duration"),
+        col("durationInSecs").alias("duration"),
         col("status").alias("event_status"),
         col("objectType").alias("event_type"),
         col("presenters"),
