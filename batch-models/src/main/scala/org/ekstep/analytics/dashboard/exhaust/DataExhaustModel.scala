@@ -229,11 +229,22 @@ object DataExhaustModel extends AbsDashboardModel {
         col("certificate_id"),
         col("completionpercentage").alias("completion_percentage")
       )
-    val eventsEnrolmentWithDurationDF = eventsEnrolmentDF.withColumn("event_duration",
-      when(col("progress_details").isNotNull, col("progress_details.max_size")).otherwise(null)
-    ).withColumn("duration",
-      when(col("progress_details").isNotNull, col("progress_details.duration")).otherwise(null)
-    ).drop(col("progress_details"))
+    val eventsEnrolmentWithDurationDF = eventsEnrolmentDF
+      .withColumn("event_duration", when(col("progress_details").isNotNull, col("progress_details.max_size")).otherwise(null))
+      .durationFormat("event_duration")
+      .withColumn("progress_duration", when(col("progress_details").isNotNull, col("progress_details.duration")).otherwise(null))
+      .durationFormat("progress_duration")
+      .select(
+        col("userid").alias("user_id"),
+        col("contentid").alias("event_id"),
+        col("status"),
+        col("event_duration"),
+        col("progress_duration"),
+        col("certificate_id"),
+        col("completionpercentage").alias("completion_percentage")
+      )
+    show(eventsEnrolmentWithDurationDF, "eventsEnrolmentWithDurationDF")
+    // write to cache
     cache.write(eventsEnrolmentWithDurationDF, "eventEnrolmentDetails")
     eventsEnrolmentDF.unpersist()
 
