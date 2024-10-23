@@ -264,11 +264,11 @@ object DataUtil extends Serializable {
     ))
     val eventEnrolmentCountByUserSchema: StructType = StructType(Seq(
       StructField("user_id", StringType),
-      StructField("count", StringType)
+      StructField("event_count", StringType)
     ))
     val eventLearningHoursByUserSchema: StructType = StructType(Seq(
       StructField("user_id", StringType),
-      StructField("totalLearningHours", StringType)
+      StructField("totalEventLearningHours", StringType)
     ))
     val cbplanDraftDataSchema: StructType = StructType(Seq(
       StructField("name", StringType, nullable = true),
