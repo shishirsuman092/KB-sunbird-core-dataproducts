@@ -1,12 +1,11 @@
 package org.ekstep.analytics.dashboard.nationallearningweek
 
 import org.apache.spark.SparkContext
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
-import org.ekstep.analytics.dashboard.DataUtil._
 import org.ekstep.analytics.dashboard.DashboardUtil._
+import org.ekstep.analytics.dashboard.DataUtil._
 import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig, Redis}
 import org.ekstep.analytics.framework.FrameworkContext
 
@@ -65,9 +64,25 @@ object NationalLearningWeekModel extends AbsDashboardModel {
     val windowSpecRow = Window.partitionBy("org_id").orderBy(col("rank"), col("last_credit_date").asc)
     val finalUserLeaderBoardDataDF = userLeaderBoardOrderedDataDF.withColumn("row_num", row_number.over(windowSpecRow))
     val certificateCounyByUserDF = Redis.getMapAsDataFrame("dashboard_content_certificates_issued_nlw_by_user", Schema.enrolmentCountByUserSchema)
+    val eventCertificateCounyByUserDF = Redis.getMapAsDataFrame("dashboard_event_certificates_issued_nlw_by_user", Schema.eventEnrolmentCountByUserSchema)
     val learningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_content_learning_hours_nlw_by_user", Schema.learningHoursByUserSchema)
+    val eventLearningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_event_learning_hours_nlw_by_user", Schema.eventLearningHoursByUserSchema)
     val extendedColsUserDF = certificateCounyByUserDF.join(learningHoursByUserDF, Seq("userID"), "inner").withColumnRenamed("userID", "userid")
-    val userStatsDataDF = extendedColsUserDF.join(finalUserLeaderBoardDataDF, Seq("userid"), "right").withColumnRenamed("totalLearningHours", "learning_hours")
+
+    val extendedColsUserEventDF = eventCertificateCounyByUserDF.join(eventLearningHoursByUserDF, Seq("user_id"), "inner").withColumnRenamed("user_id", "userid")
+
+    val extendedColsUserContentEventDF = extendedColsUserEventDF.join(extendedColsUserDF, Seq("userid"), "outer")
+      .withColumn("totalEventLearningHours1", coalesce(col("totalEventLearningHours").cast("double"), lit(0.00)))
+      .withColumn("totalLearningHours1", coalesce(col("totalLearningHours").cast("double"), lit(0.00)))
+      .withColumn("count1", coalesce(col("count").cast("int"), lit(0)))
+      .withColumn("event_count1", coalesce(col("event_count").cast("int"), lit(0)))
+      .withColumn("total_count", coalesce((col("count1")+col("event_count1")), lit(0)))
+      .withColumn("total_learning_hours", coalesce((col("totalEventLearningHours1")+col("totalLearningHours1")), lit(0.00)))
+
+
+    val userStatsDataDF = extendedColsUserContentEventDF.join(finalUserLeaderBoardDataDF, Seq("userid"), "right")
+      .withColumnRenamed("total_learning_hours", "learning_hours")
+
     val selectedColUserLeaderboardDF = userStatsDataDF
       .select(
         col("userid"),
@@ -79,7 +94,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         col("last_credit_date"),
         coalesce(col("rank"), lit(0)).alias("rank"), // Replace null rank with 0
         col("row_num"),
-        coalesce(col("count"), lit(0)).alias("count"), // Replace null count with 0
+        coalesce(col("total_count"), lit(0)).alias("count"), // Replace null count with 0
         coalesce(col("learning_hours"), lit(0)).alias("total_learning_hours") // Replace null learning_hours with 0
       )
       .dropDuplicates("userid")
