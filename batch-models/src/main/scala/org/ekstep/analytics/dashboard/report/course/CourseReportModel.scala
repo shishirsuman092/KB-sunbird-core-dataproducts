@@ -26,7 +26,6 @@ object CourseReportModel extends AbsDashboardModel {
     val getContentResourceWithCategoryDF = contentResourceHierarchyDF
       .join(allCourseProgramDetailsDF, Seq("courseID"), "inner")
       .select(contentResourceHierarchyDF.columns.map(col) ++ Seq(allCourseProgramDetailsDF("category")): _*)
-
     orgDF.unpersist()
 
     // Define the schema for the hierarchy column
@@ -151,7 +150,102 @@ object CourseReportModel extends AbsDashboardModel {
       .withColumn("ArchivedOn", when(col("courseStatus") === "Retired", to_date(col("lastStatusChangedOn"), dateFormat)))
       .withColumn("Report_Last_Generated_On", currentDateTime)
 
-    val mdoReportDF = fullDF
+    val ciosDataSchema = new StructType().add("content", new StructType()
+      .add("name", StringType)
+      .add("duration", StringType)
+      .add("lastUpdatedOn", StringType)
+      .add("contentPartner", new StructType()
+        .add("id", StringType)
+        .add("contentPartnerName", StringType)))
+
+
+    val aggregatedDF2 = marketPlaceEnrolments()
+      .withColumnRenamed("courseid", "content_id")
+      .withColumn("issuedCertificateCountPerContent", when(size(col("issued_certificates")) > 0, lit(1)).otherwise(lit(0)))
+      .groupBy("content_id")
+      .agg(
+        count("*").alias("enrolledUserCount"),
+        sum(when(col("status") === 1, 1).otherwise(0)).alias("inProgressCount"),
+        sum(when(col("status") === 0, 1).otherwise(0)).alias("notStartedCount"),
+        sum(when(col("status") === 2, 1).otherwise(0)).alias("completedCount"),
+        sum(col("issuedCertificateCountPerContent")).alias("totalCertificatesIssued"),
+        min("completedon").alias("earliestCompletedOn"),
+        max("completedon").alias("latestCompletedOn"))
+
+    val marketPlaceContentWithEnrolmentsDF = marketPlaceEnrolments()
+      .withColumnRenamed("courseid", "content_id")
+      .join(aggregatedDF2, Seq("content_id"), "left")
+      .withColumn("firstCompletedOn", to_date(col("earliestCompletedOn"), dateFormat))
+      .withColumn("lastCompletedOn", to_date(col("latestCompletedOn"), dateFormat))
+      .withColumn("data_last_generated_on", currentDateTime)
+
+    val marketPlaceContentsDF = marketPlaceContentDF()
+    val parsedDF = marketPlaceContentsDF.withColumn("parsed_data", from_json(col("cios_data"), ciosDataSchema))
+
+    // Extract the desired fields
+    val extractedDF = parsedDF.select(col("content_id"),
+      col("parsed_data.content.name").as("courseName"),
+      col("parsed_data.content.duration").as("courseDuration"),
+      col("parsed_data.content.lastUpdatedOn").as("courseLastPublishedOn"),
+      col("parsed_data.content.contentPartner.id").as("courseOrgID"),
+      col("parsed_data.content.contentPartner.contentPartnerName").as("courseOrgName"),
+      lit("External Content").as("category"),
+      lit("LIVE").as("courseStatus"))
+
+    var combinedDF = extractedDF.join(marketPlaceContentWithEnrolmentsDF, Seq("content_id"), "inner").durationFormat("courseDuration")
+
+    val marketPlaceContentWarehouseDF = combinedDF.withColumn("data_last_generated_on", currentDateTime)
+      .select(
+        col("content_id"),
+        col("courseOrgID").alias("content_provider_id"),
+        col("courseOrgName").alias("content_provider_name"),
+        col("courseName").alias("content_name"),
+        col("category").alias("content_type"),
+        lit("Not Available").alias("batch_id"), // Match order
+        lit("Not Available").alias("batch_name"), // Match order
+        lit(null).cast("date").alias("batch_start_date"), // Match order
+        lit(null).cast("date").alias("batch_end_date"), // Match order
+        col("courseDuration").alias("content_duration"),
+        lit("Not Available").alias("content_rating"), // Match order
+        to_date(col("courseLastPublishedOn"), dateFormat).alias("last_published_on"),
+        lit(null).cast("date").alias("content_retired_on"), // Match order
+        col("courseStatus").alias("content_status"),
+        lit("Not Available").alias("resource_count"), // Match order
+        col("totalCertificatesIssued").alias("total_certificates_issued"),
+        lit("Not Available").alias("content_substatus"), // Match order
+        lit("Not Available").alias("language"), // Match order
+        col("data_last_generated_on")
+      )
+      .drop(col("courseLastPublishedOn"))
+
+
+    val marketPlaceContentMdoReportDF = combinedDF
+      .select(
+        col("courseStatus").alias("Content_Status"),
+        col("courseOrgName").alias("Content_Provider"),
+        col("courseName").alias("Content_Name"),
+        col("category").alias("Content_Type"),
+        lit("Not Available").alias("Batch_Id"), // Match order
+        lit("Not Available").alias("Batch_Name"), // Match order
+        lit(null).cast("date").alias("Batch_Start_Date"), // Match order
+        lit(null).cast("date").alias("Batch_End_Date"), // Match order
+        col("courseDuration").alias("Content_Duration"),
+        col("enrolledUserCount").cast("long").alias("Enrolled"),
+        col("notStartedCount").cast("long").alias("Not_Started"),
+        col("inProgressCount").cast("long").alias("In_Progress"),
+        col("completedCount").cast("long").alias("Completed"),
+        lit(null).cast("double").alias("Content_Rating"), // New column with null
+        to_date(col("courseLastPublishedOn"), dateFormat).alias("Last_Published_On"),
+        col("firstCompletedOn").alias("First_Completed_On"),
+        col("lastCompletedOn").alias("Last_Completed_On"),
+        lit(null).cast("date").alias("Content_Retired_On"), // Match order
+        col("totalCertificatesIssued").cast("long").alias("Total_Certificates_Issued"),
+        col("courseOrgID").alias("mdoid"),
+        col("data_last_generated_on").alias("Report_Last_Generated_On")
+      )
+      .coalesce(1)
+
+    val platformContentMdoReportDF = fullDF
       .select(
         col("courseStatus").alias("Content_Status"),
         col("courseOrgName").alias("Content_Provider"),
@@ -176,13 +270,15 @@ object CourseReportModel extends AbsDashboardModel {
         col("Report_Last_Generated_On")
       )
       .coalesce(1)
-    // Generate report
+
+    val mdoReportDF = platformContentMdoReportDF.union(marketPlaceContentMdoReportDF)
+    //generate report
     generateReport(mdoReportDF,  reportPath,"mdoid", "ContentReport")
     // to be removed once new security job is created
     if (conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
     }
-    val df_warehouse = fullDF
+    val platformContentWarehouseDF = fullDF
       .withColumn("data_last_generated_on", currentDateTime)
       .select(
         col("courseID").alias("content_id"),
@@ -205,10 +301,9 @@ object CourseReportModel extends AbsDashboardModel {
         col("contentLanguage").alias("language"),
         col("data_last_generated_on")
       )
+    val df_warehouse = platformContentWarehouseDF.union(marketPlaceContentWarehouseDF)
     generateReport(df_warehouse.coalesce(1), s"${reportPath}-warehouse")
-
     warehouseCache.write(df_warehouse.coalesce(1), conf.dwCourseTable)
-
     Redis.closeRedisConnect()
   }
 }
