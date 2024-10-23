@@ -99,7 +99,7 @@ object CourseReportModel extends AbsDashboardModel {
     generateReport(distinctDF.coalesce(1), s"${reportPath}-resource-warehouse")
 
     // changes for creating avro file for warehouse
-    //    warehouseCache.write(distinctDF.coalesce(1), conf.dwContentResourceTable)
+    warehouseCache.write(distinctDF.coalesce(1), conf.dwContentResourceTable)
 
     // Compute user ratings and join with course details
     val userRatingDF = userCourseRatingDataframe().groupBy("courseID").agg(avg(col("userRating")).alias("rating"))
@@ -245,8 +245,6 @@ object CourseReportModel extends AbsDashboardModel {
       )
       .coalesce(1)
 
-    marketPlaceContentMdoReportDF.printSchema()
-
     val platformContentMdoReportDF = fullDF
       .select(
         col("courseStatus").alias("Content_Status"),
@@ -273,7 +271,6 @@ object CourseReportModel extends AbsDashboardModel {
       )
       .coalesce(1)
 
-    platformContentMdoReportDF.printSchema()
     val mdoReportDF = platformContentMdoReportDF.union(marketPlaceContentMdoReportDF)
     //generate report
     generateReport(mdoReportDF,  reportPath,"mdoid", "ContentReport")
