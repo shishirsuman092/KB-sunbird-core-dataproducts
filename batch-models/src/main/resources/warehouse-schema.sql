@@ -208,3 +208,7 @@ ALTER TABLE user_detail ADD COLUMN marked_as_not_my_user boolean;
 ALTER TABLE user_detail ADD COLUMN total_event_learning_hours DOUBLE PRECISION;
 ALTER TABLE user_detail ADD COLUMN total_content_learning_hours DOUBLE PRECISION;
 ALTER TABLE user_detail ADD COLUMN total_learning_hours DOUBLE PRECISION;
+ALTER TABLE events_enrolment ADD COLUMN event_duration character varying(255);
+ALTER TABLE events_enrolment ADD COLUMN progress_duration character varying(255);
+ALTER TABLE events_enrolment ADD COLUMN completed_on_datetime character varying(255);
+ALTER TABLE events_enrolment ADD COLUMN duration character varying(255);
