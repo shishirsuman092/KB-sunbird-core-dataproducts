@@ -236,17 +236,7 @@ object DataExhaustModel extends AbsDashboardModel {
       .durationFormat("event_duration")
       .withColumn("progress_duration", when(col("progress_details").isNotNull, col("progress_details.duration")).otherwise(null))
       .durationFormat("progress_duration")
-      .select(
-        col("user_id"),
-        col("event_id"),
-        col("status"),
-        col("enrolled_on_datetime"),
-        col("completed_on_datetime"),
-        col("event_duration"),
-        col("progress_duration"),
-        col("certificate_id"),
-        col("completion_percentage")
-      )
+      .drop(col("progress_details"))
     show(eventsEnrolmentWithDurationDF, "eventsEnrolmentWithDurationDF")
     // write to cache
     cache.write(eventsEnrolmentWithDurationDF, "eventEnrolmentDetails")
