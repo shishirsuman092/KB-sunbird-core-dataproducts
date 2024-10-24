@@ -23,7 +23,7 @@ CREATE TABLE user_detail(
    is_verified_karmayogi VARCHAR(255),
    mdo_created_on DATE,
    user_registration_date VARCHAR(255),
-   marked_as_not_my_user
+   marked_as_not_my_user VARCHAR(255),
    data_last_generated_on VARCHAR(255)
 );
 
@@ -205,3 +205,6 @@ ALTER TABLE user_detail ADD COLUMN no_of_karma_points INTEGER;
 ALTER TABLE org_hierarchy ADD COLUMN mdo_created_on DATE;
 ALTER TABLE content ADD COLUMN language VARCHAR(255);
 ALTER TABLE user_detail ADD COLUMN marked_as_not_my_user boolean;
+ALTER TABLE user_detail ADD COLUMN total_event_learning_hours DOUBLE PRECISION;
+ALTER TABLE user_detail ADD COLUMN total_content_learning_hours DOUBLE PRECISION;
+ALTER TABLE user_detail ADD COLUMN total_learning_hours DOUBLE PRECISION;

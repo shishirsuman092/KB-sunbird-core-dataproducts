@@ -95,7 +95,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         coalesce(col("rank"), lit(0)).alias("rank"), // Replace null rank with 0
         col("row_num"),
         coalesce(col("total_count"), lit(0)).alias("count"), // Replace null count with 0
-        coalesce(col("learning_hours"), lit(0)).alias("total_learning_hours") // Replace null learning_hours with 0
+        coalesce(round(col("learning_hours"), 2), lit(0)).alias("total_learning_hours") // Replace null learning_hours with 0
       )
       .dropDuplicates("userid")
     show(selectedColUserLeaderboardDF, "cols")
