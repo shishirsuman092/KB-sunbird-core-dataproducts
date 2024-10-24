@@ -238,6 +238,7 @@ object DataExhaustModel extends AbsDashboardModel {
         col("user_id"),
         col("event_id"),
         col("status"),
+        col("enrolled_on_datetime"),
         col("event_duration"),
         col("progress_duration"),
         col("certificate_id"),
