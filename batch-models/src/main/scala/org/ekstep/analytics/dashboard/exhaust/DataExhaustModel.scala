@@ -218,6 +218,7 @@ object DataExhaustModel extends AbsDashboardModel {
     val eventsEnrolmentDF = cassandraTableAsDataFrame(conf.cassandraCourseKeyspace, conf.cassandraUserEntityEnrolmentTable)
       .withColumn("certificate_id", when(col("issued_certificates").isNull, "").otherwise( col("issued_certificates")(size(col("issued_certificates")) - 1).getItem("identifier")))
       .withColumn("enrolled_on_datetime", date_format(to_utc_timestamp(col("enrolled_date"), "Asia/Kolkata"), dateTimeFormat))
+      .withColumn("completed_on_datetime", date_format(to_utc_timestamp(col("completedon"), "Asia/Kolkata"), dateTimeFormat))
       .withColumn("status", expr(caseExpression))
       .withColumn("progress_details", from_json(col("lrc_progressdetails"), Schema.eventProgressDetailSchema))
       .select(
@@ -225,6 +226,7 @@ object DataExhaustModel extends AbsDashboardModel {
         col("contentid").alias("event_id"),
         col("status"),
         col("enrolled_on_datetime"),
+        col("completed_on_datetime"),
         col("progress_details"),
         col("certificate_id"),
         col("completionpercentage").alias("completion_percentage")
@@ -239,6 +241,7 @@ object DataExhaustModel extends AbsDashboardModel {
         col("event_id"),
         col("status"),
         col("enrolled_on_datetime"),
+        col("completed_on_datetime"),
         col("event_duration"),
         col("progress_duration"),
         col("certificate_id"),
