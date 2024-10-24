@@ -21,6 +21,14 @@ object UserReportModel extends AbsDashboardModel {
 
     val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
 
+    val learningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_content_learning_hours_nlw_by_user", Schema.learningHoursByUserSchema)
+    val eventLearningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_event_learning_hours_nlw_by_user", Schema.eventLearningHoursByUserSchema)
+      .withColumnRenamed("user_id", "userID")
+    val learningHourData = learningHoursByUserDF.join(eventLearningHoursByUserDF, Seq("userID"), "full")
+      .withColumn("total_event_learning_hours", coalesce(col("totalEventLearningHours").cast("double"), lit(0.00)))
+      .withColumn("total_content_learning_hours", coalesce(col("totalLearningHours").cast("double"), lit(0.00)))
+      .withColumn("total_learning_hours", round(coalesce((col("total_content_learning_hours")+col("total_event_learning_hours")), lit(0.00)), 2))
+
     val orgHierarchyData = orgHierarchyDataframe()
     val weeklyClapsDF = learnerStatsDataFrame()
     val karmaPointsDF = cache.load("userKarmaPointsSummary")
@@ -34,6 +42,7 @@ object UserReportModel extends AbsDashboardModel {
     val userDataWithKarmaPoints = userData
       .join(weeklyClapsDF, userData("userID") === weeklyClapsDF("userid"), "left")
       .select(userData("*"), weeklyClapsDF("total_claps").alias("weekly_claps_day_before_yesterday"))
+      .join(learningHourData, Seq("userID"), "left")
 
     val reportPath = s"${conf.userReportPath}/${today}"
     //generateReport(fullReportDF, s"${reportPath}-full")
@@ -59,7 +68,10 @@ object UserReportModel extends AbsDashboardModel {
         col("Report_Last_Generated_On"),
         from_unixtime(col("userOrgCreatedDate"), dateFormat).alias("MDO_Created_On"),
         col("userVerified").alias("Verified Karmayogi"),
-        col("weekly_claps_day_before_yesterday")
+        col("weekly_claps_day_before_yesterday"),
+        col("total_event_learning_hours").alias("Event_Learning_Hr_After_19_Oct"),
+        col("total_content_learning_hours").alias("Content_Learning_Hr_After_19_Oct"),
+        col("total_learning_hours").alias("Total_Learning_Hr_After_19_Oct")
       ).coalesce(1)
     // Repartition by mdo_id and write to CSV
     generateReport(mdoWiseReportDF, reportPath,"mdoid", "UserReport")
@@ -91,6 +103,9 @@ object UserReportModel extends AbsDashboardModel {
         col("additionalProperties.externalSystemId").alias("external_system_id"),
         col("weekly_claps_day_before_yesterday"),
         col("marked_as_not_my_user"),
+        col("total_event_learning_hours"),
+        col("total_content_learning_hours"),
+        col("total_learning_hours"),
         col("data_last_generated_on")
       )
 

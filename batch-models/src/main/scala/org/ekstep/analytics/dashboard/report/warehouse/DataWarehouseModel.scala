@@ -33,6 +33,9 @@ object DataWarehouseModel extends AbsDashboardModel {
       .withColumn("status", col("status").cast("int"))
       .withColumn("no_of_karma_points", col("no_of_karma_points").cast("int"))
       .withColumn("marked_as_not_my_user", col("marked_as_not_my_user").cast("boolean"))
+      .withColumn("total_event_learning_hours", col("total_event_learning_hours").cast("double"))
+      .withColumn("total_content_learning_hours", col("total_content_learning_hours").cast("double"))
+      .withColumn("total_learning_hours", col("total_learning_hours").cast("double"))
     truncateWarehouseTable(conf.dwUserTable)
     saveDataframeToPostgresTable_With_Append(userDetails, dwPostgresUrl, conf.dwUserTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
 
