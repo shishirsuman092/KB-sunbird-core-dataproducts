@@ -489,26 +489,38 @@ object DashboardSyncModel extends AbsDashboardModel {
     /* certificates issued by user that week across all types of content*/
     val certificateGeneratedInNLWByUserDF = certificateGeneratedInNLWDF.groupBy("userID").agg(count("*").alias("count"))
     val eventCertificateGeneratedInNLWByUserDF = eventCertificatesGeneratedNLWDF.groupBy("user_id").agg(count("*").alias("count"))
-    Redis.dispatchDataFrame[String]("dashboard_content_certificates_issued_nlw_by_user", certificateGeneratedInNLWByUserDF, "userID", "count")
-    Redis.dispatchDataFrame[String]("dashboard_event_certificates_issued_nlw_by_user", eventCertificateGeneratedInNLWByUserDF, "user_id", "count")
+    cache.write(certificateGeneratedInNLWByUserDF, "nlwContentCertificateGeneratedCount")
+    cache.write(eventCertificateGeneratedInNLWByUserDF, "nlwEventCertificateGeneratedCount")
+    //Redis.dispatchDataFrame[String]("dashboard_content_certificates_issued_nlw_by_user", certificateGeneratedInNLWByUserDF, "userID", "count")
+    //Redis.dispatchDataFrame[String]("dashboard_event_certificates_issued_nlw_by_user", eventCertificateGeneratedInNLWByUserDF, "user_id", "count")
 
     /* learning hours by user that week across all types of content*/
-    println("This is the problem start")
 
     // NLW event consumption
 //    val eventTotalLearningNLWByUserDF = eventsEnrolmentDataDF.filter(col("duration").isNotNull)
 //      .groupBy("user_id").agg(sum("duration").alias("totalLearningSeconds"))
 //      .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2)).select("user_id", "totalLearningHours")
-    val eventTotalLearningNLWByUserDF = eventsEnrolmentDataDF.filter(col("duration").isNotNull)
-      .groupBy("user_id").agg(sum(when(col("duration") > 180, col("event_duration")).otherwise(0)).alias("totalLearningSeconds"))
+
+    val eventsEnrolmentDataDFWithDuration = eventsEnrolmentDataDF.withColumn("hours", split(col("event_duration"), ":").getItem(0).cast("int"))
+      .withColumn("minutes", split(col("event_duration"), ":").getItem(1).cast("int"))
+      .withColumn("seconds", split(col("event_duration"), ":").getItem(2).cast("int"))
+      .withColumn("event_duration_seconds", col("hours") * 3600 + col("minutes") * 60 + col("seconds"))
+
+    val eventTotalLearningNLWByUserDF = eventsEnrolmentDataDFWithDuration.filter(col("duration").isNotNull)
+      .groupBy("user_id").agg(sum(when(col("duration") >= 180, col("event_duration_seconds")).otherwise(0)).alias("totalLearningSeconds"))
       .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2))
       .select("user_id", "totalLearningHours")
-    Redis.dispatchDataFrame[String]("dashboard_event_learning_hours_nlw_by_user", eventTotalLearningNLWByUserDF, "user_id", "totalLearningHours")
+    cache.write(eventTotalLearningNLWByUserDF, "nlwEventLearningHours")
+    //Redis.dispatchDataFrame[String]("dashboard_event_learning_hours_nlw_by_user", eventTotalLearningNLWByUserDF, "user_id", "totalLearningHours")
+
+    eventTotalLearningNLWByUserDF.show(false)
 
     val enrolmentContentDurationNLWByUserDF = cbpCompletionWithDetailsDF.filter($"courseEnrolledTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseEnrolledTimestamp" <= nationalLearningWeekEndDateTimeEpoch && $"userID" =!= "").groupBy("userID").agg(sum(expr("(completionPercentage / 100) * courseDuration")).alias("totalLearningSeconds"))
       .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2)).select("userID", "totalLearningHours")
-    println("This is the problem end")
-    Redis.dispatchDataFrame[String]("dashboard_content_learning_hours_nlw_by_user", enrolmentContentDurationNLWByUserDF, "userID", "totalLearningHours")
+    cache.write(enrolmentContentDurationNLWByUserDF, "nlwContentLearningHours")
+    //Redis.dispatchDataFrame[String]("dashboard_content_learning_hours_nlw_by_user", enrolmentContentDurationNLWByUserDF, "userID", "totalLearningHours")
+    println("eventTotalLearningNLWByUserDF cache write")
+
     // get the count for each courseID
     val topContentCountDF = liveCourseProgramExcludingModeratedCompletedDF.groupBy("courseID").agg(count("*").alias("count"))
     val liveCourseProgramExcludingModeratedCompletedWithCountDF = liveCourseProgramExcludingModeratedCompletedDF.join(topContentCountDF, "courseID")

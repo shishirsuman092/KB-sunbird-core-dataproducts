@@ -21,8 +21,10 @@ object UserReportModel extends AbsDashboardModel {
 
     val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
 
-    val learningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_content_learning_hours_nlw_by_user", Schema.learningHoursByUserSchema)
-    val eventLearningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_event_learning_hours_nlw_by_user", Schema.eventLearningHoursByUserSchema)
+//    val learningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_content_learning_hours_nlw_by_user", Schema.learningHoursByUserSchema)
+//    val eventLearningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_event_learning_hours_nlw_by_user", Schema.eventLearningHoursByUserSchema)
+    val learningHoursByUserDF = cache.load("nlwContentLearningHours")
+    val eventLearningHoursByUserDF = cache.load("nlwEventLearningHours")
       .withColumnRenamed("user_id", "userID")
     val learningHourData = learningHoursByUserDF.join(eventLearningHoursByUserDF, Seq("userID"), "full")
       .withColumn("total_event_learning_hours", coalesce(col("totalEventLearningHours").cast("double"), lit(0.00)))
