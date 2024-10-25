@@ -68,9 +68,9 @@ object NationalLearningWeekModel extends AbsDashboardModel {
 //    val learningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_content_learning_hours_nlw_by_user", Schema.learningHoursByUserSchema)
 //    val eventLearningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_event_learning_hours_nlw_by_user", Schema.eventLearningHoursByUserSchema)
     val certificateCountByUserDF = cache.load("nlwContentCertificateGeneratedCount")
-    val eventCertificateCountByUserDF = cache.load("nlwEventCertificateGeneratedCount")
+    val eventCertificateCountByUserDF = cache.load("nlwEventCertificateGeneratedCount").withColumn("event_count", col("count")).drop("count")
     val learningHoursByUserDF = cache.load("nlwContentLearningHours")
-    val eventLearningHoursByUserDF = cache.load("nlwEventLearningHours")
+    val eventLearningHoursByUserDF = cache.load("nlwEventLearningHours").withColumn("totalEventLearningHours", col("totalLearningHours")).drop("totalLearningHours")
     val extendedColsUserDF = certificateCountByUserDF.join(learningHoursByUserDF, Seq("userID"), "inner").withColumnRenamed("userID", "userid")
     val extendedColsUserEventDF = eventCertificateCountByUserDF.join(eventLearningHoursByUserDF, Seq("user_id"), "inner").withColumnRenamed("user_id", "userid")
 
