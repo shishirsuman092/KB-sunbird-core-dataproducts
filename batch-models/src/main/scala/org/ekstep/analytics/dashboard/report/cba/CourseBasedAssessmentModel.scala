@@ -40,7 +40,6 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
       allCourseProgramDetailsWithRatingDF, userOrgDF)
 
     val orgHierarchyData = orgHierarchyDataframe()
-
     val userAssessChildDataDF = userAssessChildrenDetailsDF
       .join(broadcast(orgHierarchyData), Seq("userOrgID"), "left")
 
@@ -78,6 +77,7 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
         col("assessOrgID"),
         col("userOrgID"),
         col("fullName"),
+        col("userStatus").alias("status"),
         col("professionalDetails.designation").alias("Designation"),
         col("personalDetails.primaryEmail").alias("E mail"),
         col("personalDetails.mobile").alias("Phone Number"),
@@ -109,8 +109,8 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
     // Join using a single column or Seq if multiple columns
     val userOrgHierarchyDataDF = userOrgDF.join(broadcast(orgHierarchyData), Seq("userOrgID"), "left")
     val oldAssessmentData = cache.load("oldAssessmentDetails").withColumnRenamed("user_id", "userID").withColumnRenamed("parent_source_id", "courseID")
-    val fullReportDFOld = oldAssessmentData.join(allCourseProgramDetailsDF, Seq("courseID"), "left")
-      .join(userOrgHierarchyDataDF, Seq("userID"), "left")
+
+    val fullReportDFOldDraft = oldAssessmentData.join(allCourseProgramDetailsDF, Seq("courseID"), "left").join(userOrgHierarchyDataDF, Seq("userID"), "left")
       .withColumn("assessment_type", lit("Learning Resource"))
       .withColumn("total_questions", col("correct_count") + col("incorrect_count") + col("not_answered_count"))
       .withColumn("assessment_publish_date", lit(null).cast("date"))
@@ -121,6 +121,8 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
       .withColumn("assessChildID", lit(null).cast("string"))
       .withColumn("Pass", when(col("result_percent") >= col("pass_percent"), lit("Yes")).otherwise(lit("No")))
       .withColumn("Tags", concat_ws(", ", col("additionalProperties.tag")))
+
+    val fullReportDFOld = fullReportDFOldDraft
       .select(
         col("userID"),
         col("source_id").alias("assessment_id"),
@@ -128,6 +130,7 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
         col("assessChildID"),
         col("userOrgID"),
         col("fullName"),
+        col("userStatus"),
         col("professionalDetails.designation").alias("Designation"),
         col("personalDetails.primaryEmail").alias("E mail"),
         col("personalDetails.mobile").alias("Phone Number"),
@@ -169,6 +172,7 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
         col("Phone Number"),
         col("Group"),
         col("Tags"),
+        col("status"),
         col("Ministry"),
         col("Department"),
         col("Organisation"),
@@ -184,13 +188,15 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
         col("assessPercentage").alias("Cut off Percentage"),
         col("Pass"),
         col("total_questions").alias("Total Questions"),
-        col("incorrect_count").alias("No.of Incorrect Responses"),
+        col("incorrect_count").alias("No of Incorrect Responses"),
         col("unattempted_questions").alias("Unattempted Questions"),
-        col("retakes").alias("No. of Retakes"),
+        col("retakes").alias("No of Retakes"),
         col("mdoid"),
         col("Report_Last_Generated_On")
       ).coalesce(1)
-    generateReport(mdoReportDF, reportPath,"mdoid", "UserAssessmentReport")
+    val columnsToKeepInReport = mdoReportDF.columns.filter(_ != "status")
+    generateReport(mdoReportDF.filter(col("status") === 1).select(columnsToKeepInReport.map(col): _*), reportPath,"mdoid", "UserAssessmentReport")
+
     // to be removed once new security job is created
     if (conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
