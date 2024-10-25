@@ -70,8 +70,8 @@ object UserEnrolmentModel extends AbsDashboardModel {
       lit("LIVE").as("courseStatus"))
 
     var marketPlaceContentEnrolmentsDF = extractedDF.join(marketPlaceEnrolmentsDF, Seq("content_id"), "inner").durationFormat("courseDuration")
-      .withColumn("courseCompletedTimestamp", col("completedon"))
-      .withColumn("courseEnrolledTimestamp", col("enrolled_date"))
+      .withColumn("courseCompletedTimestamp", date_format(col("completedon"), dateTimeFormat))
+      .withColumn("courseEnrolledTimestamp", date_format(col("enrolled_date"), dateTimeFormat))
       .withColumn("lastContentAccessTimestamp", lit("Not Available"))
       .withColumn("userRating", lit("Not Available"))
       .withColumn("live_cbp_plan_mandate", lit(false))
@@ -117,7 +117,7 @@ object UserEnrolmentModel extends AbsDashboardModel {
     // read acbp data and filter the cbp plan based on status
     val acbpDF = acbpDetailsDF().where(col("acbpStatus") === "Live")
 
-    val selectColumns = Seq("userID", "designation", "userOrgID", "acbpID", "assignmentType", "acbpCourseIDList","acbpStatus")
+    val selectColumns = Seq("userID", "designation", "userOrgID", "acbpID", "assignmentType", "acbpCourseIDList","acbpStatus", "userStatus")
     val acbpAllotmentDF = explodedACBPDetails(acbpDF, userDataDF, selectColumns)
 
     // replace content list with names of the courses instead of ids
@@ -170,6 +170,7 @@ object UserEnrolmentModel extends AbsDashboardModel {
         round(expr("CASE WHEN courseResourceCount=0 THEN 0.0 ELSE 100.0 * courseProgress / courseResourceCount END"), 2).alias("rawCompletionPercentage"),
         col("Certificate_ID"),
         col("Report_Last_Generated_On"),
+        col("userStatus").alias("status"),
         col("live_cbp_plan_mandate").alias("Live_CBP_Plan_Mandate")
       )
       .coalesce(1)
@@ -195,12 +196,12 @@ object UserEnrolmentModel extends AbsDashboardModel {
       lit("Not Available").alias("Batch_Name"),
       lit(null).cast("date").alias("Batch_Start_Date"),
       lit(null).cast("date").alias("Batch_End_Date"),
-      col("enrolled_date").alias("Enrolled_On"),
+      col("courseEnrolledTimestamp").alias("Enrolled_On"),
       col("dbCompletionStatus").alias("Status"),
       col("completionpercentage").alias("Content_Progress_Percentage"),
       col("courseLastPublishedOn").alias("Last_Published_On"),
       lit(null).cast("date").alias("Content_Retired_On"),
-      col("completedon").alias("Completed_On"),
+      col("courseCompletedTimestamp").alias("Completed_On"),
       col("certificate_generated").alias("Certificate_Generated"),
       col("userRating").alias("User_Rating"),
       col("personalDetails.gender").alias("Gender"),
@@ -210,18 +211,21 @@ object UserEnrolmentModel extends AbsDashboardModel {
       col("userOrgID").alias("mdoid"),
       col("certificateID").alias("Certificate_ID"),
       col("Report_Last_Generated_On"),
+      col("userStatus"),
       col("live_cbp_plan_mandate").alias("Live_CBP_Plan_Mandate")
     )
+
     val mdoPlatformReport = fullReportDF.select(
       col("Full_Name"),col("Designation"),col("Email"),col("Phone_Number"),col("Group"),col("Tag"),col("Ministry"),col("Department"),
       col("Organization"),col("Content_Provider"),col("Content_Name"),col("Content_Type"),col("Content_Duration"),col("Batch_Id"),col("Batch_Name"),
       col("Batch_Start_Date"),col("Batch_End_Date"),col("Enrolled_On"),col("Status"),col("Content_Progress_Percentage"),col("Last_Published_On"),
       col("Content_Retired_On"),col("Completed_On"),col("Certificate_Generated"),col("User_Rating"),col("Gender"),col("Category"),col("External_System"),
-      col("External_System_Id"),col("mdoid"),col("Certificate_ID"),col("Report_Last_Generated_On"),col("Live_CBP_Plan_Mandate")
+      col("External_System_Id"),col("mdoid"),col("Certificate_ID"),col("Report_Last_Generated_On"),col("status"),col("Live_CBP_Plan_Mandate")
     )
+    val mdoReportDF = mdoPlatformReport.union(mdoMarketplaceReport.withColumnRenamed("userStatus", "status"))
+    val columnsToKeepInReport = mdoReportDF.columns.filter(_ != "status")
+    generateReport(mdoReportDF.filter(col("status") === 1).select(columnsToKeepInReport.map(col): _*), reportPath, "mdoid","ConsumptionReport")
 
-    val mdoReportDF = mdoPlatformReport.union(mdoMarketplaceReport)
-    generateReport(mdoReportDF, reportPath, "mdoid","ConsumptionReport")
     // to be removed once new security job is created
     if (conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
@@ -234,13 +238,13 @@ object UserEnrolmentModel extends AbsDashboardModel {
         col("userID").alias("user_id"),
         col("batchID").alias("batch_id"),
         col("courseID").alias("content_id"),
-        col("enrolled_date").alias("enrolled_on"),
+        col("courseEnrolledTimestamp").alias("enrolled_on"),
         col("completionpercentage").alias("content_progress_percentage"),
         col("courseProgress").alias("resource_count_consumed"),
         col("dbCompletionStatus").alias("user_consumption_status"),
         col("firstCompletedOn").alias("first_completed_on"),
         col("firstCompletedOn").alias("first_certificate_generated_on"),
-        col("completedon").alias("last_completed_on"),
+        col("courseCompletedTimestamp").alias("last_completed_on"),
         col("certificate_generated_on").alias("last_certificate_generated_on"),
         col("lastContentAccessTimestamp").alias("content_last_accessed_on"),
         col("certificate_generated").alias("certificate_generated"),

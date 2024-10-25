@@ -59,10 +59,12 @@ object UserReportModel extends AbsDashboardModel {
         col("Report_Last_Generated_On"),
         from_unixtime(col("userOrgCreatedDate"), dateFormat).alias("MDO_Created_On"),
         col("userVerified").alias("Verified Karmayogi"),
-        col("weekly_claps_day_before_yesterday")
+        col("weekly_claps_day_before_yesterday"),
+        col("userStatus").alias("status")
       ).coalesce(1)
+    val columnsToKeepInReport = mdoWiseReportDF.columns.filter(_ != "status")
     // Repartition by mdo_id and write to CSV
-    generateReport(mdoWiseReportDF, reportPath,"mdoid", "UserReport")
+    generateReport(mdoWiseReportDF.filter(col("status") === 1).select(columnsToKeepInReport.map(col): _*), reportPath,"mdoid", "UserReport")
     // to be removed once new security job is created
     if (conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
