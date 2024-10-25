@@ -21,8 +21,10 @@ object UserReportModel extends AbsDashboardModel {
 
     val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
 
-    val learningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_content_learning_hours_nlw_by_user", Schema.learningHoursByUserSchema)
-    val eventLearningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_event_learning_hours_nlw_by_user", Schema.eventLearningHoursByUserSchema)
+//    val learningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_content_learning_hours_nlw_by_user", Schema.learningHoursByUserSchema)
+//    val eventLearningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_event_learning_hours_nlw_by_user", Schema.eventLearningHoursByUserSchema)
+    val learningHoursByUserDF = cache.load("nlwContentLearningHours")
+    val eventLearningHoursByUserDF = cache.load("nlwEventLearningHours")
       .withColumnRenamed("user_id", "userID")
     val learningHourData = learningHoursByUserDF.join(eventLearningHoursByUserDF, Seq("userID"), "full")
       .withColumn("total_event_learning_hours", coalesce(col("totalEventLearningHours").cast("double"), lit(0.00)))
@@ -69,7 +71,7 @@ object UserReportModel extends AbsDashboardModel {
         from_unixtime(col("userOrgCreatedDate"), dateFormat).alias("MDO_Created_On"),
         col("userVerified").alias("Verified Karmayogi"),
         col("weekly_claps_day_before_yesterday"),
-        col("userStatus").alias("status")
+        col("userStatus").alias("status"),
         col("weekly_claps_day_before_yesterday"),
         col("total_event_learning_hours").alias("Event_Learning_Hr_After_19_Oct"),
         col("total_content_learning_hours").alias("Content_Learning_Hr_After_19_Oct"),
