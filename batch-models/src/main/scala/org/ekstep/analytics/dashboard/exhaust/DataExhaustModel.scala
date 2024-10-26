@@ -185,6 +185,7 @@ object DataExhaustModel extends AbsDashboardModel {
     oldAssessmentDetailsDF.unpersist()
 
     //NLW event data
+    val nationalLearningWeekStartString = conf.nationalLearningWeekStart
     val objectType = Seq("Event")
     val shouldClauseRequired = objectType.map(pc => s"""{"match":{"objectType.raw":"${pc}"}}""").mkString(",")
     val fieldsRequired = Seq("identifier", "name", "objectType", "status", "startDate", "startTime", "duration", "registrationLink" ,"createdFor", "recordedLinks")
@@ -199,6 +200,7 @@ object DataExhaustModel extends AbsDashboardModel {
       .withColumn("presenters", lit("No presenters available"))
       .withColumn("durationInSecs", col("duration")*60)
       .durationFormat("durationInSecs")
+      .filter(col("event_start_datetime") >= nationalLearningWeekStartString)
       .select(
         col("identifier").alias("event_id"),
         col("name").alias("event_name"),
@@ -212,7 +214,7 @@ object DataExhaustModel extends AbsDashboardModel {
         col("registrationLink").alias("video_link")
       ).dropDuplicates("event_id")
       .na.fill(0.0, Seq("duration"))
-    cache.write(eventDetailsDF, "eventDetails")
+    cache.write(eventDetailsDF.coalesce(1), "eventDetails")
 
     val caseExpression = "CASE WHEN ISNULL(status) THEN 'not-enrolled' WHEN status == 0 THEN 'not-started' WHEN status == 1 THEN 'in-progress' ELSE 'completed' END"
     val eventsEnrolmentDF = cassandraTableAsDataFrame(conf.cassandraCourseKeyspace, conf.cassandraUserEntityEnrolmentTable)
@@ -221,6 +223,7 @@ object DataExhaustModel extends AbsDashboardModel {
       .withColumn("completed_on_datetime", date_format(to_utc_timestamp(col("completedon"), "Asia/Kolkata"), dateTimeFormat))
       .withColumn("status", expr(caseExpression))
       .withColumn("progress_details", from_json(col("lrc_progressdetails"), Schema.eventProgressDetailSchema))
+      .filter(col("enrolled_on_datetime") >= nationalLearningWeekStartString)
       .select(
         col("userid").alias("user_id"),
         col("contentid").alias("event_id"),
@@ -237,10 +240,11 @@ object DataExhaustModel extends AbsDashboardModel {
       .withColumn("progress_duration", when(col("progress_details").isNotNull, col("progress_details.duration")).otherwise(null))
       .durationFormat("progress_duration")
       .withColumn("duration", when(col("progress_details").isNotNull, col("progress_details.duration")).otherwise(null))
+      .withColumn("event_duration_seconds", when(col("progress_details").isNotNull, col("progress_details.max_size")).otherwise(null))
       .drop(col("progress_details"))
     show(eventsEnrolmentWithDurationDF, "eventsEnrolmentWithDurationDF")
     // write to cache
-    cache.write(eventsEnrolmentWithDurationDF, "eventEnrolmentDetails")
+    cache.write(eventsEnrolmentWithDurationDF.coalesce(1), "eventEnrolmentDetails")
     eventsEnrolmentDF.unpersist()
 
   }

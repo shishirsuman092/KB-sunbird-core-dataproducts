@@ -489,8 +489,8 @@ object DashboardSyncModel extends AbsDashboardModel {
     /* certificates issued by user that week across all types of content*/
     val certificateGeneratedInNLWByUserDF = certificateGeneratedInNLWDF.groupBy("userID").agg(count("*").alias("count"))
     val eventCertificateGeneratedInNLWByUserDF = eventCertificatesGeneratedNLWDF.groupBy("user_id").agg(count("*").alias("count"))
-    cache.write(certificateGeneratedInNLWByUserDF, "nlwContentCertificateGeneratedCount")
-    cache.write(eventCertificateGeneratedInNLWByUserDF, "nlwEventCertificateGeneratedCount")
+    cache.write(certificateGeneratedInNLWByUserDF.coalesce(1), "nlwContentCertificateGeneratedCount")
+    cache.write(eventCertificateGeneratedInNLWByUserDF.coalesce(1), "nlwEventCertificateGeneratedCount")
     //Redis.dispatchDataFrame[String]("dashboard_content_certificates_issued_nlw_by_user", certificateGeneratedInNLWByUserDF, "userID", "count")
     //Redis.dispatchDataFrame[String]("dashboard_event_certificates_issued_nlw_by_user", eventCertificateGeneratedInNLWByUserDF, "user_id", "count")
 
@@ -501,23 +501,23 @@ object DashboardSyncModel extends AbsDashboardModel {
 //      .groupBy("user_id").agg(sum("duration").alias("totalLearningSeconds"))
 //      .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2)).select("user_id", "totalLearningHours")
 
-    val eventsEnrolmentDataDFWithDuration = eventsEnrolmentDataDF.withColumn("hours", split(col("event_duration"), ":").getItem(0).cast("int"))
+    /*val eventsEnrolmentDataDFWithDuration = eventsEnrolmentDataDF.withColumn("hours", split(col("event_duration"), ":").getItem(0).cast("int"))
       .withColumn("minutes", split(col("event_duration"), ":").getItem(1).cast("int"))
       .withColumn("seconds", split(col("event_duration"), ":").getItem(2).cast("int"))
-      .withColumn("event_duration_seconds", col("hours") * 3600 + col("minutes") * 60 + col("seconds"))
+      .withColumn("event_duration_seconds", col("hours") * 3600 + col("minutes") * 60 + col("seconds"))*/
 
-    val eventTotalLearningNLWByUserDF = eventsEnrolmentDataDFWithDuration.filter(col("duration").isNotNull)
+    val eventTotalLearningNLWByUserDF = eventsEnrolmentDataDF.filter(col("duration").isNotNull)
       .groupBy("user_id").agg(sum(when(col("duration") >= 180, col("event_duration_seconds")).otherwise(0)).alias("totalLearningSeconds"))
       .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2))
       .select("user_id", "totalLearningHours")
-    cache.write(eventTotalLearningNLWByUserDF, "nlwEventLearningHours")
+    cache.write(eventTotalLearningNLWByUserDF.coalesce(1), "nlwEventLearningHours")
     //Redis.dispatchDataFrame[String]("dashboard_event_learning_hours_nlw_by_user", eventTotalLearningNLWByUserDF, "user_id", "totalLearningHours")
 
     eventTotalLearningNLWByUserDF.show(false)
 
     val enrolmentContentDurationNLWByUserDF = cbpCompletionWithDetailsDF.filter($"courseEnrolledTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseEnrolledTimestamp" <= nationalLearningWeekEndDateTimeEpoch && $"userID" =!= "").groupBy("userID").agg(sum(expr("(completionPercentage / 100) * courseDuration")).alias("totalLearningSeconds"))
       .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2)).select("userID", "totalLearningHours")
-    cache.write(enrolmentContentDurationNLWByUserDF, "nlwContentLearningHours")
+    cache.write(enrolmentContentDurationNLWByUserDF.coalesce(1), "nlwContentLearningHours")
     //Redis.dispatchDataFrame[String]("dashboard_content_learning_hours_nlw_by_user", enrolmentContentDurationNLWByUserDF, "userID", "totalLearningHours")
     println("eventTotalLearningNLWByUserDF cache write")
 
