@@ -224,8 +224,8 @@ object UserEnrolmentModel extends AbsDashboardModel {
     )
     val mdoReportDF = mdoPlatformReport.union(mdoMarketplaceReport.withColumnRenamed("userStatus", "status"))
     val columnsToKeepInReport = mdoReportDF.columns.filter(_ != "status")
-    generateReport(mdoReportDF.filter(col("status") === 1).select(columnsToKeepInReport.map(col): _*).coalesce(1), reportPath, "mdoid","ConsumptionReport")
-
+    //generateReport(mdoReportDF.filter(col("status") === 1).select(columnsToKeepInReport.map(col): _*).coalesce(1), reportPath, "mdoid","ConsumptionReport")
+    generateReport(mdoReportDF.filter(col("status").cast("int") === 1).select(columnsToKeepInReport.map(col): _*).coalesce(1), reportPath, "mdoid","ConsumptionReport")
     // to be removed once new security job is created
     if (conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
