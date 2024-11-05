@@ -5,12 +5,12 @@ import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.functions._
 import org.ekstep.analytics.dashboard.DashboardUtil._
 import org.ekstep.analytics.dashboard.DataUtil._
-import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig}
+import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig, Redis}
 import org.ekstep.analytics.framework.FrameworkContext
+import redis.clients.jedis.Jedis
 
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-
 
 object MonthlyRequestModel extends AbsDashboardModel {
   implicit val className: String = "org.ekstep.analytics.dashboard.report.monthly.requests.MonthlyRequestModel"
@@ -36,9 +36,51 @@ object MonthlyRequestModel extends AbsDashboardModel {
     karmaPointsWallOfFameData.repartition(1).write.mode(SaveMode.Overwrite).format("csv").option("header", true).save(s"${conf.localReportDir}/monthly-requests/wallOfFame-karma-points-data")
     mobileVersionsData.repartition(1).write.mode(SaveMode.Overwrite).format("csv").option("header", true).save(s"${conf.localReportDir}/monthly-requests/mobile-versions-data")
 
+    val userData = userDataFrame().select(
+      col("userID"),
+      col("firstName"),
+      col("userProfileImgUrl"),
+      col("professionalDetails.designation").alias("designation"),
+      col("employmentDetails.departmentName").alias("departmentName")
+    )
 
+    // Repartition the larger DataFrame to improve parallelism
+    val repartitionedUserData = userData.repartition(500)
+
+    // Section to add User Details into Redis
+    repartitionedUserData.foreachPartition { partition =>
+      // Create a new Redis connection for each partition
+      val jedis = new Jedis(conf.redisHost, conf.redisPort)
+      val pipeline = jedis.pipelined()
+      var commandCount = 0
+      val batchSize = 25000
+
+      partition.foreach { row =>
+        val userId = row.getAs[String]("userID")
+        val firstName = row.getAs[String]("firstName")
+        val userProfileImgUrl = row.getAs[String]("userProfileImgUrl")
+        val designation = row.getAs[String]("designation")
+        val departmentName = row.getAs[String]("departmentName")
+
+        // Construct Redis key and JSON value
+        val redisKey = s"user:$userId"
+        val redisValue = s"""{"user_id":"$userId", "first_name":"$firstName", "user_profile_img_url":"$userProfileImgUrl", "designation":"$designation", "department":"$departmentName"}"""
+
+        // Queue the command in the pipeline
+        pipeline.set(redisKey, redisValue)
+        commandCount += 1
+
+        // Execute pipeline commands after reaching batch size
+        if (commandCount >= batchSize) {
+          pipeline.sync()
+          commandCount = 0
+        }
+      }
+
+      // Execute any remaining commands
+      if (commandCount > 0) {
+        pipeline.sync()
+      }
+    }
   }
 }
-
-
-
