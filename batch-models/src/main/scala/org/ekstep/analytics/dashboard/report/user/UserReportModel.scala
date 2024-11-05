@@ -78,8 +78,9 @@ object UserReportModel extends AbsDashboardModel {
       ).coalesce(1)
     val columnsToKeepInReport = mdoWiseReportDF.columns.filter(_ != "status")
     // Repartition by mdo_id and write to CSV
-    generateReport(mdoWiseReportDF, reportPath,"mdoid", "UserReport")
-    // to be removed once new security job is created
+    //generateReport(mdoWiseReportDF, reportPath,"mdoid", "UserReport")
+      generateReport(mdoWiseReportDF.filter(col("status").cast("int") === 1).select(columnsToKeepInReport.map(col): _*).coalesce(1),reportPath,"mdoid", "UserReport")
+      // to be removed once new security job is created
     if (conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
     }
