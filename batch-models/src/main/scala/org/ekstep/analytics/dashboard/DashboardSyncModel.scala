@@ -543,7 +543,8 @@ object DashboardSyncModel extends AbsDashboardModel {
       )
 
     // average NPS
-    val npsQuery = raw"""SELECT ROUND(((SUM(CASE WHEN rating IN (9, 10) THEN 1 ELSE 0 END) - SUM(CASE WHEN rating IN (0, 1, 2, 3, 4, 5, 6) THEN 1 ELSE 0 END)) * 1.0) / COUNT(rating) * 100, 1) AS avgNps FROM \"nps-upgraded-users-data\" WHERE submitted = true"""
+    val platformRatingSurveyId = conf.platformRatingSurveyId
+    val npsQuery = raw"""SELECT ROUND(((SUM(CASE WHEN rating IN (9, 10) THEN 1 ELSE 0 END) - SUM(CASE WHEN rating IN (0, 1, 2, 3, 4, 5, 6) THEN 1 ELSE 0 END)) * 1.0) / COUNT(rating) * 100, 1) AS avgNps FROM \"nps-upgraded-users-data\" WHERE submitted = true AND activityID = '$platformRatingSurveyId'"""
     var npsDF = druidDFOption(npsQuery, conf.sparkDruidRouterHost).orNull
     if (npsDF == null) {
       npsDF = Seq((0)).toDF("avgNps")
