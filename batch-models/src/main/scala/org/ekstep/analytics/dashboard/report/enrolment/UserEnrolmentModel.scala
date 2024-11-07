@@ -197,7 +197,11 @@ object UserEnrolmentModel extends AbsDashboardModel {
       lit(null).cast("date").alias("Batch_Start_Date"),
       lit(null).cast("date").alias("Batch_End_Date"),
       col("courseEnrolledTimestamp").alias("Enrolled_On"),
-      col("dbCompletionStatus").alias("Status"),
+      when(col("dbCompletionStatus").isNull, "not-enrolled")
+        .when(col("dbCompletionStatus") === 0, "not-started")
+        .when(col("dbCompletionStatus") === 1, "in-progress")
+        .otherwise("completed")
+        .alias("Status"),
       col("completionpercentage").alias("Content_Progress_Percentage"),
       col("courseLastPublishedOn").alias("Last_Published_On"),
       lit(null).cast("date").alias("Content_Retired_On"),
@@ -241,7 +245,11 @@ object UserEnrolmentModel extends AbsDashboardModel {
         col("courseEnrolledTimestamp").alias("enrolled_on"),
         col("completionpercentage").alias("content_progress_percentage"),
         col("courseProgress").alias("resource_count_consumed"),
-        col("dbCompletionStatus").alias("user_consumption_status"),
+        when(col("dbCompletionStatus").isNull, "not-enrolled")
+          .when(col("dbCompletionStatus") === 0, "not-started")
+          .when(col("dbCompletionStatus") === 1, "in-progress")
+          .otherwise("completed")
+          .alias("user_consumption_status"),
         col("firstCompletedOn").alias("first_completed_on"),
         col("firstCompletedOn").alias("first_certificate_generated_on"),
         col("courseCompletedTimestamp").alias("last_completed_on"),
