@@ -69,7 +69,8 @@ object UserEnrolmentModel extends AbsDashboardModel {
       lit("External Content").as("category"),
       lit("LIVE").as("courseStatus"))
 
-    var marketPlaceContentEnrolmentsDF = extractedDF.join(marketPlaceEnrolmentsDF, Seq("content_id"), "inner").durationFormat("courseDuration")
+    var marketPlaceContentEnrolmentsDF = extractedDF.durationFormat("courseDuration")
+      .join(marketPlaceEnrolmentsDF, Seq("content_id"), "inner")
       .withColumn("courseCompletedTimestamp", date_format(col("completedon"), dateTimeFormat))
       .withColumn("courseEnrolledTimestamp", date_format(col("enrolled_date"), dateTimeFormat))
       .withColumn("lastContentAccessTimestamp", lit("Not Available"))
@@ -89,7 +90,7 @@ object UserEnrolmentModel extends AbsDashboardModel {
       .na.fill(0, Seq("courseProgress", "issuedCertificateCount"))
       .na.fill("", Seq("certificateGeneratedOn"))
 
-    val marketPlaceEnrolmentsWithUserDetailsDF = marketPlaceContentEnrolmentsDF.join(userDataDF, Seq("userID"), "left").durationFormat("courseDuration").withColumn("Tag", concat_ws(", ", col("additionalProperties.tag")))
+    val marketPlaceEnrolmentsWithUserDetailsDF = marketPlaceContentEnrolmentsDF.join(userDataDF, Seq("userID"), "left").withColumn("Tag", concat_ws(", ", col("additionalProperties.tag")))
     val allCourseProgramCompletionWithDetailsWithBatchInfoDF = allCourseProgramCompletionWithDetailsDF.join(relevantBatchInfoDF, Seq("courseID", "batchID"), "left")
 
     val allCourseProgramCompletionWithDetailsDFWithRating = allCourseProgramCompletionWithDetailsWithBatchInfoDF.join(userRatingDF, Seq("courseID", "userID"), "left")
@@ -203,7 +204,7 @@ object UserEnrolmentModel extends AbsDashboardModel {
         .otherwise("completed")
         .alias("Status"),
       col("completionpercentage").alias("Content_Progress_Percentage"),
-      col("courseLastPublishedOn").alias("Last_Published_On"),
+      to_date(col("courseLastPublishedOn"), dateFormat).alias("Last_Published_On"),
       lit(null).cast("date").alias("Content_Retired_On"),
       col("courseCompletedTimestamp").alias("Completed_On"),
       col("certificate_generated").alias("Certificate_Generated"),
