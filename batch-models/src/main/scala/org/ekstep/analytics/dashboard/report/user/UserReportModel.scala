@@ -8,7 +8,6 @@ import org.ekstep.analytics.dashboard.DataUtil._
 import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig, Redis}
 import org.ekstep.analytics.framework.FrameworkContext
 
-
 object UserReportModel extends AbsDashboardModel {
   implicit val className: String = "org.ekstep.analytics.dashboard.report.user.UserReportModel"
   override def name() = "UserReportModel"
@@ -23,31 +22,32 @@ object UserReportModel extends AbsDashboardModel {
 
 //    val learningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_content_learning_hours_nlw_by_user", Schema.learningHoursByUserSchema)
 //    val eventLearningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_event_learning_hours_nlw_by_user", Schema.eventLearningHoursByUserSchema)
-      val learningHoursByUserDF = cache.load("nlwContentLearningHours")
-      val eventLearningHoursByUserDF = cache.load("nlwEventLearningHours").withColumn("totalEventLearningHours", col("totalLearningHours")).drop("totalLearningHours")
+    val learningHoursByUserDF = cache.load("nlwContentLearningHours")
+    val eventLearningHoursByUserDF = cache.load("nlwEventLearningHours").withColumn("totalEventLearningHours", col("totalLearningHours")).drop("totalLearningHours")
 
-      val learningHourData = learningHoursByUserDF.join(eventLearningHoursByUserDF, eventLearningHoursByUserDF("user_id") === learningHoursByUserDF("userID"), "full")
-        .withColumn("total_event_learning_hours", coalesce(col("totalEventLearningHours").cast("double"), lit(0.00)))
-        .withColumn("total_content_learning_hours", coalesce(col("totalLearningHours").cast("double"), lit(0.00)))
-        .withColumn("total_learning_hours", round(coalesce((col("total_content_learning_hours") + col("total_event_learning_hours")), lit(0.00)), 2))
+    val learningHourData = learningHoursByUserDF.join(eventLearningHoursByUserDF, eventLearningHoursByUserDF("user_id") === learningHoursByUserDF("userID"), "full")
+      .withColumn("total_event_learning_hours", coalesce(col("totalEventLearningHours").cast("double"), lit(0)))
+      .withColumn("total_content_learning_hours", coalesce(col("totalLearningHours").cast("double"), lit(0)))
+      .withColumn("total_learning_hours", round(coalesce(col("total_content_learning_hours") + col("total_event_learning_hours"), lit(0)), 2))
 
     val orgHierarchyData = orgHierarchyDataframe()
     val weeklyClapsDF = learnerStatsDataFrame()
-    val karmaPointsDF = cache.load("userKarmaPointsSummary")
-      .withColumnRenamed("userid", "userID")
+    val karmaPointsDF = cache.load("userKarmaPointsSummary").withColumnRenamed("userid", "userID")
+
     val userData = userOrgDF
       .join(userRolesDF, Seq("userID"), "left")
       .join(karmaPointsDF.select("userID","total_points"), Seq("userID"), "left")
       .join(broadcast(orgHierarchyData), Seq("userOrgID"), "left")
       .dropDuplicates("userID")
       .withColumn("Tag", concat_ws(", ", col("additionalProperties.tag")))
+
     val userDataWithKarmaPoints = userData
       .join(weeklyClapsDF, userData("userID") === weeklyClapsDF("userid"), "left")
       .select(userData("*"), weeklyClapsDF("total_claps").alias("weekly_claps_day_before_yesterday"))
       .join(learningHourData, Seq("userID"), "left")
 
     val reportPath = s"${conf.userReportPath}/${today}"
-    //generateReport(fullReportDF, s"${reportPath}-full")
+
     val mdoWiseReportDF = userDataWithKarmaPoints
       .withColumn("Report_Last_Generated_On", currentDateTime)
       .select(
@@ -72,15 +72,18 @@ object UserReportModel extends AbsDashboardModel {
         col("userVerified").alias("Verified Karmayogi"),
         col("userStatus").alias("status"),
         col("weekly_claps_day_before_yesterday"),
-        col("total_event_learning_hours").alias("Event_Learning_Hr_After_19_Oct"),
-        col("total_content_learning_hours").alias("Content_Learning_Hr_After_19_Oct"),
-        col("total_learning_hours").alias("Total_Learning_Hr_After_19_Oct")
+        coalesce(col("total_event_learning_hours"), lit(0)).alias("Event_Learning_Hr_After_19_Oct"),
+        coalesce(col("total_content_learning_hours"), lit(0)).alias("Content_Learning_Hr_After_19_Oct"),
+        coalesce(col("total_learning_hours"), lit(0)).alias("Total_Learning_Hr_After_19_Oct")
       ).coalesce(1)
+
     val columnsToKeepInReport = mdoWiseReportDF.columns.filter(_ != "status")
-    // Repartition by mdo_id and write to CSV
-    //generateReport(mdoWiseReportDF, reportPath,"mdoid", "UserReport")
-      generateReport(mdoWiseReportDF.filter(col("status").cast("int") === 1).select(columnsToKeepInReport.map(col): _*).coalesce(1),reportPath,"mdoid", "UserReport")
-      // to be removed once new security job is created
+
+    generateReport(
+      mdoWiseReportDF.filter(col("status").cast("int") === 1).select(columnsToKeepInReport.map(col): _*).coalesce(1),
+      reportPath, "mdoid", "UserReport"
+    )
+
     if (conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
     }
@@ -108,20 +111,16 @@ object UserReportModel extends AbsDashboardModel {
         col("additionalProperties.externalSystemId").alias("external_system_id"),
         col("weekly_claps_day_before_yesterday"),
         col("marked_as_not_my_user"),
-        col("total_event_learning_hours"),
-        col("total_content_learning_hours"),
-        col("total_learning_hours"),
+        coalesce(col("total_event_learning_hours"), lit(0)),
+        coalesce(col("total_content_learning_hours"), lit(0)),
+        coalesce(col("total_learning_hours"), lit(0)),
         col("data_last_generated_on")
       )
 
     generateReport(df_warehouse.coalesce(1), s"${reportPath}-warehouse")
 
-    // changes for creating avro file for warehouse
     warehouseCache.write(df_warehouse.coalesce(1), conf.dwUserTable)
 
     Redis.closeRedisConnect()
-
   }
 }
-
-
