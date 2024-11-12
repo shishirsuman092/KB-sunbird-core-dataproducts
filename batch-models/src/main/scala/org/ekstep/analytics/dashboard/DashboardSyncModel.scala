@@ -364,7 +364,6 @@ object DashboardSyncModel extends AbsDashboardModel {
     println("nationalLearningWeekEndDate",nationalLearningWeekEndDate)
 
     // NLW events enrollment data Filter the DataFrame where enrolled_on_datetime is within NLW
-    val eventsEnrolmentDataDF = cache.load("eventEnrolmentDetails")
     val eventEnrolledDF = eventsEnrolmentDataDF
       .filter(col("enrolled_on_datetime") >= nationalLearningWeekStartDate && col("enrolled_on_datetime") <= nationalLearningWeekEndDate)
 
