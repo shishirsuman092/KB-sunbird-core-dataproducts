@@ -69,7 +69,7 @@ object UserReportModel extends AbsDashboardModel {
         col("userOrgID").alias("mdoid"),
         col("Report_Last_Generated_On"),
         from_unixtime(col("userOrgCreatedDate"), dateFormat).alias("MDO_Created_On"),
-        col("userVerified").alias("Verified Karmayogi"),
+        col("userProfileStatus").alias("Verified Karmayogi"),
         col("userStatus").alias("status"),
         col("weekly_claps_day_before_yesterday"),
         coalesce(col("total_event_learning_hours"), lit(0)).alias("Event_Learning_Hr_After_19_Oct"),
@@ -101,7 +101,7 @@ object UserReportModel extends AbsDashboardModel {
         col("personalDetails.mobile").alias("phone_number"),
         col("professionalDetails.group").alias("groups"),
         col("Tag").alias("tag"),
-        col("userVerified").alias("is_verified_karmayogi"),
+        col("userProfileStatus").alias("is_verified_karmayogi"),
         date_format(from_unixtime(col("userCreatedTimestamp")), dateTimeFormat).alias("user_registration_date"),
         col("role").alias("roles"),
         col("personalDetails.gender").alias("gender"),
@@ -119,6 +119,7 @@ object UserReportModel extends AbsDashboardModel {
 
     generateReport(df_warehouse.coalesce(1), s"${reportPath}-warehouse")
 
+    // changes for creating avro file for warehouse
     warehouseCache.write(df_warehouse.coalesce(1), conf.dwUserTable)
 
     Redis.closeRedisConnect()
