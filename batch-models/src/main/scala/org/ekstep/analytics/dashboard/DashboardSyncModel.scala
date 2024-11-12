@@ -503,15 +503,15 @@ object DashboardSyncModel extends AbsDashboardModel {
       .groupBy("user_id").agg(sum(when(col("duration") >= 180, col("event_duration_seconds")).otherwise(0)).alias("totalLearningSeconds"))
       .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2))
       .select("user_id", "totalLearningHours")
-    // cache.write(eventTotalLearningNLWByUserDF.coalesce(1), "nlwEventLearningHours")
-    Redis.dispatchDataFrame[String]("dashboard_event_learning_hours_nlw_by_user", eventTotalLearningNLWByUserDF, "user_id", "totalLearningHours")
+    cache.write(eventTotalLearningNLWByUserDF.coalesce(1), "nlwEventLearningHours")
+    //Redis.dispatchDataFrame[String]("dashboard_event_learning_hours_nlw_by_user", eventTotalLearningNLWByUserDF, "user_id", "totalLearningHours")
 
     eventTotalLearningNLWByUserDF.show(false)
 
     val enrolmentContentDurationNLWByUserDF = cbpCompletionWithDetailsDF.filter($"courseEnrolledTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseEnrolledTimestamp" <= nationalLearningWeekEndDateTimeEpoch && $"userID" =!= "").groupBy("userID").agg(sum(expr("(completionPercentage / 100) * courseDuration")).alias("totalLearningSeconds"))
       .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2)).select("userID", "totalLearningHours")
-    // cache.write(enrolmentContentDurationNLWByUserDF.coalesce(1), "nlwContentLearningHours")
-    Redis.dispatchDataFrame[String]("dashboard_content_learning_hours_nlw_by_user", enrolmentContentDurationNLWByUserDF, "userID", "totalLearningHours")
+    cache.write(enrolmentContentDurationNLWByUserDF.coalesce(1), "nlwContentLearningHours")
+    //Redis.dispatchDataFrame[String]("dashboard_content_learning_hours_nlw_by_user", enrolmentContentDurationNLWByUserDF, "userID", "totalLearningHours")
     println("eventTotalLearningNLWByUserDF cache write")
 
     // get the count for each courseID
