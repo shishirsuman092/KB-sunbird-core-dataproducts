@@ -4,7 +4,6 @@ import org.apache.spark.SparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
-import org.apache.spark.storage.StorageLevel
 import org.ekstep.analytics.dashboard.DashboardUtil._
 import org.ekstep.analytics.dashboard.DataUtil._
 import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig, Redis}
@@ -108,8 +107,6 @@ object UserActivityModel extends AbsDashboardModel {
       .withColumn("ArchivedOn", to_date(col("ArchivedOn"), dateFormat))
       .withColumn("Certificate_ID", col("certificateID"))
       .dropDuplicates("userID", "courseID", "batchID")
-
-    allCourseProgramCompletionWithDetailsDFWithRating.persist(StorageLevel.MEMORY_ONLY)
 
     // read acbp data and filter the cbp plan based on status
     val acbpDF = acbpDetailsDF().where(col("acbpStatus") === "Live")
@@ -220,8 +217,6 @@ object UserActivityModel extends AbsDashboardModel {
     val dwPostgresUrl = s"jdbc:postgresql://${conf.dwPostgresHost}/${conf.dwPostgresSchema}"
     truncateWarehouseTable(conf.dwUserActivityTable)
     saveDataframeToPostgresTable_With_Append(userActivityDF, dwPostgresUrl, conf.dwUserActivityTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
-
-    allCourseProgramCompletionWithDetailsDFWithRating.unpersist()
 
     Redis.closeRedisConnect()
   }
