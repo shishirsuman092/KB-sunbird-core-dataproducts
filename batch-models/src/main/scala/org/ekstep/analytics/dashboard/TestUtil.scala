@@ -82,6 +82,7 @@ object TestUtil extends Serializable {
       "dwPostgresCredential" -> "Password@12345678",
       "dwPostgresSchema" -> "warehouse",
 
+      "dwUserActivityTable" -> "user_activity",
       "dwUserTable" -> "user_detail",
       "dwCourseTable" -> "content",
       "dwEnrollmentsTable" -> "user_enrolments",
@@ -161,8 +162,8 @@ object TestUtil extends Serializable {
       "commsConsolePrarambhTags" -> "rojgaar,rozgaar,rozgar",
       "commsConsolePrarambhCbpIds" -> "do_113882965067743232154,do_1137468666262241281756,do_1139032976499261441156",
       "commsConsolePrarambhNCount" -> "2",
-      "nationalLearningWeekStart" -> "2024-06-01 00:00:00",
-      "nationalLearningWeekEnd" -> "2024-07-15 23:59:59",
+      "nationalLearningWeekStart" -> "2024-10-19 00:00:00",
+      "nationalLearningWeekEnd" -> "2024-10-27 23:59:59",
       "cassandraNLWUserLeaderboardTable" -> "nlw_user_leaderboard",
       "cassandraNLWMdoLeaderboardTable" -> "nlw_mdo_leaderboard",
       "anonymousAssessmentLoggedInUserContentIDs" -> "do_1141533540853432321675,do_1141533857591132161321,do_1141525365329264641663,do_1141527106280980481664",
