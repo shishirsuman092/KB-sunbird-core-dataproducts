@@ -66,7 +66,7 @@ object UserActivityModel extends AbsDashboardModel {
       lit("External Content").as("category"),
       lit("LIVE").as("courseStatus"))
 
-    var marketPlaceContentEnrolmentsDF = extractedDF.join(marketPlaceEnrolmentsDF, Seq("content_id"), "inner").durationFormat("courseDuration")
+    val marketPlaceContentEnrolmentsDF = extractedDF.join(marketPlaceEnrolmentsDF, Seq("content_id"), "inner").durationFormat("courseDuration")
       .withColumn("courseCompletedTimestamp", date_format(col("completedon"), dateTimeFormat))
       .withColumn("courseEnrolledTimestamp", date_format(col("enrolled_date"), dateTimeFormat))
       .withColumn("lastContentAccessTimestamp", lit("Not Available"))
