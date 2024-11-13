@@ -112,12 +112,12 @@ object DashboardSyncModel extends AbsDashboardModel {
     val (hierarchy1DF, cbpDetailsWithCompDF, cbpDetailsDF,
     cbpDetailsWithRatingDF) = contentDataFrames(orgDF, Seq("Course", "Program", "Blended Program", "Curated Program"))
     val cbpCompletionWithDetailsDF = allCourseProgramCompletionWithDetailsDataFrame(userCourseProgramCompletionDF, cbpDetailsDF, userOrgDF)
-
+    val eventsEnrolmentDataDF = cache.load("eventEnrolmentDetails")
     // update redis data for learner home page
-    updateLearnerHomePageData(orgDF, userOrgDF, userCourseProgramCompletionDF, cbpCompletionWithDetailsDF, cbpDetailsWithRatingDF)
+    updateLearnerHomePageData(orgDF, userOrgDF, userCourseProgramCompletionDF, cbpCompletionWithDetailsDF, cbpDetailsWithRatingDF, eventsEnrolmentDataDF)
 
     // update redis data for dashboards
-    dashboardRedisUpdates(orgRoleCount, activeUsers, allCourseProgramDetailsWithRatingDF, allCourseProgramCompletionWithDetailsDF, allCourseProgramCompetencyDF, cbpCompletionWithDetailsDF)
+    dashboardRedisUpdates(orgRoleCount, activeUsers, allCourseProgramDetailsWithRatingDF, allCourseProgramCompletionWithDetailsDF, allCourseProgramCompetencyDF, cbpCompletionWithDetailsDF, eventsEnrolmentDataDF)
 
     // update cbp top 10 reviews
     cbpTop10Reviews(allCourseProgramDetailsWithRatingDF)
@@ -126,7 +126,7 @@ object DashboardSyncModel extends AbsDashboardModel {
   }
 
   def dashboardRedisUpdates(orgRoleCount: DataFrame, activeUsers: DataFrame, allCourseProgramDetailsWithRatingDF: DataFrame,
-                            allCourseProgramCompletionWithDetailsDF: DataFrame, allCourseProgramCompetencyDF: DataFrame, cbpCompletionWithDetailsDF: DataFrame)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
+                            allCourseProgramCompletionWithDetailsDF: DataFrame, allCourseProgramCompetencyDF: DataFrame, cbpCompletionWithDetailsDF: DataFrame, eventsEnrolmentDataDF: DataFrame)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
     import spark.implicits._
     // new redis updates - start
     // MDO onboarded, with atleast one MDO_ADMIN/MDO_LEADER
@@ -221,9 +221,6 @@ object DashboardSyncModel extends AbsDashboardModel {
     val twelveMonthsAgoLocalDateTime = twelveMonthsAgo.atStartOfDay()
     // Get the epoch time in milliseconds with IST offset
     val twelveMonthsAgoEpochMillis = twelveMonthsAgoLocalDateTime.toEpochSecond(java.time.ZoneOffset.ofHoursMinutes(5, 30))
-    println("=====================")
-    println(twelveMonthsAgoEpochMillis)
-    println("======================================")
     val liveRetiredCourseEnrolmentsInLast12MonthsDF = allCourseProgramCompletionWithDetailsDF.where(expr(s"category='Course' AND courseStatus IN ('Live', 'Retired') AND userStatus=1 AND courseEnrolledTimestamp >= ${twelveMonthsAgoEpochMillis}"))
     // started + not-started = enrolled
     val liveRetiredCourseNotStartedDF = liveRetiredCourseEnrolmentDF.where(expr("dbCompletionStatus=0"))
@@ -356,7 +353,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     val nationalLearningWeekStartDateTimeEpoch = nationalLearningWeekStartOffsetDateTime.toEpochSecond
     val nationalLearningWeekEndDateTimeEpoch = nationalLearningWeekEndOffsetDateTime.toEpochSecond
 
-    val eventsEnrolmentDataDF = cache.load("eventEnrolmentDetails")
+
     /* total certificates issued yesterday across all types of content */
     val certificateDateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")
     val eventsDateTimeFormatter=DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
@@ -381,7 +378,6 @@ object DashboardSyncModel extends AbsDashboardModel {
       .getLong(0)
 
     /* total enrolments that week across all types of content */
-    println(liveRetiredContentEnrolmentDF.count())
     val enrolmentContentNLWDF = liveRetiredContentEnrolmentDF.filter($"courseEnrolledTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseEnrolledTimestamp" <= nationalLearningWeekEndDateTimeEpoch)
     val enrolmentContentNLWCountDF = enrolmentContentNLWDF.agg(count("*").alias("count"))
     val enrolmentContentNLWCount = enrolmentContentNLWCountDF.select("count").first().getLong(0)
@@ -437,9 +433,6 @@ object DashboardSyncModel extends AbsDashboardModel {
     /* total certificates issued that week across all types of content */
     val nationalLearningWeekStartDateTimeString = nationalLearningWeekStartOffsetDateTime.format(certificateDateTimeFormatter)
     val nationalLearningWeekEndDateTimeString = nationalLearningWeekEndOffsetDateTime.format(certificateDateTimeFormatter)
-    println("=================")
-    println(nationalLearningWeekStartDateTimeString)
-    println(nationalLearningWeekEndDateTimeString)
 
     val eventCertificatesGeneratedNLWDF = eventsEnrolmentDataDF
       .filter(col("status") === "completed")
@@ -505,7 +498,6 @@ object DashboardSyncModel extends AbsDashboardModel {
       .withColumn("minutes", split(col("event_duration"), ":").getItem(1).cast("int"))
       .withColumn("seconds", split(col("event_duration"), ":").getItem(2).cast("int"))
       .withColumn("event_duration_seconds", col("hours") * 3600 + col("minutes") * 60 + col("seconds"))*/
-
     val eventTotalLearningNLWByUserDF = eventsEnrolmentDataDF.filter(col("duration").isNotNull)
       .groupBy("user_id").agg(sum(when(col("duration") >= 180, col("event_duration_seconds")).otherwise(0)).alias("totalLearningSeconds"))
       .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2))
@@ -630,34 +622,34 @@ object DashboardSyncModel extends AbsDashboardModel {
     Redis.dispatchDataFrame[String]("dashboard_top_10_courses_by_completion_by_course_org", combinedDFByCBP, "courseOrgID:content", "sorted_courseIDs")
 
     // Anonymous Assessment KPIs START
-    val courseIDs = conf.anonymousAssessmentLoggedInUserContentIDs.split(",").toSeq
-    val anonymousAssessmentIDs = conf.anonymousAssessmentNonLoggedInUserAssessmentIDs.split(",").toSeq
-    val loggedInEnrolmentData = cache.load("enrolment")
-      .where(expr("active=true"))
-      .select(col("status"), col("userid"), col("courseid"), col("issued_certificates"))
-      .filter(col("courseid").isin(courseIDs: _*))
+     val courseIDs = conf.anonymousAssessmentLoggedInUserContentIDs.split(",").toSeq
+     val anonymousAssessmentIDs = conf.anonymousAssessmentNonLoggedInUserAssessmentIDs.split(",").toSeq
+     val loggedInEnrolmentData = cache.load("enrolment")
+       .where(expr("active=true"))
+       .select(col("status"), col("userid"), col("courseid"), col("issued_certificates"))
+       .filter(col("courseid").isin(courseIDs: _*))
 
-    val nonLoggedInUserConpletionWIthAssessmentData = cassandraTableAsDataFrame(conf.cassandraUserKeyspace,conf.cassandraPublicUserAssessmentDataTable)
-      .select(col("userid"), col("status"), col("issued_certificates"), col("assessmentid"))
-      .filter(col("assessmentid").isin(anonymousAssessmentIDs: _*))
+     val nonLoggedInUserConpletionWIthAssessmentData = cassandraTableAsDataFrame(conf.cassandraUserKeyspace,conf.cassandraPublicUserAssessmentDataTable)
+       .select(col("userid"), col("status"), col("issued_certificates"), col("assessmentid"))
+       .filter(col("assessmentid").isin(anonymousAssessmentIDs: _*))
 
-    val nonLoggedInUserAccessCount = nonLoggedInUserAccessCountDataFrame().select(col("user_count")).first().getLong(0)
-    val loggedInUserAccessCount = loggedInUserAccessCountDataFrame().select(col("user_count")).first().getLong(0)
-    val loggedInUserEnrolmentsCount = loggedInEnrolmentData
-      .filter(col("status").isin(0, 1, 2)).agg(count("userid").alias("distinct_user_count"))
-      .select(col("distinct_user_count")).first().getLong(0)
-    val loggedInUserCompletionWithCertificateCount = loggedInEnrolmentData
-      .filter(col("status") === 2 && size(col("issued_certificates")) > 0).agg(count("userid").alias("distinct_user_count"))
-      .select(col("distinct_user_count")).first().getLong(0)
-    val nonLoggedInUserCompletionWithCertificateCount = nonLoggedInUserConpletionWIthAssessmentData
-      .filter(col("status") === "SUBMITTED" && size(col("issued_certificates")) > 0).agg(count("userid").alias("distinct_user_count"))
-      .select(col("distinct_user_count")).first().getLong(0)
+      val nonLoggedInUserAccessCount = nonLoggedInUserAccessCountDataFrame().select(col("user_count")).first().getLong(0)
+      val loggedInUserAccessCount = loggedInUserAccessCountDataFrame().select(col("user_count")).first().getLong(0)
+      val loggedInUserEnrolmentsCount = loggedInEnrolmentData
+        .filter(col("status").isin(0, 1, 2)).agg(count("userid").alias("distinct_user_count"))
+        .select(col("distinct_user_count")).first().getLong(0)
+      val loggedInUserCompletionWithCertificateCount = loggedInEnrolmentData
+        .filter(col("status") === 2 && size(col("issued_certificates")) > 0).agg(count("userid").alias("distinct_user_count"))
+        .select(col("distinct_user_count")).first().getLong(0)
+      val nonLoggedInUserCompletionWithCertificateCount = nonLoggedInUserConpletionWIthAssessmentData
+        .filter(col("status") === "SUBMITTED" && size(col("issued_certificates")) > 0).agg(count("userid").alias("distinct_user_count"))
+        .select(col("distinct_user_count")).first().getLong(0)
 
-    Redis.update("dashboards_lu_assessment_access_count", loggedInUserAccessCount.toString)
-    Redis.update("dashboards_lu_assessment_enrolment_count", loggedInUserEnrolmentsCount.toString)
-    Redis.update("dashboards_lu_assessment_certification_count", loggedInUserCompletionWithCertificateCount.toString)
-    Redis.update("dashboards_nlu_anonymous_assessment_access_count", nonLoggedInUserAccessCount.toString)
-    Redis.update("dashboards_nlu_anonymous_assessment_certification_count", nonLoggedInUserCompletionWithCertificateCount.toString)
+      Redis.update("dashboards_lu_assessment_access_count", loggedInUserAccessCount.toString)
+       Redis.update("dashboards_lu_assessment_enrolment_count", loggedInUserEnrolmentsCount.toString)
+       Redis.update("dashboards_lu_assessment_certification_count", loggedInUserCompletionWithCertificateCount.toString)
+       Redis.update("dashboards_nlu_anonymous_assessment_access_count", nonLoggedInUserAccessCount.toString)
+       Redis.update("dashboards_nlu_anonymous_assessment_certification_count", nonLoggedInUserCompletionWithCertificateCount.toString)
 
     // Anonymous Assessment KPIs END
 
@@ -905,7 +897,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     averageMonthlyActiveUserCount
   }
 
-  def updateLearnerHomePageData(orgDF: DataFrame, userOrgDF: DataFrame, userCourseProgramCompletionDF: DataFrame, cbpCompletionWithDetailsDF: DataFrame, cbpDetailsWithRatingDF: DataFrame)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
+  def updateLearnerHomePageData(orgDF: DataFrame, userOrgDF: DataFrame, userCourseProgramCompletionDF: DataFrame, cbpCompletionWithDetailsDF: DataFrame, cbpDetailsWithRatingDF: DataFrame, eventsEnrolmentDataDF: DataFrame)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
 
     //We only want the date here as the intent is to run this part of the script only once a day. The competency metrics
     // script may run a second time if we run into issues and this function should be skipped in that case.
@@ -916,11 +908,11 @@ object DashboardSyncModel extends AbsDashboardModel {
     print("The last run date is " + lastRunDate + "\n")
     print("current Date is" + currentDateString + "\n")
 
-    if(!lastRunDate.equals(currentDateString)) {
-      learnerHPRedisCalculations(cbpCompletionWithDetailsDF, cbpDetailsWithRatingDF)
-    } else {
-      print("This is a second run today and the computation and redis key updates are not required")
-    }
+     if(!lastRunDate.equals(currentDateString)) {
+    learnerHPRedisCalculations(cbpCompletionWithDetailsDF, cbpDetailsWithRatingDF, userOrgDF, eventsEnrolmentDataDF)
+      } else {
+        print("This is a second run today and the computation and redis key updates are not required")
+      }
 
     Redis.update("lhp_lastRunDate", currentDateString)
 
@@ -940,16 +932,33 @@ object DashboardSyncModel extends AbsDashboardModel {
       .select(s"userOrgID", "totalLearningHours")
   }
 
-  def processLearningHours(courseProgramCompletionWithDetailsDF: DataFrame)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
+  def processLearningHours(courseProgramCompletionWithDetailsDF: DataFrame, userOrgDF: DataFrame, eventsEnrolmentDataDF:DataFrame)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
 
-    // The courseDuration is coming in seconds from ES, so converting it to hours. Also courseProgress is number of leaf nodes
-    // consumed and we should look at completion percentage as the % of learning hours
-    val totalLearningHoursTillTodayByOrg = courseProgramCompletionWithDetailsDF
+    // The courseDuration is coming in seconds from ES, so converting it to hours. We are considering only the completed content duration for learning hours
+    val totalContentLearningHoursTillTodayByOrg = courseProgramCompletionWithDetailsDF
       .filter("userOrgID IS NOT NULL AND TRIM(userOrgID) != ''")
+      .filter("dbCompletionStatus = 2")
+      .filter("certificateID IS NOT NULL")// Only consider rows where dbCompletionStatus is 2 and certificate is generated
       .groupBy("userOrgID")
-      .agg(sum(expr("(completionPercentage / 100) * courseDuration")).alias("totalLearningSeconds"))
-      .withColumn("totalLearningHours", col("totalLearningSeconds") / 3600)
+      .agg(
+        sum("courseDuration").alias("totalLearningSeconds"))
+      .withColumn("totalLearningHours", round(col("totalLearningSeconds") / 3600, 2))  // Convert to hours and round to 2 decimal places
       .drop("totalLearningSeconds")
+
+    // events learning hours
+    val eventsEnrolmentWithUserDetails = eventsEnrolmentDataDF.join(userOrgDF.withColumnRenamed("userID", "user_id"), Seq("user_id"), "inner")
+      .select(eventsEnrolmentDataDF("*"), userOrgDF("userOrgID"))
+    val eventTotalLearningHoursByUseOrgrDF = eventsEnrolmentWithUserDetails.filter(col("duration").isNotNull)
+      .groupBy("userOrgID").agg(sum(when(col("duration") >= 180, col("event_duration_seconds")).otherwise(0)).alias("totalLearningSeconds"))
+      .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2))
+      .select("userOrgID", "totalLearningHours")
+
+    // sum of both content and event learning hours for each org
+    val totalLearningHoursTillTodayByOrg = totalContentLearningHoursTillTodayByOrg.withColumnRenamed("totalLearningHours", "contentLearningHours")
+      .join(eventTotalLearningHoursByUseOrgrDF.withColumnRenamed("totalLearningHours", "eventLearningHours"), Seq("userOrgID"), "outer")  // Using outer join to ensure we capture all userOrgID's from both dataframes
+      .na.fill(0)  // Replace any nulls with 0 (in case userOrgID exists in one dataframe but not the other)
+      .withColumn("totalLearningHours", col("contentLearningHours") + col("eventLearningHours"))  // Sum the learning hours from both DataFrames
+      .select("userOrgID", "totalLearningHours")
 
     val totalLearningHoursTillYesterdayByOrg = Redis.getMapAsDataFrame("lhp_learningHoursTillToday", Schema.totalLearningHoursSchema)
       .withColumn("totalLearningHours", col("totalLearningHours").cast(DoubleType))
@@ -1094,7 +1103,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     Redis.update("lhp_mostEnrolledTag", mostEnrolledTag + "\n")
   }
 
-  def learnerHPRedisCalculations(cbpCompletionWithDetailsDF: DataFrame, cbpDetailsWithRatingDF: DataFrame)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
+  def learnerHPRedisCalculations(cbpCompletionWithDetailsDF: DataFrame, cbpDetailsWithRatingDF: DataFrame, userOrgDF: DataFrame, eventsEnrolmentDataDF: DataFrame)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
     val courseProgramCompletionWithDetailsDF = cbpCompletionWithDetailsDF.where(expr("category IN ('Course', 'Program')"))
 
     // do home page data update
@@ -1104,7 +1113,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     Redis.updateMapField("lhp_trending", "across:under_30_mins", coursesUnder30mins)
 
     // calculate and save learning hours to redis
-    processLearningHours(courseProgramCompletionWithDetailsDF)
+    processLearningHours(courseProgramCompletionWithDetailsDF, userOrgDF, eventsEnrolmentDataDF)
 
     // calculate and save certifications to redis
     processCertifications(courseProgramCompletionWithDetailsDF)
