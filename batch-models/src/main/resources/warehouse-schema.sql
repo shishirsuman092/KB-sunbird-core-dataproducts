@@ -212,3 +212,4 @@ ALTER TABLE events_enrolment ADD COLUMN event_duration character varying(255);
 ALTER TABLE events_enrolment ADD COLUMN progress_duration character varying(255);
 ALTER TABLE events_enrolment ADD COLUMN completed_on_datetime character varying(255);
 ALTER TABLE events_enrolment ADD COLUMN duration character varying(255);
+alter table user_detail alter column is_verified_karmayogi type character varying(15);

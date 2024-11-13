@@ -1,6 +1,7 @@
 package org.ekstep.analytics.job
 
 import org.ekstep.analytics.dashboard.DashboardSyncJob
+import org.ekstep.analytics.dashboard.activity.user.UserActivityJob
 import org.ekstep.analytics.dashboard.bq.BqDataJob
 import org.ekstep.analytics.dashboard.exhaust.DataExhaustJob
 import org.ekstep.analytics.dashboard.karma.points.KarmaPointsJob
@@ -126,6 +127,8 @@ object JobFactory {
         NationalLearningWeekJob
       case "monthly-requests" =>
         MonthlyRequestJob
+      case "user-activity" =>
+        UserActivityJob
       case _ =>
         reflectModule(jobType);
     }
