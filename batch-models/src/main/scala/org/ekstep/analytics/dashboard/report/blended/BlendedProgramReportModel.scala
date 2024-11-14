@@ -182,6 +182,7 @@ object BlendedProgramReportModel extends AbsDashboardModel {
         col("bpBatchID"),
         col("bpIssuedCertificateCount"),
         col("fullName").alias("Name"),
+        col("userStatus").alias("status"),
         col("userPrimaryEmail").alias("Email"),
         col("userMobile").alias("Phone_Number"),
         col("maskedEmail"),
@@ -233,15 +234,16 @@ object BlendedProgramReportModel extends AbsDashboardModel {
     // generateReport(fullReportDF, s"${reportPath}-full")
     val mdoReportDF = fullReportDF
       .select(
-        col("Name"),col("Email"),col("Phone_Number"),col("Designation"),col("Group"),col("Gender"),
+        col("Name"),col("Email"),col("Phone_Number"),col("Designation"),col("Group"),col("Gender"),col("status"),
         col("Category"),col("Tag"),col("Ministry"),col("Department"),col("Organization"),col("Provider_Name"),col("Program_Name"),col("Batch_Name"),
         col("Batch_Location"),col("Batch_Start_Date"),col("Batch_End_Date"),col("Enrolled_On"),col("Component_Name"),col("Component_Type"),
         col("Component_Mode"),col("Status"),col("Component_Duration"),col("Component_Progress_Percentage"),col("Component_Completed_On"),
         col("Last_Accessed_On"),col("Offline_Session_Date"),col("Offline_Session_Start_Time"),col("Offline_Session_End_Time"),col("Offline_Attendance_Status"),
         col("Instructor(s)_Name"),col("Program_Coordinator_Name"),col("Certificate_Generated"),col("mdoid"),col("Report_Last_Generated_On")
       )
+    val columnsToKeepInMDOReport = mdoReportDF.columns.filter(_ != "status")
     // mdo wise
-    generateReport(mdoReportDF,  reportPathMDO,"mdoid", "BlendedProgramReport")
+    generateReport(mdoReportDF.filter(col("status").cast("int") === 1).select(columnsToKeepInMDOReport.map(col): _*),  reportPathMDO,"mdoid", "BlendedProgramReport")
     // to be removed once new security job is created
     if (conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", reportPathMDO)
@@ -249,14 +251,15 @@ object BlendedProgramReportModel extends AbsDashboardModel {
     // cbp wise
     val cbpReportDF = fullReportDF
       .select(
-        col("bpOrgID").alias("mdoid"),col("Name"),col("maskedEmail").alias("Email"),col("maskedPhone").alias("Phone_Number"),col("Designation"),col("Group"),
+        col("bpOrgID").alias("mdoid"),col("Name"),col("maskedEmail").alias("Email"),col("maskedPhone").alias("Phone_Number"),col("Designation"),col("Group"),col("status"),
         col("Gender"),col("Category"),col("Tag"),col("Ministry"), col("Department"),col("Organization"),col("Provider_Name"),col("Program_Name"),col("Batch_Name"),
         col("Batch_Location"),col("Batch_Start_Date"),col("Batch_End_Date"),col("Enrolled_On"),col("Component_Name"),col("Component_Type"),col("Component_Mode"),
         col("Status"),col("Component_Duration"),col("Component_Progress_Percentage"),col("Component_Completed_On"),col("Last_Accessed_On"),
         col("Offline_Session_Date"),col("Offline_Session_Start_Time"),col("Offline_Session_End_Time"),col("Offline_Attendance_Status"),col("Instructor(s)_Name"),
         col("Program_Coordinator_Name"),col("Certificate_Generated"),col("Report_Last_Generated_On")
       )
-    generateAndSyncReports(cbpReportDF, "mdoid", reportPathCBP, "BlendedProgramReport")
+    val columnsToKeepInCBPReport = cbpReportDF.columns.filter(_ != "status")
+    generateAndSyncReports(cbpReportDF.filter(col("status").cast("int") === 1).select(columnsToKeepInCBPReport.map(col): _*), "mdoid", reportPathCBP, "BlendedProgramReport")
 
 
     val df_warehouse = fullDF

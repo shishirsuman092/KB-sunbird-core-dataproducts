@@ -37,7 +37,7 @@ object CommsReportModel extends AbsDashboardModel {
       .csv(s"${conf.localReportDir}/${conf.userReportPath}/${today}-warehouse")
       //.withColumn("registrationDate", to_date(col("user_registration_date"), dateFormat1))
       .withColumn("registrationDate",  date_format(col("user_registration_date"), "dd/MM/yyyy HH:mm:ss a"))
-      .select("user_id", "mdo_id", "full_name", "email", "phone_number", "roles", "registrationDate", "tag", "user_registration_date")
+      .select("user_id", "mdo_id", "status", "full_name", "email", "phone_number", "roles", "registrationDate", "tag", "user_registration_date")
       .join(orgDF, Seq("mdo_id"), "left")
 
     val rawEnrollmentsDF = spark.read.option("header", "true")
@@ -70,12 +70,14 @@ object CommsReportModel extends AbsDashboardModel {
         col("department").alias("Department"),
         col("organization").alias("Organization"),
         col("roles").alias("Role"),
+        col("status"),
         col("userCount").alias("Total_Users"),
         col("completionCount").alias("Total_Content_Completion"),
         col("completionPerUser").alias("Content_Completion_Per_User"),
         col("Last_Updated_On")
       )
-    generateReport(mdoCompletionRateWithAdminDetailsDF, s"${commsConsoleReportPath}/AllMDOsContentCompletion", fileName="AllMDOsContentCompletion")
+    val columnsToKeepInMDOCompletionRateReport = mdoCompletionRateWithAdminDetailsDF.columns.filter(_ != "status")
+    generateReport(mdoCompletionRateWithAdminDetailsDF.filter(col("status").cast("int") === 1).select(columnsToKeepInMDOCompletionRateReport.map(col): _*), s"${commsConsoleReportPath}/AllMDOsContentCompletion", fileName="AllMDOsContentCompletion")
 
     val usersWithEnrollments = enrollmentsDF.select("user_id").distinct()
     //users who have not been enrolled in any cbp
@@ -85,6 +87,7 @@ object CommsReportModel extends AbsDashboardModel {
       .select(
         col("full_name").alias("Name"),
         col("email").alias("Email"),
+        col("status"),
         col("phone_number").alias("Phone_Number"),
         col("ministry").alias("Ministry"),
         col("department").alias("Department"),
@@ -92,7 +95,8 @@ object CommsReportModel extends AbsDashboardModel {
         col("user_registration_date").alias("User_Registration_Date"),
         col("Last_Updated_On")
       )
-    generateReport(usersWithoutAnyEnrollmentsWithUserDetailsDF, s"${commsConsoleReportPath}/UsersOnboardedNotSignedUpAnyContent", fileName="UsersOnboardedNotSignedUpAnyContent")
+    val columnsToKeepInUsersWithourEnrolmentsReport = usersWithoutAnyEnrollmentsWithUserDetailsDF.columns.filter(_ != "status")
+    generateReport(usersWithoutAnyEnrollmentsWithUserDetailsDF.filter(col("status").cast("int") === 1).select(columnsToKeepInUsersWithourEnrolmentsReport.map(col): _*), s"${commsConsoleReportPath}/UsersOnboardedNotSignedUpAnyContent", fileName="UsersOnboardedNotSignedUpAnyContent")
 
     // users created in last 15 days, but not enrolled in any cbp
     val usersCreatedInLastNDaysDF = userDF.filter(col("user_registration_date").between(dateNDaysAgo, currentDate)).select("user_id").distinct()
@@ -102,6 +106,7 @@ object CommsReportModel extends AbsDashboardModel {
       .select(
         col("full_name").alias("Name"),
         col("email").alias("Email"),
+        col("status"),
         col("phone_number").alias("Phone_Number"),
         col("ministry").alias("Ministry"),
         col("department").alias("Department"),
@@ -109,7 +114,8 @@ object CommsReportModel extends AbsDashboardModel {
         col("user_registration_date").alias("User_Registration_Date"),
         col("Last_Updated_On")
       )
-    generateReport(usersCreatedInLastNDaysWithoutEnrollmentsWithUserDetailsDF, s"${commsConsoleReportPath}/UsersOnboardedLast15DaysNotSignedUpAnyContent", fileName="UsersOnboardedLast15DaysNotSignedUpAnyContent")
+    val columnsToKeepInUsersCreatedReport = usersCreatedInLastNDaysWithoutEnrollmentsWithUserDetailsDF.columns.filter(_ != "status")
+    generateReport(usersCreatedInLastNDaysWithoutEnrollmentsWithUserDetailsDF.filter(col("status").cast("int") === 1).select(columnsToKeepInUsersCreatedReport.map(col): _*), s"${commsConsoleReportPath}/UsersOnboardedLast15DaysNotSignedUpAnyContent", fileName="UsersOnboardedLast15DaysNotSignedUpAnyContent")
 
     //top 60 users ranked by cbp completion in last 15 days
     val topXCompletionsInNDays = enrollmentsDF.filter(col("content_last_accessed_on").between(dateNDaysAgo, currentDate))
@@ -123,6 +129,7 @@ object CommsReportModel extends AbsDashboardModel {
       .select(
         col("full_name").alias("Name"),
         col("email").alias("Email"),
+        col("status"),
         col("phone_number").alias("Phone_Number"),
         col("ministry").alias("Ministry"),
         col("department").alias("Department"),
@@ -131,7 +138,8 @@ object CommsReportModel extends AbsDashboardModel {
         col("completionCount").alias("Content_Completion"),
         col("Last_Updated_On")
       )
-    generateReport(topXCompletionsInNDays, s"${commsConsoleReportPath}/Top1LakhUsersContentCompletionLast15Days", fileName="Top1LakhUsersContentCompletionLast15Days")
+    val columnsToKeepInTopXCompletionReport = topXCompletionsInNDays.columns.filter(_ != "status")
+    generateReport(topXCompletionsInNDays.filter(col("status").cast("int") === 1).select(columnsToKeepInTopXCompletionReport.map(col): _*), s"${commsConsoleReportPath}/Top1LakhUsersContentCompletionLast15Days", fileName="Top1LakhUsersContentCompletionLast15Days")
 
     val prarambhCourses = conf.commsConsolePrarambhCbpIds.split(",").map(_.trim).toList
     val rozgarTags =  conf.commsConsolePrarambhTags.split(",").map(_.trim).toList
@@ -153,6 +161,7 @@ object CommsReportModel extends AbsDashboardModel {
       .select(
         col("full_name").alias("Name"),
         col("email").alias("Email"),
+        col("status"),
         col("phone_number").alias("Phone_Number"),
         col("ministry").alias("Ministry"),
         col("department").alias("Department"),
@@ -163,9 +172,12 @@ object CommsReportModel extends AbsDashboardModel {
         col("prarambhCompletionCount")
       )
 
-    generateReport(prarambhUserDataWithCompletionCountsDF.filter(col("prarambhCompletionCount") === prarambhCompletionCount).drop("prarambhCompletionCount")
+    val columnsToKeepInPrarambhCourseReport = prarambhUserDataWithCompletionCountsDF.columns.filter(_ != "status")
+    generateReport(prarambhUserDataWithCompletionCountsDF.filter(col("prarambhCompletionCount") === prarambhCompletionCount).filter(col("status").cast("int") === 1).select(columnsToKeepInPrarambhCourseReport.map(col): _*)
+      .drop("prarambhCompletionCount")
       , s"${commsConsoleReportPath}/UsersCompleted6PrarambhCoursesPendingFullCompletion", fileName="UsersCompleted6PrarambhCoursesPendingFullCompletion")
-    generateReport(prarambhUserDataWithCompletionCountsDF.filter(col("prarambhCompletionCount") === prarambhCourseCount).drop("prarambhCompletionCount")
+    generateReport(prarambhUserDataWithCompletionCountsDF.filter(col("prarambhCompletionCount") === prarambhCourseCount).filter(col("status").cast("int") === 1).select(columnsToKeepInPrarambhCourseReport.map(col): _*)
+      .drop("prarambhCompletionCount")
       , s"${commsConsoleReportPath}/UsersFinishedEntirePrarambhModule", fileName="UsersFinishedEntirePrarambhModule")
 
     syncReports(s"${conf.localReportDir}/${commsConsoleReportPath}", commsConsoleReportPath)
