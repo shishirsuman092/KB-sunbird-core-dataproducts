@@ -31,19 +31,13 @@ object UserActivityModel extends AbsDashboardModel {
     // Get course data first
     val allCourseProgramDetailsDF = contentWithOrgDetailsDataFrame(orgDF, Seq("Course", "Program", "Blended Program", "CuratedCollections", "Curated Program"))
 
-
     /*
-     * "userID", "courseID", "batchID", "courseProgress", "dbCompletionStatus", "courseCompletedTimestamp","courseEnrolledTimestamp", "firstCompletedOn", "certificateGeneratedOn"
+     * "userID", "courseID", "batchID", "dbCompletionStatus", "courseCompletedTimestamp","courseEnrolledTimestamp", "firstCompletedOn", "certificateGeneratedOn"
      */
     val userEnrolmentDF = userCourseProgramCompletionDataFrameForUserActivity()
 
-    show(userEnrolmentDF, "userEnrolmentDF")
-
-    //use allCourseProgramDetailsDFWithOrgName below instead of allCourseProgramDetailsDF after adding orgname alias above
-    //val allCourseProgramCompletionWithDetailsDF = allCourseProgramCompletionWithDetailsDataFrame(userEnrolmentDF, allCourseProgramDetailsDF, userDataDF)
-
-    val categoryList = allCourseProgramDetailsDF.select("category").distinct().map(_.getString(0)).filter(_.nonEmpty).collectAsList()
-    val allCourseProgramCompletionWithDetailsDF = userEnrolmentDF.join(allCourseProgramDetailsDF, Seq("courseID"), "left")
+   val categoryList = allCourseProgramDetailsDF.select("category").distinct().map(_.getString(0)).filter(_.nonEmpty).collectAsList()
+   val allCourseProgramCompletionWithDetailsDF = userEnrolmentDF.join(allCourseProgramDetailsDF, Seq("courseID"), "left")
       .filter(col("category").isInCollection(categoryList))
       .join(userOrgDF, Seq("userID"), "left")
 
@@ -70,7 +64,6 @@ object UserActivityModel extends AbsDashboardModel {
       .na.fill("", Seq("certificateGeneratedOn"))
 
     val marketPlaceEnrolmentsWithUserDetailsDF = marketPlaceContentEnrolmentsDF.join(userDataDF, Seq("userID"), "left")
-
 
     val df = allCourseProgramCompletionWithDetailsDF
       .withColumn("completedOn", date_format(col("courseCompletedTimestamp"), dateTimeFormat))
