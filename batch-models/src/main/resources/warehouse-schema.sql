@@ -213,3 +213,20 @@ ALTER TABLE events_enrolment ADD COLUMN progress_duration character varying(255)
 ALTER TABLE events_enrolment ADD COLUMN completed_on_datetime character varying(255);
 ALTER TABLE events_enrolment ADD COLUMN duration character varying(255);
 alter table user_detail alter column is_verified_karmayogi type character varying(15);
+
+CREATE TABLE user_activity (
+  id SERIAL PRIMARY KEY NOT NULL,
+  org_id character varying(255),
+  user_id character varying(255),
+  type_identifier character varying(100),
+  batch_id character varying(255),
+  type character varying(50),
+  status character varying(20),
+  updated_date timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  created_date timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  certificate_generated_on timestamp without time zone,
+  completed_on timestamp without time zone,
+  enrolled_on timestamp without time zone
+);
+
+alter table user_activity add CONSTRAINT unique_user_type UNIQUE (user_id,type_identifier,batch_id);
