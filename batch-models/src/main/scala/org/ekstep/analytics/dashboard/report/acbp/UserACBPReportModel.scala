@@ -26,7 +26,7 @@ object UserACBPReportModel extends AbsDashboardModel {
       .withColumn("group", coalesce(col("professionalDetails.group"), lit("")))
       .withColumn("userPrimaryEmail", col("personalDetails.primaryEmail"))
       .withColumn("userMobile", col("personalDetails.mobile"))
-      .select("userID", "fullName", "userPrimaryEmail", "userMobile", "userOrgID", "ministry_name", "dept_name", "userOrgName", "designation", "group")
+      .select("userID", "fullName", "userStatus", "userPrimaryEmail", "userMobile", "userOrgID", "ministry_name", "dept_name", "userOrgName", "designation", "group")
 
     // get course details and course enrolment data frames
     val hierarchyDF = contentHierarchyDataFrame()
@@ -38,7 +38,7 @@ object UserACBPReportModel extends AbsDashboardModel {
     // get ACBP details data frame
     val acbpDF = acbpDetailsDF()
 
-    val selectColumns = Seq("userID", "fullName", "userPrimaryEmail", "userMobile", "designation", "group", "userOrgID", "ministry_name", "dept_name", "userOrgName", "acbpID",
+    val selectColumns = Seq("userID", "fullName", "userPrimaryEmail", "userMobile", "designation", "group", "userOrgID", "ministry_name", "dept_name", "userOrgName", "userStatus", "acbpID",
       "assignmentType", "completionDueDate", "allocatedOn", "acbpCourseIDList","acbpStatus", "acbpCreatedBy","cbPlanName")
     val acbpAllotmentDF = explodedACBPDetails(acbpDF, userDataDF, selectColumns)
 
@@ -102,13 +102,15 @@ object UserACBPReportModel extends AbsDashboardModel {
         col("currentProgress").alias("Current Progress"),
         col("completionDueDate").alias("Due Date of Completion"),
         col("courseCompletedTimestamp").alias("Actual Date of Completion"),
+        col("userStatus").alias("status"),
         col("userOrgID").alias("mdoid")
       ).withColumn("Report_Last_Generated_On", currentDateTime)
       .repartition(1)  // repartitioning here resolves a memory issue
 
+    val columnsToKeepInEnrolmentReport = enrolmentReportDF.columns.filter(_ != "status")
     val reportPath = s"${conf.acbpReportPath}/${today}"
-    generateReport(enrolmentReportDF.drop("mdoid"), s"${reportPath}/CBPEnrollmentReport", fileName="CBPEnrollmentReport")
-    generateReport(enrolmentReportDF,  s"${conf.acbpMdoEnrolmentReportPath}/${today}","mdoid", "CBPEnrollmentReport")
+    generateReport(enrolmentReportDF.filter(col("status").cast("int") === 1).select(columnsToKeepInEnrolmentReport.map(col): _*).drop("mdoid").coalesce(1), s"${reportPath}/CBPEnrollmentReport", fileName="CBPEnrollmentReport")
+    generateReport(enrolmentReportDF.filter(col("status").cast("int") === 1).select(columnsToKeepInEnrolmentReport.map(col): _*).coalesce(1),  s"${conf.acbpMdoEnrolmentReportPath}/${today}","mdoid", "CBPEnrollmentReport")
     // to be removed once new security job is created
     if (conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", s"${conf.acbpMdoEnrolmentReportPath}/${today}")
@@ -119,7 +121,7 @@ object UserACBPReportModel extends AbsDashboardModel {
     val userSummaryDataDF = acbpEnrolmentDF
       .withColumn("completionDueDateLong", expr("completionDueDate + INTERVAL 24 HOURS").cast(LongType))
       .withColumn("courseCompletedTimestampLong", col("courseCompletedTimestamp").cast(LongType))
-      .groupBy("userID", "fullName", "userPrimaryEmail", "userMobile", "designation", "group", "userOrgID", "ministry_name", "dept_name", "userOrgName")
+      .groupBy("userID", "fullName", "userPrimaryEmail", "userMobile", "designation", "group", "userOrgID", "ministry_name", "dept_name", "userOrgName", "userStatus")
       .agg(
         count("courseID").alias("allocatedCount"),
         expr("SUM(CASE WHEN dbCompletionStatus=2 THEN 1 ELSE 0 END)").alias("completedCount"),
@@ -139,10 +141,12 @@ object UserACBPReportModel extends AbsDashboardModel {
         col("allocatedCount").alias("Number of CBP Courses Allocated"),
         col("completedCount").alias("Number of CBP Courses Completed"),
         col("completedBeforeDueDateCount").alias("Number of CBP Courses Completed within due date"),
+        col("userStatus").alias("status"),
         col("userOrgID").alias("mdoid")
       ).withColumn("Report_Last_Generated_On", currentDateTime)
-    generateReport(userSummaryReportDF.drop("mdoid"), s"${reportPath}/CBPUserSummaryReport", fileName="CBPUserSummaryReport")
-    generateReport(userSummaryReportDF.coalesce(1),  s"${conf.acbpMdoSummaryReportPath}/${today}","mdoid", "CBPUserSummaryReport")
+    val columnsToKeepInSummaryReport = userSummaryReportDF.columns.filter(_ != "status")
+    generateReport(userSummaryReportDF.filter(col("status").cast("int") === 1).select(columnsToKeepInSummaryReport.map(col): _*).drop("mdoid").coalesce(1), s"${reportPath}/CBPUserSummaryReport", fileName="CBPUserSummaryReport")
+    generateReport(userSummaryReportDF.filter(col("status").cast("int") === 1).select(columnsToKeepInSummaryReport.map(col): _*).coalesce(1), s"${conf.acbpMdoSummaryReportPath}/${today}","mdoid", "CBPUserSummaryReport")
     // to be removed once new security job is created
     if(conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", s"${conf.acbpMdoSummaryReportPath}/${today}")
