@@ -1046,6 +1046,41 @@ object DataUtil extends Serializable {
     df
   }
 
+  /**
+   * Despite the name this gets all rows from user_enrolments table, only filtering out active=false
+   * 'active' column was added to the db to fix the issue of duplicate rows in this table
+   *
+   * @return DataFrame(userID, courseID, batchID, courseCompletedTimestamp, courseEnrolledTimestamp, lastContentAccessTimestamp, courseProgress, dbCompletionStatus)
+   */
+  def userCourseProgramCompletionDataFrameForUserActivity(extraCols: Seq[String] = Seq(), datesAsLong: Boolean = false)(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
+
+    val selectCols = Seq("userID", "courseID", "batchID", "courseProgress", "dbCompletionStatus", "courseCompletedTimestamp",
+      "courseEnrolledTimestamp", "firstCompletedOn", "certificateGeneratedOn") ++ extraCols
+
+    var df = cache.load("enrolment")
+      .where(expr("active=true"))
+      .withColumn("courseCompletedTimestamp", col("completedon"))
+      .withColumn("courseEnrolledTimestamp", col("enrolled_date"))
+      .withColumn("certificateGeneratedOn", when(col("issued_certificates").isNull, "").otherwise(col("issued_certificates")(size(col("issued_certificates")) - 1).getItem("lastIssuedOn")))
+      .withColumn("firstCompletedOn", when(col("issued_certificates").isNull, "").otherwise(when(size(col("issued_certificates")) > 0, col("issued_certificates")(0).getItem("lastIssuedOn")).otherwise("")))
+      .withColumnRenamed("userid", "userID")
+      .withColumnRenamed("courseid", "courseID")
+      .withColumnRenamed("batchid", "batchID")
+      .withColumnRenamed("status", "dbCompletionStatus")
+      .withColumnRenamed("contentstatus", "courseContentStatus")
+      .na.fill("", Seq("certificateGeneratedOn"))
+      .select(selectCols.head, selectCols.tail: _*)
+
+    if (datesAsLong) {
+      df = df
+        .withColumn("courseCompletedTimestamp", col("courseCompletedTimestamp").cast("long"))
+        .withColumn("courseEnrolledTimestamp", col("courseEnrolledTimestamp").cast("long"))
+        .withColumn("lastContentAccessTimestamp", col("lastContentAccessTimestamp").cast("long"))
+    }
+
+    df
+  }
+
 //  def leafNodesDataframe(allCourseProgramDF: DataFrame, hierarchyDF: DataFrame)(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
 //    var df = hierarchyDF.withColumn("hierarchy", from_json(col("hierarchy"), Schema.makeHierarchySchema()))
 //    df = df.select(col("hierarchy.leafNodes").alias("liveContents"),

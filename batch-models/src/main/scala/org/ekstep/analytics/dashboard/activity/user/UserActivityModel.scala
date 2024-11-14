@@ -3,7 +3,6 @@ package org.ekstep.analytics.dashboard.activity.user
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types._
 import org.ekstep.analytics.dashboard.DashboardUtil._
 import org.ekstep.analytics.dashboard.DataUtil._
 import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig, Redis}
@@ -21,6 +20,7 @@ object UserActivityModel extends AbsDashboardModel {
    * @param timestamp unique timestamp from the start of the processing
    */
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
+    import spark.implicits._
     //GET ORG DATA
     val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
     val orgHierarchyData = orgHierarchyDataframe()
@@ -31,81 +31,53 @@ object UserActivityModel extends AbsDashboardModel {
     // Get course data first
     val allCourseProgramDetailsDF = contentWithOrgDetailsDataFrame(orgDF, Seq("Course", "Program", "Blended Program", "CuratedCollections", "Curated Program"))
 
-    val userEnrolmentDF = userCourseProgramCompletionDataFrame()
 
-    val userRatingDF = userCourseRatingDataframe()
+    /*
+     * "userID", "courseID", "batchID", "courseProgress", "dbCompletionStatus", "courseCompletedTimestamp","courseEnrolledTimestamp", "firstCompletedOn", "certificateGeneratedOn"
+     */
+    val userEnrolmentDF = userCourseProgramCompletionDataFrameForUserActivity()
+
+    show(userEnrolmentDF, "userEnrolmentDF")
 
     //use allCourseProgramDetailsDFWithOrgName below instead of allCourseProgramDetailsDF after adding orgname alias above
-    val allCourseProgramCompletionWithDetailsDF = allCourseProgramCompletionWithDetailsDataFrame(userEnrolmentDF, allCourseProgramDetailsDF, userDataDF)
+    //val allCourseProgramCompletionWithDetailsDF = allCourseProgramCompletionWithDetailsDataFrame(userEnrolmentDF, allCourseProgramDetailsDF, userDataDF)
 
-    val courseBatchDF = courseBatchDataFrame()
-    val relevantBatchInfoDF = allCourseProgramDetailsDF.select("courseID", "category")
-      .where(col("category").equalTo("Blended Program"))
-      .join(courseBatchDF, Seq("courseID"), "left")
-      .select("courseID", "batchID", "courseBatchName", "courseBatchStartDate", "courseBatchEndDate")
-
-    val ciosDataSchema = new StructType().add("content", new StructType()
-      .add("name", StringType)
-      .add("duration", StringType)
-      .add("lastUpdatedOn", StringType)
-      .add("contentPartner", new StructType()
-        .add("id", StringType)
-        .add("contentPartnerName", StringType)))
+    val categoryList = allCourseProgramDetailsDF.select("category").distinct().map(_.getString(0)).filter(_.nonEmpty).collectAsList()
+    val allCourseProgramCompletionWithDetailsDF = userEnrolmentDF.join(allCourseProgramDetailsDF, Seq("courseID"), "left")
+      .filter(col("category").isInCollection(categoryList))
+      .join(userOrgDF, Seq("userID"), "left")
 
     val marketPlaceContentsDF = marketPlaceContentDF()
-    val parsedDF = marketPlaceContentsDF.withColumn("parsed_data", from_json(col("cios_data"), ciosDataSchema))
     val marketPlaceEnrolmentsDF = marketPlaceEnrolments().withColumnRenamed("courseid", "content_id")
     // Extract the desired fields
-    val extractedDF = parsedDF.select(col("content_id"),
-      col("parsed_data.content.name").as("courseName"),
-      col("parsed_data.content.duration").as("courseDuration"),
-      col("parsed_data.content.lastUpdatedOn").as("courseLastPublishedOn"),
-      col("parsed_data.content.contentPartner.id").as("courseOrgID"),
-      col("parsed_data.content.contentPartner.contentPartnerName").as("courseOrgName"),
+    val extractedDF = marketPlaceContentsDF.select(col("content_id"),
       lit("External Content").as("category"),
       lit("LIVE").as("courseStatus"))
 
-    val marketPlaceContentEnrolmentsDF = extractedDF.join(marketPlaceEnrolmentsDF, Seq("content_id"), "inner").durationFormat("courseDuration")
+    val marketPlaceContentEnrolmentsDF = extractedDF.join(marketPlaceEnrolmentsDF, Seq("content_id"), "inner")
       .withColumn("courseCompletedTimestamp", date_format(col("completedon"), dateTimeFormat))
       .withColumn("courseEnrolledTimestamp", date_format(col("enrolled_date"), dateTimeFormat))
-      .withColumn("lastContentAccessTimestamp", lit("Not Available"))
-      .withColumn("userRating", lit("Not Available"))
-      .withColumn("live_cbp_plan_mandate", lit(false))
       .withColumn("batchID", lit("Not Available"))
       .withColumn("issuedCertificateCount", size(col("issued_certificates")))
       .withColumn("certificate_generated", expr("CASE WHEN issuedCertificateCount > 0 THEN 'Yes' ELSE 'No' END"))
       .withColumn("certificateGeneratedOn", when(col("issued_certificates").isNull, "").otherwise( col("issued_certificates")(size(col("issued_certificates")) - 1).getItem("lastIssuedOn")))
       .withColumn("firstCompletedOn", when(col("issued_certificates").isNull, "").otherwise(when(size(col("issued_certificates")) > 0, col("issued_certificates")(0).getItem("lastIssuedOn")).otherwise("")))
-      .withColumn("certificateID", when(col("issued_certificates").isNull, "").otherwise( col("issued_certificates")(size(col("issued_certificates")) - 1).getItem("identifier")))
       .withColumn("Report_Last_Generated_On", currentDateTime)
       .withColumnRenamed("userid", "userID")
       .withColumnRenamed("content_id", "courseID")
       .withColumnRenamed("progress", "courseProgress")
       .withColumnRenamed("status", "dbCompletionStatus")
-      .na.fill(0, Seq("courseProgress", "issuedCertificateCount"))
       .na.fill("", Seq("certificateGeneratedOn"))
 
-    val marketPlaceEnrolmentsWithUserDetailsDF = marketPlaceContentEnrolmentsDF.join(userDataDF, Seq("userID"), "left").durationFormat("courseDuration").withColumn("Tag", concat_ws(", ", col("additionalProperties.tag")))
-    val allCourseProgramCompletionWithDetailsWithBatchInfoDF = allCourseProgramCompletionWithDetailsDF.join(relevantBatchInfoDF, Seq("courseID", "batchID"), "left")
+    val marketPlaceEnrolmentsWithUserDetailsDF = marketPlaceContentEnrolmentsDF.join(userDataDF, Seq("userID"), "left")
 
-    val allCourseProgramCompletionWithDetailsDFWithRating = allCourseProgramCompletionWithDetailsWithBatchInfoDF.join(userRatingDF, Seq("courseID", "userID"), "left")
 
-    val df = allCourseProgramCompletionWithDetailsDFWithRating
-      .durationFormat("courseDuration")
+    val df = allCourseProgramCompletionWithDetailsDF
       .withColumn("completedOn", date_format(col("courseCompletedTimestamp"), dateTimeFormat))
       .withColumn("enrolledOn", date_format(col("courseEnrolledTimestamp"), dateTimeFormat))
       .withColumn("firstCompletedOn", date_format(col("firstCompletedOn"), dateTimeFormat))
-      .withColumn("lastContentAccessTimestamp", date_format(col("lastContentAccessTimestamp"), dateTimeFormat))
       .withColumn("courseLastPublishedOn", to_date(col("courseLastPublishedOn"), dateFormat))
-      .withColumn("courseBatchStartDate", to_date(col("courseBatchStartDate"), dateFormat))
-      .withColumn("courseBatchEndDate", to_date(col("courseBatchEndDate"), dateFormat))
-      .withColumn("completionPercentage", round(col("completionPercentage"), 2))
-      .withColumn("Tag", concat_ws(", ", col("additionalProperties.tag")))
       .withColumn("Report_Last_Generated_On", currentDateTime)
-      .withColumn("Certificate_Generated", expr("CASE WHEN issuedCertificateCount > 0 THEN 'Yes' ELSE 'No' END"))
-      .withColumn("ArchivedOn", expr("CASE WHEN courseStatus == 'Retired' THEN lastStatusChangedOn ELSE '' END"))
-      .withColumn("ArchivedOn", to_date(col("ArchivedOn"), dateFormat))
-      .withColumn("Certificate_ID", col("certificateID"))
       .dropDuplicates("userID", "courseID", "batchID")
 
     // read acbp data and filter the cbp plan based on status
@@ -170,8 +142,6 @@ object UserActivityModel extends AbsDashboardModel {
 
     val warehouseDF = platformWarehouseDF.union(marketPlaceWarehouseDF)
 
-    show(warehouseDF, "warehouse DF")
-
     val eventEnrolments = cache.load("eventEnrolmentDetails")
 
     val eventEnrolmentsDF = eventEnrolments.join(broadcast(userDataDF), eventEnrolments("user_id") === userDataDF("userID"), "left")
@@ -193,8 +163,6 @@ object UserActivityModel extends AbsDashboardModel {
         col("created_date")
       ).dropDuplicates("user_id", "type_identifier", "batch_id")
 
-    show(eventEnrolmentsDF, "eventEnrolmentsDF")
-
     val userActivityDF = warehouseDF.union(eventEnrolmentsDF)
       .withColumn("created_date_ts", col("created_date").cast("timestamp"))
       .withColumn("certificate_generated_on_ts", col("certificate_generated_on").cast("timestamp"))
@@ -211,8 +179,6 @@ object UserActivityModel extends AbsDashboardModel {
         col("org_id"),
         col("created_date_ts").alias("created_date")
       ).dropDuplicates("user_id", "type_identifier", "batch_id")
-
-    show(userActivityDF, "userActivityDF")
 
     val dwPostgresUrl = s"jdbc:postgresql://${conf.dwPostgresHost}/${conf.dwPostgresSchema}"
     truncateWarehouseTable(conf.dwUserActivityTable)
