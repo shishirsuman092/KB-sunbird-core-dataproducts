@@ -111,10 +111,10 @@ object UserReportModel extends AbsDashboardModel {
         col("additionalProperties.externalSystemId").alias("external_system_id"),
         col("weekly_claps_day_before_yesterday"),
         col("marked_as_not_my_user"),
-        coalesce(col("total_event_learning_hours"), lit(0)),
-        coalesce(col("total_content_learning_hours"), lit(0)),
-        coalesce(col("total_learning_hours"), lit(0)),
-        col("data_last_generated_on")
+          coalesce(col("total_event_learning_hours"), lit(0)).alias("total_event_learning_hours"),
+          coalesce(col("total_content_learning_hours"), lit(0)).alias("total_content_learning_hours"),
+          coalesce(col("total_learning_hours"), lit(0)).alias("total_learning_hours"),
+          col("data_last_generated_on")
       )
 
     generateReport(df_warehouse.coalesce(1), s"${reportPath}-warehouse")
