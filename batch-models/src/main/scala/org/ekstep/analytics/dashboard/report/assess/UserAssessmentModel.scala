@@ -75,14 +75,15 @@ object UserAssessmentModel extends AbsDashboardModel {
         col("assessPassPercentage").alias("Percentage_Of_Score"),
         col("noOfAttempts").alias("Number_of_Attempts"),
         col("maskedEmail").alias("Email"),
+        col("userStatus").alias("status"),
         col("maskedPhone").alias("Phone"),
         col("assessOrgID").alias("mdoid"),
         col("Report_Last_Generated_On")
       ).coalesce(1)
-
+    val columnsToKeepInReport = df.columns.filter(_ != "status")
     val reportPath = s"${conf.standaloneAssessmentReportPath}/${today}"
     // generateReport(df, s"${reportPath}-full")
-    generateAndSyncReports(df, "mdoid",reportPath, "StandaloneAssessmentReport")
+    generateAndSyncReports(df.filter(col("status").cast("int") === 1).select(columnsToKeepInReport.map(col): _*), "mdoid",reportPath, "StandaloneAssessmentReport")
 
     Redis.closeRedisConnect()
 
