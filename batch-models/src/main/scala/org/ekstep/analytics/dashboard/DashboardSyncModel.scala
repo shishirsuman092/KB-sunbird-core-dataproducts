@@ -436,7 +436,7 @@ object DashboardSyncModel extends AbsDashboardModel {
 
     val eventCertificatesGeneratedNLWDF = eventsEnrolmentDataDF
       .filter(col("status") === "completed")
-      .filter(col("enrolled_on_datetime") >= nationalLearningWeekStartDate && col("enrolled_on_datetime") <= nationalLearningWeekEndDate)
+      .filter(col("enrolled_on_datetime") >= nationalLearningWeekStartDate)
       .filter(col("certificate_id").isNotNull) // Ensuring the certificate_id exists
 
     // Count the distinct certificate_ids
@@ -1017,8 +1017,42 @@ object DashboardSyncModel extends AbsDashboardModel {
 
     Redis.update("lhp_certificationsTillToday", totalCertificationsTillToday.toString)
     Redis.update("lhp_certificationsTillYesterday", totalCertificationsTillYesterday.toString)
-    Redis.updateMapField("lhp_certifications", "across:yesterday", totalCertificationsYesterday.toString)
-    Redis.updateMapField("lhp_certifications", "across:today", totalCertificationsToday.toString)
+//    Redis.updateMapField("lhp_certifications", "across:yesterday", totalCertificationsYesterday.toString)
+//    Redis.updateMapField("lhp_certifications", "across:today", totalCertificationsToday.toString)
+
+    //NLWEventsCalculation
+    val nationalLearningWeekStartString = conf.nationalLearningWeekStart
+    val zoneOffset = ZoneOffset.ofHoursMinutes(5, 30)
+    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+    // Parse the strings to LocalDateTime
+    val nationalLearningWeekStartDateTime = LocalDateTime.parse(nationalLearningWeekStartString, formatter)
+    val nationalLearningWeekStartOffsetDateTime = nationalLearningWeekStartDateTime.atOffset(zoneOffset)
+
+    /* total certificates issued yesterday across all types of event */
+    val eventsDateTimeFormatter=DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+    val nationalLearningWeekStartDate = nationalLearningWeekStartOffsetDateTime.format(eventsDateTimeFormatter)
+
+    val EventEnrollmentDf= cache.load("eventEnrolmentDetails")
+    val totalEventCertificationsTillToday =
+      EventEnrollmentDf
+        .filter(col("status") === "completed")
+        .filter(col("enrolled_on_datetime") >= nationalLearningWeekStartDate)
+        .filter(col("certificate_id").isNotNull).count()
+
+    val totalEventCertificationsTillYesterdayStr = Redis.get("lhp_eventCertificationsTillToday")
+    val totalEventCertificationsTillYesterday = if (totalEventCertificationsTillYesterdayStr == "") { 0L } else { totalEventCertificationsTillYesterdayStr.toLong }
+    val totalEventCertificationsToday = totalEventCertificationsTillToday - totalEventCertificationsTillYesterday
+    val totalEventCertificationsTillDayBeforeYesterdayStr = Redis.get("lhp_eventCertificationsTillYesterday")
+    val totalEventCertificationsTillDayBeforeYesterday = if (totalEventCertificationsTillDayBeforeYesterdayStr == "") { 0L } else { totalEventCertificationsTillDayBeforeYesterdayStr.toLong }
+    val totalEventCertificationsYesterday = totalEventCertificationsTillYesterday - totalEventCertificationsTillDayBeforeYesterday
+
+    Redis.update("lhp_eventCertificationsTillToday", totalEventCertificationsTillToday.toString)
+    Redis.update("lhp_eventCertificationsTillYesterday", totalEventCertificationsTillYesterday.toString)
+    Redis.updateMapField("lhp_eventCertifications", "across:yesterday", totalEventCertificationsYesterday.toString)
+    Redis.updateMapField("lhp_eventCertifications", "across:today", totalEventCertificationsToday.toString)
+
+    Redis.updateMapField("lhp_certifications", "across:yesterday", (totalCertificationsYesterday+totalEventCertificationsYesterday).toString)
+    Redis.updateMapField("lhp_certifications", "across:today", (totalCertificationsToday+totalEventCertificationsToday).toString)
 
     val courseIdsString = topNCertifications
       .agg(concat_ws(",", collect_list("courseID"))).first().getString(0)
