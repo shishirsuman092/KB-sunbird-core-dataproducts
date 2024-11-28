@@ -5,7 +5,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
 import org.ekstep.analytics.dashboard.DashboardUtil._
 import org.ekstep.analytics.dashboard.DataUtil._
-import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig, Redis}
+import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig}
 import org.ekstep.analytics.framework.FrameworkContext
 
 object UserActivityModel extends AbsDashboardModel {
@@ -111,6 +111,7 @@ object UserActivityModel extends AbsDashboardModel {
     truncateWarehouseTable(conf.dwUserActivityTable)
     saveDataframeToPostgresTable_With_Append(userActivityDF, dwPostgresUrl, conf.dwUserActivityTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
 
-    Redis.closeRedisConnect()
+    // writing data to warehouse cache to populate BQ tables
+    warehouseCache.write(userActivityDF.coalesce(1), conf.dwUserActivityTable)
   }
 }
