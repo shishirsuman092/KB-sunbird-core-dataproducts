@@ -1549,9 +1549,9 @@ object DataUtil extends Serializable {
   /**
    * Reading existing weekly claps data
    */
-  def learnerStatsDataFrame()(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): DataFrame = {
-    cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraLearnerStatsTable)
-  }
+//  def learnerStatsDataFrame()(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): DataFrame = {
+//    cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraLearnerStatsTable)
+//  }
 
   /**
    * Reading karma points details

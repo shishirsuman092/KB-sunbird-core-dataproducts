@@ -20,36 +20,52 @@ object UserReportModel extends AbsDashboardModel {
 
     val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
 
-//    val learningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_content_learning_hours_nlw_by_user", Schema.learningHoursByUserSchema)
-//    val eventLearningHoursByUserDF = Redis.getMapAsDataFrame("dashboard_event_learning_hours_nlw_by_user", Schema.eventLearningHoursByUserSchema)
-    val learningHoursByUserDF = cache.load("nlwContentLearningHours")
-    val eventLearningHoursByUserDF = cache.load("nlwEventLearningHours").withColumn("totalEventLearningHours", col("totalLearningHours")).drop("totalLearningHours")
-
-    val learningHourData = learningHoursByUserDF.join(eventLearningHoursByUserDF, eventLearningHoursByUserDF("user_id") === learningHoursByUserDF("userID"), "full")
-      .withColumn("total_event_learning_hours", coalesce(col("totalEventLearningHours").cast("double"), lit(0)))
-      .withColumn("total_content_learning_hours", coalesce(col("totalLearningHours").cast("double"), lit(0)))
-      .withColumn("total_learning_hours", round(coalesce(col("total_content_learning_hours") + col("total_event_learning_hours"), lit(0)), 2))
-
     val orgHierarchyData = orgHierarchyDataframe()
-    val weeklyClapsDF = learnerStatsDataFrame()
-    val karmaPointsDF = cache.load("userKarmaPointsSummary").withColumnRenamed("userid", "userID")
+    val weeklyClapsDF = cache.load("weeklyClaps")
+      .withColumnRenamed("userid", "userID")
+      .withColumnRenamed("total_claps","weekly_claps_day_before_yesterday")
+      .select(col("userID"), col("weekly_claps_day_before_yesterday"))
+    val karmaPointsDF = cache.load("userKarmaPointsSummary")
+      .withColumnRenamed("userid", "userID")
+      .select(col("userID"), col("total_points"))
 
-    val userData = userOrgDF
+    val userEventDetailsDF = cache.load("eventEnrolmentDetails")
+      .withColumnRenamed("user_id", "userID")
+      .groupBy("userID")
+      .agg(
+        countDistinct(when(col("status").isin("not-started", "in-progress", "completed"), col("event_id"))).alias("total_event_enrolments"),
+        countDistinct(when(col("status").equalTo("completed"), col("event_id"))).alias("total_event_completions"),
+        sum(when(col("status").equalTo("completed") && col("certificate_id").isNotNull, col("event_duration_seconds"))).alias("total_event_learning_hours_with_certificates")
+      ).withColumn("total_event_learning_hours_with_certificates", bround(col("total_event_learning_hours_with_certificates") / 3600, 2))
+
+    val contentDurationDF = allCourseProgramESDataFrame(Seq("Course"))
+      .select(col("courseID").alias("content_id"), col("courseDuration"), col("category"))
+    val enrolmentsDataDF = warehouseCache.load("user_enrolments")
+      .select(col("user_id").alias("userID"),col("content_id"),col("user_consumption_status"), col("certificate_id"))
+      .join(contentDurationDF, Seq("content_id"), "left")
+      .groupBy("userID")
+      .agg(
+        countDistinct(when(col("user_consumption_status").isin("not-started", "in-progress", "completed"), col("content_id"))).alias("total_content_enrolments"),
+        countDistinct(when(col("user_consumption_status").equalTo("completed") && col("certificate_id").isNotNull, col("content_id"))).alias("total_content_completions"),
+        sum(when(col("user_consumption_status").equalTo("completed") && col("certificate_id").isNotNull && col("category").equalTo("Course"), col("courseDuration"))).alias("total_content_duration")
+      ).withColumn("total_content_duration", bround(col("total_content_duration") / 3600, 2))
+
+    val userCompleteData = userOrgDF
       .join(userRolesDF, Seq("userID"), "left")
-      .join(karmaPointsDF.select("userID","total_points"), Seq("userID"), "left")
+      .join(karmaPointsDF, Seq("userID"), "left")
       .join(broadcast(orgHierarchyData), Seq("userOrgID"), "left")
+      .join(weeklyClapsDF, Seq("userID"), "left")
+      .join(userEventDetailsDF, Seq("userID"), "left")
+      .join(enrolmentsDataDF, Seq("userID"), "left")
       .dropDuplicates("userID")
       .withColumn("Tag", concat_ws(", ", col("additionalProperties.tag")))
+      .withColumn("Total_Learning_Hours", coalesce(col("total_event_learning_hours_with_certificates"), lit(0)) + coalesce(col("total_content_duration"), lit(0)))
+      .withColumn("weekly_claps_day_before_yesterday", when(col("weekly_claps_day_before_yesterday").isNull || col("weekly_claps_day_before_yesterday") === "", 0).otherwise(col("weekly_claps_day_before_yesterday")))
 
-    val userDataWithKarmaPoints = userData
-      .join(weeklyClapsDF, userData("userID") === weeklyClapsDF("userid"), "left")
-      .select(userData("*"), weeklyClapsDF("total_claps").alias("weekly_claps_day_before_yesterday"))
-      .join(learningHourData, Seq("userID"), "left")
-
-    val reportPath = s"${conf.userReportPath}/${today}"
-
-    val mdoWiseReportDF = userDataWithKarmaPoints
+    val mdoWiseReportDF = userCompleteData.filter(col("userStatus").cast("int") === 1)
       .withColumn("Report_Last_Generated_On", currentDateTime)
+      .withColumn("Total_Enrolments", coalesce(col("total_event_enrolments"), lit(0)) + coalesce(col("total_content_enrolments"), lit(0)))
+      .withColumn("Total_Completions", coalesce(col("total_event_completions"), lit(0)) + coalesce(col("total_content_completions"), lit(0)))
       .select(
         col("fullName").alias("Full_Name"),
         col("professionalDetails.designation").alias("Designation"),
@@ -66,28 +82,30 @@ object UserReportModel extends AbsDashboardModel {
         col("personalDetails.category").alias("Category"),
         col("additionalProperties.externalSystem").alias("External_System"),
         col("additionalProperties.externalSystemId").alias("External_System_Id"),
-        col("userOrgID").alias("mdoid"),
-        col("Report_Last_Generated_On"),
         from_unixtime(col("userOrgCreatedDate"), dateFormat).alias("MDO_Created_On"),
-        col("userProfileStatus").alias("Verified Karmayogi"),
-        col("userStatus").alias("status"),
+        col("userProfileStatus").alias("Profile_Status"),
         col("weekly_claps_day_before_yesterday"),
-        coalesce(col("total_event_learning_hours"), lit(0)).alias("Event_Learning_Hr_After_19_Oct"),
-        coalesce(col("total_content_learning_hours"), lit(0)).alias("Content_Learning_Hr_After_19_Oct"),
-        coalesce(col("total_learning_hours"), lit(0)).alias("Total_Learning_Hr_After_19_Oct")
+        coalesce(col("total_points"), lit(0)).alias("Karma_Points"),
+        coalesce(col("total_event_enrolments"), lit(0)).alias("Event_Enrolments"),
+        coalesce(col("total_event_completions"), lit(0)).alias("Event_Completions"),
+        coalesce(col("total_event_learning_hours_with_certificates"), lit(0)).alias("Event_Learning_Hours"),
+        coalesce(col("total_content_enrolments"), lit(0)).alias("Course_Enrolments"),
+        coalesce(col("total_content_completions"), lit(0)).alias("Course_Completions"),
+        coalesce(col("total_content_duration"), lit(0)).alias("Course_Learning_Hours"),
+        coalesce(col("Total_Enrolments"), lit(0)).alias("Total_Enrolments"),
+        coalesce(col("Total_Completions"), lit(0)).alias("Total_Completions"),
+        coalesce(col("Total_Learning_Hours"), lit(0)).alias("Total_Learning_Hours"),
+        col("Report_Last_Generated_On"),
+        col("userOrgID").alias("mdoid")
       ).coalesce(1)
 
-    val columnsToKeepInReport = mdoWiseReportDF.columns.filter(_ != "status")
+    val reportPath = s"${conf.userReportPath}/${today}"
+    generateReport(mdoWiseReportDF, reportPath, "mdoid", "UserReport")
+//    if (conf.reportSyncEnable) {
+//      syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
+//    }
 
-    generateReport(
-      mdoWiseReportDF.filter(col("status").cast("int") === 1).select(columnsToKeepInReport.map(col): _*).coalesce(1),
-      reportPath, "mdoid", "UserReport"
-    )
-
-    if (conf.reportSyncEnable) {
-      syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
-    }
-    val df_warehouse = userDataWithKarmaPoints
+    val df_warehouse = userCompleteData
       .withColumn("marked_as_not_my_user", when(col("userProfileStatus") === "NOT-MY-USER", true).otherwise(false))
       .withColumn("data_last_generated_on", currentDateTime)
       .select(
@@ -101,7 +119,7 @@ object UserReportModel extends AbsDashboardModel {
         col("personalDetails.mobile").alias("phone_number"),
         col("professionalDetails.group").alias("groups"),
         col("Tag").alias("tag"),
-        col("userProfileStatus").alias("is_verified_karmayogi"),
+        col("userProfileStatus").alias("profile_status"),
         date_format(from_unixtime(col("userCreatedTimestamp")), dateTimeFormat).alias("user_registration_date"),
         col("role").alias("roles"),
         col("personalDetails.gender").alias("gender"),
@@ -110,11 +128,10 @@ object UserReportModel extends AbsDashboardModel {
         col("additionalProperties.externalSystem").alias("external_system"),
         col("additionalProperties.externalSystemId").alias("external_system_id"),
         col("weekly_claps_day_before_yesterday"),
-        col("marked_as_not_my_user"),
-          coalesce(col("total_event_learning_hours"), lit(0)).alias("total_event_learning_hours"),
-          coalesce(col("total_content_learning_hours"), lit(0)).alias("total_content_learning_hours"),
-          coalesce(col("total_learning_hours"), lit(0)).alias("total_learning_hours"),
-          col("data_last_generated_on")
+        coalesce(col("total_event_learning_hours_with_certificates"), lit(0)).alias("total_event_learning_hours"),
+        coalesce(col("total_content_duration"), lit(0)).alias("total_content_learning_hours"),
+        coalesce(col("Total_Learning_Hours"), lit(0)).alias("total_learning_hours"),
+        col("data_last_generated_on")
       )
 
     generateReport(df_warehouse.coalesce(1), s"${reportPath}-warehouse")

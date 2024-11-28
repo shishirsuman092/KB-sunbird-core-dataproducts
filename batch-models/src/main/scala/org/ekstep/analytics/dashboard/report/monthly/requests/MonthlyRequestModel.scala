@@ -26,7 +26,7 @@ object MonthlyRequestModel extends AbsDashboardModel {
     val monthEnd = date_format(last_day(add_months(current_date(), -1)), s"${dateFormat} 23:59:59")
 
     val userDayCountWallOfFameData = userDayCountWallOfFameDataFrame(fromDate, toDate)
-    val karmaPointsWallOfFameData = cassandraTableAsDataFrame("sunbird", "user_karma_points")
+    val karmaPointsWallOfFameData = cache.load("userKarmaPoints")
       .filter(col("credit_date") >= monthStart && col("credit_date") <= monthEnd)
       .groupBy(col("userid")).agg(sum(col("points")).alias("total_points"), max(col("credit_date")).alias("last_credit_date"))
 
