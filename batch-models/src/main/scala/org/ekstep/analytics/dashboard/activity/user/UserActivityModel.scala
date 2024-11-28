@@ -106,7 +106,7 @@ object UserActivityModel extends AbsDashboardModel {
 
     val userActivityDF = contentEnrolmentWithDetails.union(eventEnrolmentsDF)
 
-    show(userActivityDF, "userActivityDF")
+    // writing to postgres warehouse table
     val dwPostgresUrl = s"jdbc:postgresql://${conf.dwPostgresHost}/${conf.dwPostgresSchema}"
     truncateWarehouseTable(conf.dwUserActivityTable)
     saveDataframeToPostgresTable_With_Append(userActivityDF, dwPostgresUrl, conf.dwUserActivityTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
