@@ -212,21 +212,32 @@ ALTER TABLE events_enrolment ADD COLUMN event_duration character varying(255);
 ALTER TABLE events_enrolment ADD COLUMN progress_duration character varying(255);
 ALTER TABLE events_enrolment ADD COLUMN completed_on_datetime character varying(255);
 ALTER TABLE events_enrolment ADD COLUMN duration character varying(255);
-alter table user_detail alter column is_verified_karmayogi type character varying(15);
+alter table user_detail ALTER COLUMN is_verified_karmayogi type character varying(15);
 
-CREATE TABLE user_activity (
-  id SERIAL PRIMARY KEY NOT NULL,
-  org_id character varying(255),
-  user_id character varying(255),
-  type_identifier character varying(100),
-  batch_id character varying(255),
-  type character varying(50),
-  status character varying(20),
-  updated_date timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-  created_date timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-  certificate_generated_on timestamp without time zone,
-  completed_on timestamp without time zone,
-  enrolled_on timestamp without time zone
+CREATE TABLE user_activity(
+   user_id VARCHAR(255) NOT NULL,
+   batch_id VARCHAR(255) NOT NULL,
+   content_id  VARCHAR(255)  NOT NULL,
+   content_type character varying(255),
+   content_progress_percentage double precision,
+   certificate_generated character varying(255),
+   user_rating double precision,
+   resource_count_consumed INTEGER,
+   enrolled_on character varying(255),
+   user_consumption_status character varying(255),
+   data_last_generated_on character varying(255),
+   certificate_id character varying(255),
+   live_cbp_plan_mandate boolean,
+   first_completed_on character varying(255),
+   last_completed_on character varying(255),
+   first_certificate_generated_on character varying(255),
+   last_certificate_generated_on character varying(255),
+   content_last_accessed_on character varying(255),
+   number_of_certificate character varying(255),
+   PRIMARY KEY (user_id, content_id, batch_id)
 );
 
-alter table user_activity add CONSTRAINT unique_user_type UNIQUE (user_id,type_identifier,batch_id);
+GRANT SELECT, INSERT, UPDATE, DELETE ON user_enrolments TO postgres;
+
+ALTER TABLE user_detail RENAME COLUMN is_verified_karmayogi TO profile_status;
+ALTER TABLE user_detail ALTER COLUMN profile_status TYPE character varying(15);
