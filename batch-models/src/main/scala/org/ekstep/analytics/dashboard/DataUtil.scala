@@ -1547,30 +1547,6 @@ object DataUtil extends Serializable {
 //  }
 
   /**
-   * Reading existing weekly claps data
-   */
-//  def learnerStatsDataFrame()(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): DataFrame = {
-//    cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraLearnerStatsTable)
-//  }
-
-  /**
-   * Reading karma points details
-   */
-//  def userKarmaPointsSummaryDataFrame()(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): DataFrame = {
-//    val df = cache.load("userKarmaPointsSummary")
-//    show(df, "Karma Points Summary data")
-//    df
-//  }
-
-  /**
-   * Reading user_karma_points data
-   */
-//  def userKarmaPointsDataFrame()(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): DataFrame = {
-//    val df = cache.load("userKarmaPoints")
-//    show(df, "Karma Points data")
-//    df
-//  }
-  /**
    * Reading old assessment details
    */
 //  def oldAssessmentDetailsDataframe()(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): DataFrame = {
