@@ -184,8 +184,11 @@ object DataExhaustModel extends AbsDashboardModel {
     cache.write(oldAssessmentDetailsDF, "oldAssessmentDetails")
     oldAssessmentDetailsDF.unpersist()
 
+    val weeklyClapsDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraLearnerStatsTable)
+    cache.write(weeklyClapsDF, "weeklyClaps")
+    weeklyClapsDF.unpersist()
+
     //NLW event data
-    val nationalLearningWeekStartString = conf.nationalLearningWeekStart
     val objectType = Seq("Event")
     val shouldClauseRequired = objectType.map(pc => s"""{"match":{"objectType.raw":"${pc}"}}""").mkString(",")
     val fieldsRequired = Seq("identifier", "name", "objectType", "status", "startDate", "startTime", "duration", "registrationLink" ,"createdFor", "recordedLinks")
@@ -200,7 +203,7 @@ object DataExhaustModel extends AbsDashboardModel {
       .withColumn("presenters", lit("No presenters available"))
       .withColumn("durationInSecs", col("duration")*60)
       .durationFormat("durationInSecs")
-      .filter(col("event_start_datetime") >= nationalLearningWeekStartString)
+      .filter(col("event_start_datetime") >= conf.nationalLearningWeekStart)
       .select(
         col("identifier").alias("event_id"),
         col("name").alias("event_name"),
@@ -214,7 +217,7 @@ object DataExhaustModel extends AbsDashboardModel {
         col("registrationLink").alias("video_link")
       ).dropDuplicates("event_id")
       .na.fill(0.0, Seq("duration"))
-    cache.write(eventDetailsDF.coalesce(1), "eventDetails")
+    cache.write(eventDetailsDF, "eventDetails")
 
     val caseExpression = "CASE WHEN ISNULL(status) THEN 'not-enrolled' WHEN status == 0 THEN 'not-started' WHEN status == 1 THEN 'in-progress' ELSE 'completed' END"
     val eventsEnrolmentDF = cassandraTableAsDataFrame(conf.cassandraCourseKeyspace, conf.cassandraUserEntityEnrolmentTable)
@@ -223,7 +226,13 @@ object DataExhaustModel extends AbsDashboardModel {
       .withColumn("completed_on_datetime", date_format(to_utc_timestamp(col("completedon"), "Asia/Kolkata"), dateTimeFormat))
       .withColumn("status", expr(caseExpression))
       .withColumn("progress_details", from_json(col("lrc_progressdetails"), Schema.eventProgressDetailSchema))
-      .filter(col("enrolled_on_datetime") >= nationalLearningWeekStartString)
+      .withColumn("event_duration", when(col("progress_details").isNotNull, col("progress_details.max_size")).otherwise(0))
+      .withColumn("progress_duration", when(col("progress_details").isNotNull, col("progress_details.duration")).otherwise(0))
+      .withColumn("duration", when(col("progress_details").isNotNull, col("progress_details.duration")).otherwise(0))
+      .withColumn("event_duration_seconds", when(col("progress_details").isNotNull, col("progress_details.max_size")).otherwise(0))
+      .filter(col("enrolled_on_datetime") >= conf.nationalLearningWeekStart)
+      .durationFormat("event_duration")
+      .durationFormat("progress_duration")
       .select(
         col("userid").alias("user_id"),
         col("contentid").alias("event_id"),
@@ -232,21 +241,14 @@ object DataExhaustModel extends AbsDashboardModel {
         col("completed_on_datetime"),
         col("progress_details"),
         col("certificate_id"),
-        col("completionpercentage").alias("completion_percentage")
+        col("completionpercentage").alias("completion_percentage"),
+        col("event_duration"),
+        col("progress_duration"),
+        col("duration"),
+        col("event_duration_seconds")
       )
-    val eventsEnrolmentWithDurationDF = eventsEnrolmentDF
-      .withColumn("event_duration", when(col("progress_details").isNotNull, col("progress_details.max_size")).otherwise(null))
-      .durationFormat("event_duration")
-      .withColumn("progress_duration", when(col("progress_details").isNotNull, col("progress_details.duration")).otherwise(null))
-      .durationFormat("progress_duration")
-      .withColumn("duration", when(col("progress_details").isNotNull, col("progress_details.duration")).otherwise(null))
-      .withColumn("event_duration_seconds", when(col("progress_details").isNotNull, col("progress_details.max_size")).otherwise(null))
-      .drop(col("progress_details"))
-    show(eventsEnrolmentWithDurationDF, "eventsEnrolmentWithDurationDF")
-    // write to cache
-    cache.write(eventsEnrolmentWithDurationDF.coalesce(1), "eventEnrolmentDetails")
+    cache.write(eventsEnrolmentDF, "eventEnrolmentDetails")
     eventsEnrolmentDF.unpersist()
 
   }
 }
-

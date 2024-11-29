@@ -1547,30 +1547,6 @@ object DataUtil extends Serializable {
 //  }
 
   /**
-   * Reading existing weekly claps data
-   */
-  def learnerStatsDataFrame()(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): DataFrame = {
-    cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraLearnerStatsTable)
-  }
-
-  /**
-   * Reading karma points details
-   */
-//  def userKarmaPointsSummaryDataFrame()(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): DataFrame = {
-//    val df = cache.load("userKarmaPointsSummary")
-//    show(df, "Karma Points Summary data")
-//    df
-//  }
-
-  /**
-   * Reading user_karma_points data
-   */
-//  def userKarmaPointsDataFrame()(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): DataFrame = {
-//    val df = cache.load("userKarmaPoints")
-//    show(df, "Karma Points data")
-//    df
-//  }
-  /**
    * Reading old assessment details
    */
 //  def oldAssessmentDetailsDataframe()(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): DataFrame = {
@@ -1660,9 +1636,6 @@ object DataUtil extends Serializable {
     if(df == null) return emptySchemaDataFrame(Schema.npsUserIds)
     df.na.drop(Seq("userid"))
   }
-
-
-
 
   def npsTriggerC2DataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
     val query = """(SELECT DISTINCT(userID) as userid FROM \"dashboards-user-course-program-progress\" WHERE __time = (SELECT MAX(__time) FROM \"dashboards-user-course-program-progress\") AND courseCompletedTimestamp >= TIMESTAMP_TO_MILLIS(__time + INTERVAL '5:30' HOUR TO MINUTE - INTERVAL '3' MONTH) / 1000.0 AND category IN ('Course','Program') AND courseStatus IN ('Live', 'Retired') AND dbCompletionStatus = 2) UNION ALL (SELECT uid as userid FROM (SELECT SUM(total_time_spent) AS totalTime, uid FROM \"summary-events\" WHERE __time >= CURRENT_TIMESTAMP - INTERVAL '3' MONTH AND dimensions_type='app' GROUP BY 2) WHERE totalTime >= 7200)"""
@@ -1817,12 +1790,6 @@ object DataUtil extends Serializable {
     generateReport(df, reportPath, partitionKey, fileName)
     syncReports(reportTempPath, reportPath)
   }
-
-//  def learnerLeaderBoardDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
-//    val df = cache.load("learnerLeaderBoard")
-//    show(df, "learnerLeaderBoard")
-//    df
-//  }
 
   def getSolutionIdsAsDF(solutionIds: String)(implicit spark: SparkSession, sc: SparkContext): DataFrame = {
     val mdoIDs = solutionIds.split(",").map(_.toString).distinct
