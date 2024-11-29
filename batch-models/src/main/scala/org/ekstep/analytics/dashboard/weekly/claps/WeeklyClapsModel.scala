@@ -24,7 +24,7 @@ object WeeklyClapsModel extends AbsDashboardModel {
 //    val weekEndTime = ""
 
     //get existing weekly-claps data
-    val existingWeeklyClapsDF = learnerStatsDataFrame()
+    val existingWeeklyClapsDF = cache.load("weeklyClaps")
     // get platform engagement data from summary-events druid datasource
     val platformEngagementDF = usersPlatformEngagementDataframe(weekStart, weekEndTime)
 
