@@ -18,7 +18,7 @@ object InAppReviewModel extends AbsDashboardModel {
 
 
     //gives data from cache for weekly claps
-    val weeklyClapsDF = learnerStatsDataFrame()
+    val weeklyClapsDF = cache.load("weeklyClaps")
 
     // calculate end of the week to set an expiry date for the feeds
     def endOfWeek(today: LocalDate): LocalDate = {
