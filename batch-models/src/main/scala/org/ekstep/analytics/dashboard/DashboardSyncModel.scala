@@ -265,8 +265,6 @@ object DashboardSyncModel extends AbsDashboardModel {
     // started + not-started = enrolled
     val liveRetiredCourseNotStartedDF = liveRetiredCourseEnrolmentDF.where(expr("dbCompletionStatus=0"))
     val liveRetiredCourseStartedDF = liveRetiredCourseEnrolmentDF.where(expr("dbCompletionStatus IN (1, 2)"))
-//    val liveRetiredContentStartedDF = liveRetiredEnrolmentDF.where(expr("dbCompletionStatus IN (1, 2)"))
-//    val liveRetiredExternalContentStartedDF = externalContentEnrolmentDF.where(expr("dbCompletionStatus IN (1, 2)"))
 
     // in-progress + completed = started
     val liveRetiredCourseInProgressDF = liveRetiredCourseStartedDF.where(expr("dbCompletionStatus=1"))
@@ -360,7 +358,6 @@ object DashboardSyncModel extends AbsDashboardModel {
     Redis.dispatchDataFrame[Long]("dashboard_completed_count_by_user_org", liveRetiredCourseCompletedByMDODF, "userOrgID", "count")
     Redis.dispatchDataFrame[Long]("dashboard_completed_unique_user_count_by_user_org", liveRetiredCourseCompletedByMDODF, "userOrgID", "uniqueUserCount")
 
-
     // cbp-wise enrollment/not-started/started/in-progress/completion counts
     val liveRetiredCourseEnrolmentByCBPDF = liveRetiredCourseEnrolmentDF.groupBy("courseOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     val liveRetiredContentCompletedByCBPDF = liveRetiredContentCompletedDF.groupBy("courseOrgID").agg(count("*").alias("count"))
@@ -383,7 +380,6 @@ object DashboardSyncModel extends AbsDashboardModel {
     val liveRetiredCourseCompletedByCBPDF = liveRetiredCourseCompletedDF.groupBy("courseOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     Redis.dispatchDataFrame[Long]("dashboard_completed_count_by_course_org", liveRetiredCourseCompletedByCBPDF, "courseOrgID", "count")
     Redis.dispatchDataFrame[Long]("dashboard_completed_unique_user_count_by_course_org", liveRetiredCourseCompletedByCBPDF, "courseOrgID", "uniqueUserCount")
-
 
     // cbp wise total certificate generations, competencies and top 10 content by completions for ati cti web page
     val certificateGeneratedDF = liveRetiredContentEnrolmentDF.filter($"certificateGeneratedOn".isNotNull && $"certificateGeneratedOn" =!= "")
@@ -413,7 +409,6 @@ object DashboardSyncModel extends AbsDashboardModel {
     // Convert OffsetDateTime to epoch seconds
     val nationalLearningWeekStartDateTimeEpoch = nationalLearningWeekStartOffsetDateTime.toEpochSecond
     val nationalLearningWeekEndDateTimeEpoch = nationalLearningWeekEndOffsetDateTime.toEpochSecond
-
 
     /* total certificates issued yesterday across all types of content */
     val certificateDateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")
