@@ -197,24 +197,64 @@ object DashboardSyncModel extends AbsDashboardModel {
 
     // enrollment/not-started/started/in-progress/completion count, live and retired courses
     val liveRetiredContentEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("courseStatus IN ('Live', 'Retired') AND userStatus=1"))
+    val liveRetiredEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category IN ('Course', 'Program', 'Blended Program', 'CuratedCollections', 'Curated Program') AND courseStatus IN ('Live', 'Retired') AND userStatus=1"))
     val liveRetiredCourseEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category='Course' AND courseStatus IN ('Live', 'Retired') AND userOrgID IS NOT NULL")).cache()
     val liveRetiredCourseProgramEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category IN ('Course', 'Program') AND courseStatus IN ('Live', 'Retired') AND userStatus=1"))
     val liveRetiredCourseProgramExcludingModeratedEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category IN ('Course', 'Program', 'Blended Program', 'CuratedCollections', 'Standalone Assessment', 'Curated Program') AND courseStatus IN ('Live', 'Retired') AND userStatus=1"))
     val liveRetiredCourseModeratedCourseEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category IN ('Course', 'Moderated Course') AND courseStatus IN ('Live', 'Retired') AND userStatus=1"))
+
+    val currentDate = LocalDate.now()
+    // Define the format for the timestamp with timezone offset
+    val timestampWithTimezoneFormat = "yyyy-MM-dd HH:mm:ss.SSSSSSZ"
+
+    // Calculate the start and end of the previous day (00:00:00 to 23:59:59) in UTC (or your desired timezone)
+    val previousDayStartTime = currentDate.minusDays(1).atStartOfDay().atOffset(java.time.ZoneOffset.ofHoursMinutes(5, 30))
+    val previousDayEndTime = currentDate.atStartOfDay().minusSeconds(1).atOffset(java.time.ZoneOffset.ofHoursMinutes(5, 30))
+
+    // Format them into strings using the same pattern as the timestamps in your data
+    val previousDayStartTimeString = previousDayStartTime.format(DateTimeFormatter.ofPattern(timestampWithTimezoneFormat))
+    val previousDayEndTimeString = previousDayEndTime.format(DateTimeFormatter.ofPattern(timestampWithTimezoneFormat))
+
+    println("----start"+previousDayStartTimeString)
+    println("----end"+previousDayEndTimeString)
+
+    //To get External content details
+    println("=-=-=-==-=-=-=")
+    val externalContentEnrolmentDF = marketPlaceEnrolments()
+      .withColumn("certificateID", when(col("issued_certificates").isNull, "").otherwise( col("issued_certificates")(size(col("issued_certificates")) - 1).getItem("identifier")))
+      .withColumnRenamed("status", "dbCompletionStatus")
+      .withColumnRenamed("userid", "userID")
+      .withColumn("firstCompletedOn", when(col("issued_certificates").isNull, "").otherwise(when(size(col("issued_certificates")) > 0, col("issued_certificates")(0).getItem("lastIssuedOn")).otherwise("")))
+
+    show(externalContentEnrolmentDF)
+
+    // Filter based on firstCompletedOn being between the start and end of the previous day
+    val externalContentCompletedYesDF = externalContentEnrolmentDF
+      .filter(
+        unix_timestamp(col("firstCompletedOn"), timestampWithTimezoneFormat).between(
+          unix_timestamp(lit(previousDayStartTimeString), timestampWithTimezoneFormat),
+          unix_timestamp(lit(previousDayEndTimeString), timestampWithTimezoneFormat)
+        )
+      )
+
+    // Get the count of certificates issued yesterday for external content
+    val externalCertificateIssuedYesterdayCount = externalContentCompletedYesDF.count()
 
     //get only Live counts
     val liveCourseProgramEnrolmentDF = liveRetiredCourseProgramEnrolmentDF.where(expr("courseStatus = 'Live'"))
     val liveCourseProgramExcludingModeratedEnrolmentDF = liveRetiredCourseProgramExcludingModeratedEnrolmentDF.where(expr("courseStatus = 'Live'"))
     val liveCourseModeratedCourseEnrolmentDF = liveRetiredCourseModeratedCourseEnrolmentDF.where(expr("courseStatus = 'Live'"))
 
-    val currentDate = LocalDate.now()
-    // Calculate twenty four hours ago
+    // Calculate start of the previous day (00:00:00)
     val twentyFourHoursAgo = currentDate.minusDays(1)
-    // Convert to LocalDateTime by adding a time component (midnight)
     val twentyFourHoursAgoLocalDateTime = twentyFourHoursAgo.atStartOfDay()
-    // Get the epoch time in milliseconds with IST offset
-    val twentyFourHoursAgoEpochMillis = twentyFourHoursAgoLocalDateTime.toEpochSecond(java.time.ZoneOffset.ofHoursMinutes(5, 30))
-    val liveRetiredCourseProgramCompletedYesterdayDF = allCourseProgramCompletionWithDetailsDF.where(expr(s"category IN ('Course', 'Program') AND courseStatus IN ('Live', 'Retired') AND userStatus=1 AND dbCompletionStatus=2 AND courseCompletedTimestamp >= ${twentyFourHoursAgoEpochMillis}"))
+    val twentyFourHoursAgoEpochMillis = twentyFourHoursAgoLocalDateTime.toEpochSecond(java.time.ZoneOffset.ofHoursMinutes(5, 30)) * 1000
+
+    // Calculate end of the previous day (23:59:59)
+    val previousDayEndEpochMillis = currentDate.atStartOfDay().minusSeconds(1).atOffset(java.time.ZoneOffset.ofHoursMinutes(5, 30)).toEpochSecond() * 1000
+
+    // Filter the DataFrame based on the previous day's range (from 00:00:00 to 23:59:59)
+    val liveRetiredCourseProgramCompletedYesterdayDF = liveRetiredEnrolmentDF.where(expr(s"dbCompletionStatus=2 AND unix_timestamp(firstCompletedOn) * 1000 >= ${twentyFourHoursAgoEpochMillis} AND unix_timestamp(firstCompletedOn) * 1000 <= ${previousDayEndEpochMillis}"))
     // Calculate twelve months ago
     val twelveMonthsAgo = currentDate.minusMonths(12)
     // Convert to LocalDateTime by adding a time component (midnight)
@@ -225,10 +265,16 @@ object DashboardSyncModel extends AbsDashboardModel {
     // started + not-started = enrolled
     val liveRetiredCourseNotStartedDF = liveRetiredCourseEnrolmentDF.where(expr("dbCompletionStatus=0"))
     val liveRetiredCourseStartedDF = liveRetiredCourseEnrolmentDF.where(expr("dbCompletionStatus IN (1, 2)"))
+//    val liveRetiredContentStartedDF = liveRetiredEnrolmentDF.where(expr("dbCompletionStatus IN (1, 2)"))
+//    val liveRetiredExternalContentStartedDF = externalContentEnrolmentDF.where(expr("dbCompletionStatus IN (1, 2)"))
+
     // in-progress + completed = started
     val liveRetiredCourseInProgressDF = liveRetiredCourseStartedDF.where(expr("dbCompletionStatus=1"))
     val liveRetiredCourseCompletedDF = liveRetiredCourseStartedDF.where(expr("dbCompletionStatus=2"))
     val liveRetiredContentCompletedDF = liveRetiredContentEnrolmentDF.where(expr("dbCompletionStatus=2"))
+    val liveRetiredAllCompletedDF = liveRetiredEnrolmentDF.where(expr("dbCompletionStatus=2"))
+    val liveRetiredExternalContentCompletedDF = externalContentEnrolmentDF.where(expr("dbCompletionStatus=2"))
+
     val liveRetiredCourseEnrolmentsCompletionsDF = liveRetiredCourseStartedDF.where(expr("dbCompletionStatus IN (0, 1, 2)"))
     // course program completed
     val liveRetiredCourseProgramCompletedDF = liveRetiredCourseProgramEnrolmentDF.where(expr("dbCompletionStatus=2"))
@@ -242,6 +288,10 @@ object DashboardSyncModel extends AbsDashboardModel {
     val completedCountDF = liveRetiredCourseCompletedDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     val landingPageCompletedCountDF = liveRetiredCourseProgramCompletedDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     val landingPageCompletedYesterdayCountDF = liveRetiredCourseProgramCompletedYesterdayDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
+    val contentEnrolmentCountDF=liveRetiredEnrolmentDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
+    val contentCompletedCountDF = liveRetiredAllCompletedDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
+    val externalContentEnrolmentCountDF=externalContentEnrolmentDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
+    val externalContentCompletedCountDF=liveRetiredExternalContentCompletedDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
 
     // group by courseID to get enrolment counts of each course/program
     val liveCourseProgramEnrolmentCountsDF = liveCourseProgramEnrolmentDF.groupBy("courseID").agg(count("*").alias("enrolmentCount"))
@@ -266,17 +316,28 @@ object DashboardSyncModel extends AbsDashboardModel {
     val completedCount = completedCountDF.select("count").first().getLong(0)
     val landingPageCompletedCount = landingPageCompletedCountDF.select("count").first().getLong(0)
     val landingPageCompletedYesterdayCount = landingPageCompletedYesterdayCountDF.select("count").first().getLong(0)
-
+    val contentCompletedCount = contentCompletedCountDF.select("count").first().getLong(0)
+    val externalContentCompletedCount = externalContentCompletedCountDF.select("count").first().getLong(0)
+    val contentEnrolmentCount = contentEnrolmentCountDF.select("count").first().getLong(0)
+    val externalContentEnrolmentCount = externalContentEnrolmentCountDF.select("count").first().getLong(0)
 
     Redis.update("dashboard_enrolment_count", enrolmentCount.toString)
+    Redis.update("dashboard_content_enrolment_count", (contentEnrolmentCount+externalContentEnrolmentCount).toString)
     Redis.update("dashboard_not_started_count", notStartedCount.toString)
     Redis.update("dashboard_started_count", startedCount.toString)
     Redis.update("dashboard_in_progress_count", inProgressCount.toString)
+    Redis.update("dashboard_content_completed_count", (contentCompletedCount+externalContentCompletedCount).toString)
     Redis.update("dashboard_completed_count", completedCount.toString)
     Redis.update("lp_completed_count", landingPageCompletedCount.toString)
-    Redis.update("lp_completed_yesterday_count", landingPageCompletedYesterdayCount.toString)
+//    Redis.update("lp_completed_yesterday_count", landingPageCompletedYesterdayCount.toString)
     Redis.dispatchDataFrame[Long]("live_course_program_enrolment_count", liveCourseProgramEnrolmentCountsDF, "courseID", "enrolmentCount")
+    println("dashboard_completed_count:"+completedCount.toString)
+    println("dashboard_content_completed_count:"+contentCompletedCount.toString)
+    println("dashboard_external_content_completed_count:"+externalContentCompletedCount.toString)
 
+    println("dashboard_enrolment_count:"+enrolmentCount.toString)
+    println("dashboard_content_enrolment_count:"+contentEnrolmentCount.toString)
+    println("dashboard_external_content_enrolment_count:"+externalContentEnrolmentCount.toString)
 
     // mdo-wise enrollment/not-started/started/in-progress/completion counts
     val liveRetiredCourseEnrolmentByMDODF = liveRetiredCourseEnrolmentDF.groupBy("userOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
@@ -370,9 +431,15 @@ object DashboardSyncModel extends AbsDashboardModel {
     // Count the distinct certificate_ids
     val eventEnrolledCountDF = eventEnrolledDF
       .agg(count("event_id").alias("event_count"))
+    val totalEventEnrolledCountDF = eventsEnrolmentDataDF
+      .agg(count("event_id").alias("event_count"))
 
     // Retrieve the count
     val enrolmentEventNLWCount = eventEnrolledCountDF
+      .select("event_count")
+      .first()
+      .getLong(0)
+    val totalEventEnrolmentCount = totalEventEnrolledCountDF
       .select("event_count")
       .first()
       .getLong(0)
@@ -384,6 +451,18 @@ object DashboardSyncModel extends AbsDashboardModel {
 
     val totalEnrollmentNLWCount= enrolmentEventNLWCount + enrolmentContentNLWCount
     Redis.update("dashboard_content_enrolment_nlw_count", totalEnrollmentNLWCount.toString)
+    Redis.update("dashboard_event_enrolment_count", totalEventEnrolmentCount.toString)
+    println("dashboard_event_enrolment_count:"+totalEventEnrolmentCount.toString)
+
+    //Calculate event Published Details
+    val eventsDataDF = cache.load("eventDetails")
+    val eventsPublishedCount = eventsDataDF
+      .select("event_id")
+      .distinct()
+      .count()
+    Redis.update("dashboard_events_published_count", eventsPublishedCount.toString())
+    println(s"dashboard_events_published_count: $eventsPublishedCount")
+
 
     // Calculate start and end of the previous day as OffsetDateTime
     val previousDayStart = currentDate.minusDays(1).atStartOfDay().atOffset(zoneOffset)
@@ -417,7 +496,10 @@ object DashboardSyncModel extends AbsDashboardModel {
     // dashboard_event_certificates_generated_yday_nlw_count contains event count
     Redis.update("dashboard_event_certificates_generated_yday_nlw_count", eventCertificateGeneratedYdayCount.toString)
 
-    //Total number of certificated yeasterday both event+content
+    //Adding completed Course', 'Program', 'Blended Program', 'CuratedCollections', 'Curated Program',External Content,Events
+    Redis.update("lp_completed_yesterday_count", (landingPageCompletedYesterdayCount + eventCertificateGeneratedYdayCount + externalCertificateIssuedYesterdayCount).toString)
+
+    //Total number of certificated yesterday both event+content
     val totalCertificatesGeneratedYdayCount = certificateGeneratedYdayCount + eventCertificateGeneratedYdayCount
 
     // dashboard_content_only_certificates_generated_yday_nlw_count contains content counts
@@ -454,6 +536,9 @@ object DashboardSyncModel extends AbsDashboardModel {
     val certificateGeneratedInNLWCount = certificateGeneratedInNLWCountDF.select("count").first().getLong(0)
     val totalCertificatesIssuedInNLW = certificateGeneratedInNLWCount + eventCertificateGeneratedNLWCount
     Redis.update("dashboard_content_certificates_generated_nlw_count", totalCertificatesIssuedInNLW.toString)
+    Redis.update("dashboard_event_completed_count", eventCertificateGeneratedNLWCount.toString)
+    println("dashboard_event_completed_count:"+eventCertificateGeneratedNLWCount)
+
     println("dashboard_content_certificates_generated_nlw_count |"+ totalCertificatesIssuedInNLW.toString+"|-|"+certificateGeneratedInNLWCount.toString+"|-|"+eventCertificateGeneratedNLWCount.toString)
 
     /* total number of events published that week */
