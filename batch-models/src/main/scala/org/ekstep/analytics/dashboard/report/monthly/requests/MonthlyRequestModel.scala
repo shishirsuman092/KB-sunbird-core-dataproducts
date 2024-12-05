@@ -40,6 +40,7 @@ object MonthlyRequestModel extends AbsDashboardModel {
       col("userID"),
       col("firstName"),
       col("userProfileImgUrl"),
+      col("userProfileStatus"),
       col("professionalDetails.designation").alias("designation"),
       col("employmentDetails.departmentName").alias("departmentName")
     )
@@ -60,11 +61,12 @@ object MonthlyRequestModel extends AbsDashboardModel {
         val firstName = row.getAs[String]("firstName")
         val userProfileImgUrl = row.getAs[String]("userProfileImgUrl")
         val designation = row.getAs[String]("designation")
+        val userProfileStatus = row.getAs[String]("userProfileStatus")
         val departmentName = row.getAs[String]("departmentName")
 
         // Construct Redis key and JSON value
         val redisKey = s"user:$userId"
-        val redisValue = s"""{"user_id":"$userId", "first_name":"$firstName", "user_profile_img_url":"$userProfileImgUrl", "designation":"$designation", "department":"$departmentName"}"""
+        val redisValue = s"""{"user_id":"$userId", "first_name":"$firstName", "user_profile_img_url":"$userProfileImgUrl","userProfileStatus":"$userProfileStatus","designation":"$designation", "department":"$departmentName"}"""
 
         // Queue the command in the pipeline
         pipeline.set(redisKey, redisValue)
