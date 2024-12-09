@@ -252,7 +252,23 @@ object DashboardSyncModel extends AbsDashboardModel {
 
     // Calculate end of the previous day (23:59:59)
     val previousDayEndEpochMillis = currentDate.atStartOfDay().minusSeconds(1).atOffset(java.time.ZoneOffset.ofHoursMinutes(5, 30)).toEpochSecond() * 1000
+    val toEpochMillis = udf((timestamp: String) => {
+      if (timestamp == null || timestamp.isEmpty) {
+        0L
+      } else {
+        try {
+          val format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ")
+          val date: Date = format.parse(timestamp)
+          date.getTime / 1000 // Dividing by 1000 to convert milliseconds to seconds
+        } catch {
+          case e: Exception =>
+            0L
+        }
+      }
+    })
 
+    val liveRetiredCourseProgramCompletedYesterdayDF = liveRetiredEnrolmentDF.withColumn("epoch_seconds", toEpochMillis(col("firstCompletedOn")))
+      .where(expr(s"dbCompletionStatus=2 AND epoch_seconds * 1000 >= ${twentyFourHoursAgoEpochMillis} AND epoch_seconds * 1000 <= ${previousDayEndEpochMillis}"))
     // Filter the DataFrame based on the previous day's range (from 00:00:00 to 23:59:59)
     val liveRetiredCourseProgramCompletedYesterdayDF = liveRetiredEnrolmentDF.where(expr(s"dbCompletionStatus=2 AND unix_timestamp(firstCompletedOn) * 1000 >= ${twentyFourHoursAgoEpochMillis} AND unix_timestamp(firstCompletedOn) * 1000 <= ${previousDayEndEpochMillis}"))
     // Calculate twelve months ago
