@@ -14,6 +14,7 @@ import java.text.SimpleDateFormat
 import java.time.{LocalDateTime, ZoneOffset}
 import java.time.format.DateTimeFormatter
 import java.time.LocalDate
+import java.util.Date
 
 /**
  * Model for processing dashboard data
@@ -267,10 +268,9 @@ object DashboardSyncModel extends AbsDashboardModel {
       }
     })
 
+    // Filter the DataFrame based on the previous day's range (from 00:00:00 to 23:59:59)
     val liveRetiredCourseProgramCompletedYesterdayDF = liveRetiredEnrolmentDF.withColumn("epoch_seconds", toEpochMillis(col("firstCompletedOn")))
       .where(expr(s"dbCompletionStatus=2 AND epoch_seconds * 1000 >= ${twentyFourHoursAgoEpochMillis} AND epoch_seconds * 1000 <= ${previousDayEndEpochMillis}"))
-    // Filter the DataFrame based on the previous day's range (from 00:00:00 to 23:59:59)
-    val liveRetiredCourseProgramCompletedYesterdayDF = liveRetiredEnrolmentDF.where(expr(s"dbCompletionStatus=2 AND unix_timestamp(firstCompletedOn) * 1000 >= ${twentyFourHoursAgoEpochMillis} AND unix_timestamp(firstCompletedOn) * 1000 <= ${previousDayEndEpochMillis}"))
     // Calculate twelve months ago
     val twelveMonthsAgo = currentDate.minusMonths(12)
     // Convert to LocalDateTime by adding a time component (midnight)
