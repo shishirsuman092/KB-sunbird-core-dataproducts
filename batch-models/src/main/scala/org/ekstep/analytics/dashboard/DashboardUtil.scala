@@ -558,6 +558,20 @@ object DashboardUtil extends Serializable {
       )
     }
 
+    def durationFormatMinutes(inCol: String, outCol: String = null): DataFrame = {
+      val outColName = if (outCol == null) inCol else outCol
+      df.withColumn(outColName,
+        when(col(inCol).isNull, lit(""))
+          .otherwise(
+            format_string("%02d:%02d:%02d",
+              expr(s"${inCol} / 60").cast("int"),
+              expr(s"${inCol} % 60").cast("int"),
+              lit(0)
+            )
+          )
+      )
+    }
+
     /**
      * collect values in keyField and valueField as a map
      *
