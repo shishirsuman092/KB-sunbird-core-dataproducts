@@ -239,6 +239,7 @@ object UserEnrolmentModel extends AbsDashboardModel {
       .withColumn("certificate_generated_on",date_format(from_utc_timestamp(to_utc_timestamp(to_timestamp(
         col("certificateGeneratedOn"), dateTimeWithMilliSecFormat), "UTC"), "IST"), dateTimeFormat))
       .withColumn("data_last_generated_on", currentDateTime)
+      .withColumn("firstCompletedOn", date_format(col("firstCompletedOn"), dateTimeFormat))
       .select(
         col("userID").alias("user_id"),
         col("batchID").alias("batch_id"),

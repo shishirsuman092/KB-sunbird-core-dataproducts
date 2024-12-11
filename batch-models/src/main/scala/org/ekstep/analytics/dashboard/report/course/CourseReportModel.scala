@@ -186,7 +186,7 @@ object CourseReportModel extends AbsDashboardModel {
       lit("External Content").as("category"),
       lit("LIVE").as("courseStatus"))
 
-    val marketPlaceContentWithEnrolmentsDF = extractedDF.durationFormat("courseDuration")
+    val marketPlaceContentWithEnrolmentsDF = extractedDF.durationFormatMinutes("courseDuration")
       .join(aggregatedDF2, Seq("content_id"), "outer")
       .withColumn("firstCompletedOn", to_date(col("earliestCompletedOn"), dateFormat))
       .withColumn("lastCompletedOn", to_date(col("latestCompletedOn"), dateFormat))
