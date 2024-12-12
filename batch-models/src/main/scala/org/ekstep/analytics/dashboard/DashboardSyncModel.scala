@@ -319,13 +319,13 @@ object DashboardSyncModel extends AbsDashboardModel {
     val contentEnrolmentCount = contentEnrolmentCountDF.select("count").first().getLong(0)
     val externalContentEnrolmentCount = externalContentEnrolmentCountDF.select("count").first().getLong(0)
 
-    Redis.update("dashboard_enrolment_count", enrolmentCount.toString)
-    Redis.update("dashboard_content_enrolment_count", (contentEnrolmentCount+externalContentEnrolmentCount).toString)
+   // Redis.update("dashboard_enrolment_count", enrolmentCount.toString)
+    Redis.update("dashboard_enrolment_count", (contentEnrolmentCount+externalContentEnrolmentCount).toString)
     Redis.update("dashboard_not_started_count", notStartedCount.toString)
     Redis.update("dashboard_started_count", startedCount.toString)
     Redis.update("dashboard_in_progress_count", inProgressCount.toString)
-    Redis.update("dashboard_content_completed_count", (contentCompletedCount+externalContentCompletedCount).toString)
-    Redis.update("dashboard_completed_count", completedCount.toString)
+    Redis.update("dashboard_completed_count", (contentCompletedCount+externalContentCompletedCount).toString)
+    //Redis.update("dashboard_completed_count", completedCount.toString)
     Redis.update("lp_completed_count", landingPageCompletedCount.toString)
 //    Redis.update("lp_completed_yesterday_count", landingPageCompletedYesterdayCount.toString)
     Redis.dispatchDataFrame[Long]("live_course_program_enrolment_count", liveCourseProgramEnrolmentCountsDF, "courseID", "enrolmentCount")
@@ -446,8 +446,8 @@ object DashboardSyncModel extends AbsDashboardModel {
 
     val totalEnrollmentNLWCount= enrolmentEventNLWCount + enrolmentContentNLWCount
     Redis.update("dashboard_content_enrolment_nlw_count", totalEnrollmentNLWCount.toString)
-    Redis.update("dashboard_event_enrolment_count", totalEventEnrolmentCount.toString)
-    println("dashboard_event_enrolment_count:"+totalEventEnrolmentCount.toString)
+    Redis.update("dashboard_events_enrolment_count", totalEventEnrolmentCount.toString)
+    println("dashboard_events_enrolment_count:"+totalEventEnrolmentCount.toString)
 
     //Calculate event Published Details
     val eventsDataDF = cache.load("eventDetails")
@@ -531,8 +531,8 @@ object DashboardSyncModel extends AbsDashboardModel {
     val certificateGeneratedInNLWCount = certificateGeneratedInNLWCountDF.select("count").first().getLong(0)
     val totalCertificatesIssuedInNLW = certificateGeneratedInNLWCount + eventCertificateGeneratedNLWCount
     Redis.update("dashboard_content_certificates_generated_nlw_count", totalCertificatesIssuedInNLW.toString)
-    Redis.update("dashboard_event_completed_count", eventCertificateGeneratedNLWCount.toString)
-    println("dashboard_event_completed_count:"+eventCertificateGeneratedNLWCount)
+    Redis.update("dashboard_events_completed_count", eventCertificateGeneratedNLWCount.toString)
+    println("dashboard_events_completed_count:"+eventCertificateGeneratedNLWCount)
 
     println("dashboard_content_certificates_generated_nlw_count |"+ totalCertificatesIssuedInNLW.toString+"|-|"+certificateGeneratedInNLWCount.toString+"|-|"+eventCertificateGeneratedNLWCount.toString)
 
