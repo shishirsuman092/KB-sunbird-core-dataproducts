@@ -220,19 +220,13 @@ object DataExhaustModel extends AbsDashboardModel {
     cache.write(eventDetailsDF, "eventDetails")
 
     val caseExpression = "CASE WHEN ISNULL(status) THEN 'not-enrolled' WHEN status == 0 THEN 'not-started' WHEN status == 1 THEN 'in-progress' ELSE 'completed' END"
-    val eventsEnrolmentDF = cassandraTableAsDataFrame(conf.cassandraCourseKeyspace, conf.cassandraUserEntityEnrolmentTable)
+    val eventsEnrolmentDF = cassandraTableAsDataFrame(conf.cassandraCourseKeyspace, "user_entity_enrolments")
       .withColumn("certificate_id", when(col("issued_certificates").isNull, "").otherwise( col("issued_certificates")(size(col("issued_certificates")) - 1).getItem("identifier")))
       .withColumn("enrolled_on_datetime", date_format(to_utc_timestamp(col("enrolled_date"), "Asia/Kolkata"), dateTimeFormat))
       .withColumn("completed_on_datetime", date_format(to_utc_timestamp(col("completedon"), "Asia/Kolkata"), dateTimeFormat))
       .withColumn("status", expr(caseExpression))
       .withColumn("progress_details", from_json(col("lrc_progressdetails"), Schema.eventProgressDetailSchema))
-      .withColumn("event_duration", when(col("progress_details").isNotNull, col("progress_details.max_size")).otherwise(0))
-      .withColumn("progress_duration", when(col("progress_details").isNotNull, col("progress_details.duration")).otherwise(0))
-      .withColumn("duration", when(col("progress_details").isNotNull, col("progress_details.duration")).otherwise(0))
-      .withColumn("event_duration_seconds", when(col("progress_details").isNotNull, col("progress_details.max_size")).otherwise(0))
-      .filter(col("enrolled_on_datetime") >= conf.nationalLearningWeekStart)
-      .durationFormat("event_duration")
-      .durationFormat("progress_duration")
+      .filter(col("enrolled_on_datetime") >= nationalLearningWeekStartString)
       .select(
         col("userid").alias("user_id"),
         col("contentid").alias("event_id"),
@@ -241,13 +235,19 @@ object DataExhaustModel extends AbsDashboardModel {
         col("completed_on_datetime"),
         col("progress_details"),
         col("certificate_id"),
-        col("completionpercentage").alias("completion_percentage"),
-        col("event_duration"),
-        col("progress_duration"),
-        col("duration"),
-        col("event_duration_seconds")
+        col("completionpercentage").alias("completion_percentage")
       )
-    cache.write(eventsEnrolmentDF, "eventEnrolmentDetails")
+    val eventsEnrolmentWithDurationDF = eventsEnrolmentDF
+      .withColumn("event_duration", when(col("progress_details").isNotNull, col("progress_details.max_size")).otherwise(null))
+      .durationFormat("event_duration")
+      .withColumn("progress_duration", when(col("progress_details").isNotNull, col("progress_details.duration")).otherwise(null))
+      .durationFormat("progress_duration")
+      .withColumn("duration", when(col("progress_details").isNotNull, col("progress_details.duration")).otherwise(null))
+      .withColumn("event_duration_seconds", when(col("progress_details").isNotNull, col("progress_details.max_size")).otherwise(null))
+      .drop(col("progress_details"))
+    show(eventsEnrolmentWithDurationDF, "eventsEnrolmentWithDurationDF")
+    // write to cache
+    cache.write(eventsEnrolmentWithDurationDF.coalesce(1), "eventEnrolmentDetails")
     eventsEnrolmentDF.unpersist()
 
   }

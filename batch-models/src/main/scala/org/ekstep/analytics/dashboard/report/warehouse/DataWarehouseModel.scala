@@ -120,14 +120,13 @@ object DataWarehouseModel extends AbsDashboardModel {
         col("event_id"),col("event_name"),col("event_provider_mdo_id"),col("event_start_datetime"),
         col("duration"),col("event_status"),col("event_type"),col("presenters"),col("video_link"),col("recording_link")
       )
-    val eventsEnrolmentDataDF = cache.load("eventEnrolmentDetails")
-      .select(
-        col("user_id"),col("event_id"),col("enrolled_on_datetime"),col("status"),col("certificate_id"),col("completion_percentage")
-      )
     truncateWarehouseTable(conf.dwEventsTable)
-    truncateWarehouseTable(conf.dwEventsEnrolmentTable)
     saveDataframeToPostgresTable_With_Append(eventsDataDF, dwPostgresUrl, conf.dwEventsTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
-    saveDataframeToPostgresTable_With_Append(eventsEnrolmentDataDF, dwPostgresUrl, conf.dwEventsEnrolmentTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
+
+    val eventsEnrolmentDataDF = cache.load("eventEnrolmentDetails")
+    truncateWarehouseTable("events_enrolment")
+    saveDataframeToPostgresTable_With_Append(eventsEnrolmentDataDF, dwPostgresUrl, "events_enrolment", conf.dwPostgresUsername, conf.dwPostgresCredential)
+    warehouseCache.write(eventsEnrolmentDataDF, "event_enrolment_details")
 
    //Writing event and event_enrollment data into warehouse cache
     warehouseCache.write(eventsDataDF, "event_details")
