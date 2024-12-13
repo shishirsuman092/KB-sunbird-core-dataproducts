@@ -227,7 +227,7 @@ object DataExhaustModel extends AbsDashboardModel {
       .withColumn("completed_on_datetime", date_format(to_utc_timestamp(col("completedon"), "Asia/Kolkata"), dateTimeFormat))
       .withColumn("status", expr(caseExpression))
       .withColumn("progress_details", from_json(col("lrc_progressdetails"), Schema.eventProgressDetailSchema))
-      .filter(col("enrolled_on_datetime") >= nationalLearningWeekStartString)
+      .filter(col("enrolled_on_datetime") >= conf.nationalLearningWeekStart)
       .select(
         col("userid").alias("user_id"),
         col("contentid").alias("event_id"),
