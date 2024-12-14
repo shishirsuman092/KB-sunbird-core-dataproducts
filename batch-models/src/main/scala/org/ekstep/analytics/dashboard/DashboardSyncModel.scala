@@ -250,6 +250,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     val twentyFourHoursAgo = currentDate.minusDays(1)
     val twentyFourHoursAgoLocalDateTime = twentyFourHoursAgo.atStartOfDay()
     val twentyFourHoursAgoEpochMillis = twentyFourHoursAgoLocalDateTime.toEpochSecond(java.time.ZoneOffset.ofHoursMinutes(5, 30)) * 1000
+    val twentyFourHoursAgoEpochMillisTime = twentyFourHoursAgoLocalDateTime.toEpochSecond(java.time.ZoneOffset.ofHoursMinutes(5, 30))
 
     // Calculate end of the previous day (23:59:59)
     val previousDayEndEpochMillis = currentDate.atStartOfDay().minusSeconds(1).atOffset(java.time.ZoneOffset.ofHoursMinutes(5, 30)).toEpochSecond() * 1000
@@ -269,7 +270,9 @@ object DashboardSyncModel extends AbsDashboardModel {
     })
 
     // Filter the DataFrame based on the previous day's range (from 00:00:00 to 23:59:59)
-    val liveRetiredCourseProgramCompletedYesterdayDF = liveRetiredEnrolmentDF.withColumn("epoch_seconds", toEpochMillis(col("firstCompletedOn")))
+    val liveRetiredCourseProgramCompletedYesterdayDF = allCourseProgramCompletionWithDetailsDF.where(expr(s"category IN ('Course', 'Program') AND courseStatus IN ('Live', 'Retired') AND userStatus=1 AND dbCompletionStatus=2 AND courseCompletedTimestamp >= ${twentyFourHoursAgoEpochMillisTime}"))
+    //For all content types
+    val liveRetiredContentCompletedYesterdayDF = liveRetiredEnrolmentDF.withColumn("epoch_seconds", toEpochMillis(col("firstCompletedOn")))
       .where(expr(s"dbCompletionStatus=2 AND epoch_seconds * 1000 >= ${twentyFourHoursAgoEpochMillis} AND epoch_seconds * 1000 <= ${previousDayEndEpochMillis}"))
     // Calculate twelve months ago
     val twelveMonthsAgo = currentDate.minusMonths(12)
@@ -302,6 +305,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     val completedCountDF = liveRetiredCourseCompletedDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     val landingPageCompletedCountDF = liveRetiredCourseProgramCompletedDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     val landingPageCompletedYesterdayCountDF = liveRetiredCourseProgramCompletedYesterdayDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
+    val landingPageContentCompletedYesterdayCountDF = liveRetiredContentCompletedYesterdayDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     val contentEnrolmentCountDF=liveRetiredEnrolmentDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     val contentCompletedCountDF = liveRetiredAllCompletedDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     val externalContentEnrolmentCountDF=externalContentEnrolmentDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
@@ -330,6 +334,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     val completedCount = completedCountDF.select("count").first().getLong(0)
     val landingPageCompletedCount = landingPageCompletedCountDF.select("count").first().getLong(0)
     val landingPageCompletedYesterdayCount = landingPageCompletedYesterdayCountDF.select("count").first().getLong(0)
+    val landingPageContentCompletedYesterdayCount = landingPageContentCompletedYesterdayCountDF.select("count").first().getLong(0)
     val contentCompletedCount = contentCompletedCountDF.select("count").first().getLong(0)
     val externalContentCompletedCount = externalContentCompletedCountDF.select("count").first().getLong(0)
     val contentEnrolmentCount = contentEnrolmentCountDF.select("count").first().getLong(0)
@@ -343,7 +348,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     Redis.update("dashboard_content_completed_count", (contentCompletedCount+externalContentCompletedCount).toString)
     Redis.update("dashboard_completed_count", completedCount.toString)
     Redis.update("lp_completed_count", landingPageCompletedCount.toString)
-//    Redis.update("lp_completed_yesterday_count", landingPageCompletedYesterdayCount.toString)
+    Redis.update("lp_completed_yesterday_count", landingPageCompletedYesterdayCount.toString)
     Redis.dispatchDataFrame[Long]("live_course_program_enrolment_count", liveCourseProgramEnrolmentCountsDF, "courseID", "enrolmentCount")
     println("dashboard_completed_count:"+completedCount.toString)
     println("dashboard_content_completed_count:"+contentCompletedCount.toString)
@@ -508,7 +513,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     Redis.update("dashboard_event_certificates_generated_yday_nlw_count", eventCertificateGeneratedYdayCount.toString)
 
     //Adding completed Course', 'Program', 'Blended Program', 'CuratedCollections', 'Curated Program',External Content,Events
-    Redis.update("lp_completed_yesterday_count", (landingPageCompletedYesterdayCount + eventCertificateGeneratedYdayCount + externalCertificateIssuedYesterdayCount).toString)
+    Redis.update("lp_all_completed_yesterday_count", (landingPageContentCompletedYesterdayCount + eventCertificateGeneratedYdayCount + externalCertificateIssuedYesterdayCount).toString)
 
     //Total number of certificated yesterday both event+content
     val totalCertificatesGeneratedYdayCount = certificateGeneratedYdayCount + eventCertificateGeneratedYdayCount
