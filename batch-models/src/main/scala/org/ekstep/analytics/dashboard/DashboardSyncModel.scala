@@ -340,15 +340,15 @@ object DashboardSyncModel extends AbsDashboardModel {
     val contentEnrolmentCount = contentEnrolmentCountDF.select("count").first().getLong(0)
     val externalContentEnrolmentCount = externalContentEnrolmentCountDF.select("count").first().getLong(0)
 
-    Redis.update("dashboard_enrolment_count", enrolmentCount.toString)
-    Redis.update("dashboard_content_enrolment_count",(contentEnrolmentCount+externalContentEnrolmentCount).toString)
+//    Redis.update("dashboard_enrolment_count", enrolmentCount.toString)
+    Redis.update("dashboard_enrolment_count",(contentEnrolmentCount+externalContentEnrolmentCount).toString)
     Redis.update("dashboard_not_started_count", notStartedCount.toString)
     Redis.update("dashboard_started_count", startedCount.toString)
     Redis.update("dashboard_in_progress_count", inProgressCount.toString)
-    Redis.update("dashboard_content_completed_count", (contentCompletedCount+externalContentCompletedCount).toString)
-    Redis.update("dashboard_completed_count", completedCount.toString)
+    Redis.update("dashboard_completed_count", (contentCompletedCount+externalContentCompletedCount).toString)
+//    Redis.update("dashboard_completed_count", completedCount.toString)
     Redis.update("lp_completed_count", landingPageCompletedCount.toString)
-    Redis.update("lp_completed_yesterday_count", landingPageCompletedYesterdayCount.toString)
+//    Redis.update("lp_completed_yesterday_count", landingPageCompletedYesterdayCount.toString)
     Redis.dispatchDataFrame[Long]("live_course_program_enrolment_count", liveCourseProgramEnrolmentCountsDF, "courseID", "enrolmentCount")
     println("dashboard_completed_count:"+completedCount.toString)
     println("dashboard_content_completed_count:"+contentCompletedCount.toString)
@@ -513,7 +513,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     Redis.update("dashboard_event_certificates_generated_yday_nlw_count", eventCertificateGeneratedYdayCount.toString)
 
     //Adding completed Course', 'Program', 'Blended Program', 'CuratedCollections', 'Curated Program',External Content,Events
-    Redis.update("lp_all_completed_yesterday_count", (landingPageContentCompletedYesterdayCount + eventCertificateGeneratedYdayCount + externalCertificateIssuedYesterdayCount).toString)
+    Redis.update("lp_completed_yesterday_count", (landingPageContentCompletedYesterdayCount + eventCertificateGeneratedYdayCount + externalCertificateIssuedYesterdayCount).toString)
 
     //Total number of certificated yesterday both event+content
     val totalCertificatesGeneratedYdayCount = certificateGeneratedYdayCount + eventCertificateGeneratedYdayCount
