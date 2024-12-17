@@ -644,7 +644,8 @@ object DataUtil extends Serializable {
         col("competencies_v5.competencyAreaId"),
         col("competencies_v5.competencyThemeId"),
         col("competencies_v5.competencySubThemeId"),
-        col("contentLanguage")
+        col("contentLanguage"),
+        col("courseCategory").alias("content_sub_type")
       ).dropDuplicates("courseID", "category")
       .na.fill(0.0, Seq("courseDuration"))
       .na.fill(0, Seq("courseResourceCount"))
