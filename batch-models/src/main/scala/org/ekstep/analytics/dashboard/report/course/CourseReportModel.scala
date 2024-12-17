@@ -208,7 +208,6 @@ object CourseReportModel extends AbsDashboardModel {
       col("courseOrgName").alias("content_provider_name"),
       col("courseName").alias("content_name"),
       col("category").alias("content_type"),
-      lit("External Content").alias("content_sub_type"),
       lit("Not Available").alias("batch_id"), // Match order
       lit("Not Available").alias("batch_name"), // Match order
       lit(null).cast("date").alias("batch_start_date"), // Match order
@@ -222,7 +221,8 @@ object CourseReportModel extends AbsDashboardModel {
       col("totalCertificatesIssued").alias("total_certificates_issued"),
       lit("Not Available").alias("content_substatus"), // Match order
       lit("Not Available").alias("language"), // Match order
-      col("data_last_generated_on")
+      col("data_last_generated_on"),
+      lit("External Content").alias("content_sub_type")
     )
 
     val marketPlaceContentMdoReportDF = marketPlaceContentWithEnrolmentsDF
