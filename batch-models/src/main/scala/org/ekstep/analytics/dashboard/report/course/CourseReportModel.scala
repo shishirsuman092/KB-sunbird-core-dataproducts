@@ -184,7 +184,7 @@ object CourseReportModel extends AbsDashboardModel {
       col("parsed_data.content.contentPartner.id").as("courseOrgID"),
       col("parsed_data.content.contentPartner.contentPartnerName").as("courseOrgName"),
       lit("External Content").as("category"),
-      lit("LIVE").as("courseStatus"))
+      lit("Live").as("courseStatus"))
 
     val marketPlaceContentWithEnrolmentsDF = extractedDF.durationFormatMinutes("courseDuration")
       .join(aggregatedDF2, Seq("content_id"), "outer")
@@ -208,6 +208,7 @@ object CourseReportModel extends AbsDashboardModel {
       col("courseOrgName").alias("content_provider_name"),
       col("courseName").alias("content_name"),
       col("category").alias("content_type"),
+      lit("Course").alias("content_sub_type"),
       lit("Not Available").alias("batch_id"), // Match order
       lit("Not Available").alias("batch_name"), // Match order
       lit(null).cast("date").alias("batch_start_date"), // Match order
@@ -304,7 +305,8 @@ object CourseReportModel extends AbsDashboardModel {
         col("totalCertificatesIssued").alias("total_certificates_issued"),
         col("courseReviewStatus").alias("content_substatus"),
         col("contentLanguage").alias("language"),
-        col("data_last_generated_on")
+        col("data_last_generated_on"),
+        col("courseCategory").alias("content_sub_type")
       )
     val df_warehouse = platformContentWarehouseDF.union(marketPlaceContentWarehouseDF)
     generateReport(df_warehouse.coalesce(1), s"${reportPath}-warehouse")
