@@ -242,5 +242,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON user_enrolments TO postgres;
 ALTER TABLE user_detail RENAME COLUMN is_verified_karmayogi TO profile_status;
 ALTER TABLE user_detail ALTER COLUMN profile_status TYPE character varying(15);
 
-alter table user_enrolments drop column marked_as_not_my_user;
+alter table user_detail drop column marked_as_not_my_user;
 alter table user_detail rename column is_verified_karmayogi to profile_status;
+
+// adding new column in content
+ALTER TABLE content ADD COLUMN content_sub_type character varying(50);
