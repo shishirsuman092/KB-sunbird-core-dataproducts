@@ -241,3 +241,4 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON user_enrolments TO postgres;
 
 ALTER TABLE user_detail RENAME COLUMN is_verified_karmayogi TO profile_status;
 ALTER TABLE user_detail ALTER COLUMN profile_status TYPE character varying(15);
+ALTER TABLE user_detail ADD COLUMN employee_id VARCHAR(100);

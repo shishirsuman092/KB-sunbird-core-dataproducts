@@ -134,6 +134,7 @@ object UserReportModel extends AbsDashboardModel {
         coalesce(col("total_event_learning_hours_with_certificates"), lit(0)).alias("total_event_learning_hours"),
         coalesce(col("total_content_duration"), lit(0)).alias("total_content_learning_hours"),
         coalesce(col("Total_Learning_Hours"), lit(0)).alias("total_learning_hours"),
+        col("employmentDetails.employeeCode").alias("employee_id"),
         col("data_last_generated_on")
       )
 
