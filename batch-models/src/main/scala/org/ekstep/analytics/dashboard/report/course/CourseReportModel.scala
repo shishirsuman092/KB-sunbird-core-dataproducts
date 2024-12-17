@@ -208,7 +208,7 @@ object CourseReportModel extends AbsDashboardModel {
       col("courseOrgName").alias("content_provider_name"),
       col("courseName").alias("content_name"),
       col("category").alias("content_type"),
-      lit("Course").alias("content_sub_type"),
+      lit("External Content").alias("content_sub_type"),
       lit("Not Available").alias("batch_id"), // Match order
       lit("Not Available").alias("batch_name"), // Match order
       lit(null).cast("date").alias("batch_start_date"), // Match order
