@@ -221,8 +221,8 @@ object CourseReportModel extends AbsDashboardModel {
       col("totalCertificatesIssued").alias("total_certificates_issued"),
       lit("Not Available").alias("content_substatus"), // Match order
       lit("Not Available").alias("language"), // Match order
-      col("data_last_generated_on"),
-      lit("External Content").alias("content_sub_type")
+      lit("External Content").alias("content_sub_type"),
+      col("data_last_generated_on")
     )
 
     val marketPlaceContentMdoReportDF = marketPlaceContentWithEnrolmentsDF
@@ -305,8 +305,8 @@ object CourseReportModel extends AbsDashboardModel {
         col("totalCertificatesIssued").alias("total_certificates_issued"),
         col("courseReviewStatus").alias("content_substatus"),
         col("contentLanguage").alias("language"),
-        col("data_last_generated_on"),
-        col("courseCategory").alias("content_sub_type")
+        col("courseCategory").alias("content_sub_type"),
+        col("data_last_generated_on")
       )
     val df_warehouse = platformContentWarehouseDF.union(marketPlaceContentWarehouseDF)
     generateReport(df_warehouse.coalesce(1), s"${reportPath}-warehouse")
