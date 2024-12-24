@@ -30,23 +30,57 @@ object MinistryMetricsModel extends AbsDashboardModel {
 
     val joinedWithMinistryIDDF = joinUserDF.join(org_hierarchyDF, userDF("user_org_id") === org_hierarchyDF("mdo_id"), "left_outer")
 
-    val certificateResultDF = joinedWithMinistryIDDF
+    val certificateMinistryDF = joinedWithMinistryIDDF
       .groupBy("ministry")
       .agg(countDistinct("certificate_id").alias("certificateCount"))
 
+    val certificateDeptDF = joinedWithMinistryIDDF
+      .groupBy("department")
+      .agg(countDistinct("certificate_id").alias("certificateCount"))
+      .select(col("department").alias("ministry"), col("certificateCount"))
+
+    val certificateOrgDF = joinedWithMinistryIDDF
+      .groupBy("organization")
+      .agg(countDistinct("certificate_id").alias("certificateCount"))
+      .select(col("organization").alias("ministry"), col("certificateCount"))
+
+
+    val certificateResultDF = certificateMinistryDF.union(certificateDeptDF).union(certificateOrgDF)
 
     // Aggregate and create enrolmentResultDF
-    val enrolmentResultDF = joinedWithMinistryIDDF
+
+    val enrolmentMinistrytDF = joinedWithMinistryIDDF
       .groupBy("ministry")
       .agg(count("user_ID").alias("enrolmentCount"))
 
+    val enrolmentDeptDF = joinedWithMinistryIDDF
+      .groupBy("department")
+      .agg(count("user_ID").alias("enrolmentCount"))
+      .select(col("department").alias("ministry"), col("enrolmentCount"))
+
+    val enrolmentOrgDF = joinedWithMinistryIDDF
+      .groupBy("organization")
+      .agg(count("user_ID").alias("enrolmentCount"))
+      .select(col("organization").alias("ministry"), col("enrolmentCount"))
+
+    val enrolmentResultDF = enrolmentMinistrytDF.union(enrolmentDeptDF).union(enrolmentOrgDF)
 
     // Create userCountDF
-    val userCountDF = userDF.join(org_hierarchyDF, userDF("user_org_id") === org_hierarchyDF("mdo_id"), "left_outer")
+    val userCountMinistryDF = userDF.join(org_hierarchyDF, userDF("user_org_id") === org_hierarchyDF("mdo_id"), "left_outer")
       .groupBy("ministry")
       .agg(count("user_ID").alias("userCount"))
 
+    val userCountDeptDF = userDF.join(org_hierarchyDF, userDF("user_org_id") === org_hierarchyDF("mdo_id"), "left_outer")
+      .groupBy("department")
+      .agg(count("user_ID").alias("userCount"))
+      .select(col("department").alias("ministry"), col("userCount"))
 
+    val userCountOrgDF = userDF.join(org_hierarchyDF, userDF("user_org_id") === org_hierarchyDF("mdo_id"), "left_outer")
+      .groupBy("organization")
+      .agg(count("user_ID").alias("userCount"))
+      .select(col("organization").alias("ministry"), col("userCount"))
+
+    val userCountDF = userCountMinistryDF.union(userCountDeptDF).union(userCountOrgDF)
     // certificateResultDF.join(ministryNamesDF, Seq("ministry"), "inner").select(col("ministryID"),col("certificateCount"))
     //  .repartition(1).write.mode(SaveMode.Overwrite).format("csv").option("header", true).save("/tmp/certificateCountData")
     //userCountDF.join(ministryNamesDF, Seq("ministry"), "inner").select(col("ministryID"),col("userCount"))
