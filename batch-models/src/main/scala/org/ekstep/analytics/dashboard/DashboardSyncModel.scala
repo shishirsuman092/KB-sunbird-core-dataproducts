@@ -655,11 +655,11 @@ object DashboardSyncModel extends AbsDashboardModel {
     val categories = Seq("Course", "Program", "Blended Program", "CuratedCollections", "Standalone Assessment", "Curated Program")
     val cbpDetails = allCourseProgramESDataFrame(categories)
       .where("courseStatus IN ('Live', 'Retired')")
-      .select("courseID", "competencyAreaId", "competencyThemeId", "competencySubThemeId", "courseName", "courseOrgID")
+      .select("courseID", "competencyAreaRefId", "competencyThemeRefId", "competencySubThemeRefId", "courseName", "courseOrgID")
     // explode area, theme and sub theme seperately
-    val areaExploded = cbpDetails.select(col("courseID"), expr("posexplode_outer(competencyAreaId) as (pos, competency_area_id)")).repartition(col("courseID"))
-    val themeExploded = cbpDetails.select(col("courseID"), expr("posexplode_outer(competencyThemeId) as (pos, competency_theme_id)")).repartition(col("courseID"))
-    val subThemeExploded = cbpDetails.select(col("courseID"), expr("posexplode_outer(competencySubThemeId) as (pos, competency_sub_theme_id)")).repartition(col("courseID"))
+    val areaExploded = cbpDetails.select(col("courseID"), expr("posexplode_outer(competencyAreaRefId) as (pos, competency_area_id)")).repartition(col("courseID"))
+    val themeExploded = cbpDetails.select(col("courseID"), expr("posexplode_outer(competencyThemeRefId) as (pos, competency_theme_id)")).repartition(col("courseID"))
+    val subThemeExploded = cbpDetails.select(col("courseID"), expr("posexplode_outer(competencySubThemeRefId) as (pos, competency_sub_theme_id)")).repartition(col("courseID"))
     // Joining area, theme and subtheme based on position
     val competencyJoinedDF = areaExploded.join(themeExploded, Seq("courseID", "pos")).join(subThemeExploded, Seq("courseID", "pos"))
     // joining with cbpDetails for getting courses with no competencies mapped to it
@@ -670,9 +670,9 @@ object DashboardSyncModel extends AbsDashboardModel {
     val areaWiseCountsDF = contentMappingDF.groupBy("courseOrgID", "competency_area_id").agg(countDistinct("competency_theme_id").alias("area_count")).filter(expr("competency_area_id IS NOT NULL"))
     val totalCountDF = contentMappingDF.groupBy("courseOrgID").agg(coalesce(countDistinct("competency_theme_id"), lit(0)).alias("total_count"))
     // Create a mapping for competency_area_id to descriptive keys
-    val mappedAreaWiseCountsDF = areaWiseCountsDF.withColumn("mapped_area_id", when(col("competency_area_id") === 56, "Functional")
-      .when(col("competency_area_id") === 1, "Behavioural")
-      .when(col("competency_area_id") === 145, "Domain")
+    val mappedAreaWiseCountsDF = areaWiseCountsDF.withColumn("mapped_area_id", when(col("competency_area_id") === "COMAREA-000003", "Functional")
+      .when(col("competency_area_id") === "COMAREA-000001", "Behavioural")
+      .when(col("competency_area_id") === "COMAREA-000002", "Domain")
       .otherwise(col("competency_area_id")))
 
     val resultDF = mappedAreaWiseCountsDF.join(totalCountDF, "courseOrgID").groupBy("courseOrgID").agg(

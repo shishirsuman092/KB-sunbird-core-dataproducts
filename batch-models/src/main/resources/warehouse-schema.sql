@@ -248,3 +248,6 @@ alter table user_detail rename column is_verified_karmayogi to profile_status;
 
 -- adding new column in content
 ALTER TABLE content ADD COLUMN content_sub_type character varying(50);
+
+-- competency v6 doesn't have competency theme type
+ALTER TABLE kcm_dictionary DROP COLUMN competency_theme_type;
