@@ -31,6 +31,11 @@ object DataExhaustModel extends AbsDashboardModel {
     cache.write(batchDF, "batch")
     batchDF.unpersist()
 
+    val kcmV6Hierarchy = cassandraTableAsDataFrame(conf.cassandraHierarchyStoreKeyspace, conf.cassandraFrameworkHierarchyTable)
+      .filter(col("identifier") === "kcmfinal_fw")
+    cache.write(kcmV6Hierarchy, "kcmV6")
+    kcmV6Hierarchy.unpersist()
+
     val userAssessmentDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraUserAssessmentTable)
       .select(
         col("assessmentid").alias("assessChildID"),
@@ -111,10 +116,9 @@ object DataExhaustModel extends AbsDashboardModel {
     roleDF.unpersist()
 
     // ES content
-    val nationalLearningWeekStartString = conf.nationalLearningWeekStart
     val primaryCategories = Seq("Course","Program","Blended Program","Curated Program","Standalone Assessment","CuratedCollections","Moderated Course")
     val shouldClause = primaryCategories.map(pc => s"""{"match":{"primaryCategory.raw":"${pc}"}}""").mkString(",")
-    val fields = Seq("identifier", "name", "primaryCategory", "status", "reviewStatus", "channel", "duration", "leafNodesCount", "lastPublishedOn", "lastStatusChangedOn", "createdFor", "competencies_v5", "programDirectorName","language","courseCategory")
+    val fields = Seq("identifier", "name", "primaryCategory", "status", "reviewStatus", "channel", "duration", "leafNodesCount", "lastPublishedOn", "lastStatusChangedOn", "createdFor", "competencies_v6", "programDirectorName","language","courseCategory")
     val arrayFields = Seq("createdFor","language")
     val fieldsClause = fields.map(f => s""""${f}"""").mkString(",")
     val query = s"""{"_source":[${fieldsClause}],"query":{"bool":{"should":[${shouldClause}]}}}"""
