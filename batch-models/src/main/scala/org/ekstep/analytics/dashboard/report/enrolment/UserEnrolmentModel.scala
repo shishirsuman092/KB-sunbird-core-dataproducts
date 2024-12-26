@@ -91,7 +91,7 @@ object UserEnrolmentModel extends AbsDashboardModel {
       .na.fill("", Seq("certificateGeneratedOn"))
 
     val marketPlaceEnrolmentsWithUserDetailsDF = marketPlaceContentEnrolmentsDF.join(userDataDF, Seq("userID"), "left").withColumn("Tag", concat_ws(", ", col("additionalProperties.tag")))
-    val  allCourseProgramCompletionWithDetailsWithBatchInfoDF = allCourseProgramCompletionWithDetailsDF.join(relevantBatchInfoDF, Seq("courseID", "batchID"), "left")
+    val allCourseProgramCompletionWithDetailsWithBatchInfoDF = allCourseProgramCompletionWithDetailsDF.join(relevantBatchInfoDF, Seq("courseID", "batchID"), "left")
 
     val allCourseProgramCompletionWithDetailsDFWithRating = allCourseProgramCompletionWithDetailsWithBatchInfoDF.join(userRatingDF, Seq("courseID", "userID"), "left")
 
@@ -130,7 +130,7 @@ object UserEnrolmentModel extends AbsDashboardModel {
       .withColumn("live_cbp_plan_mandate", when(col("liveCBPlan").isNull, false).otherwise(col("liveCBPlan")))
 
     val fullReportDF = enrolmentWithACBP.select(
-            col("userID"),
+        col("userID"),
         col("userOrgID"),
         col("courseID"),
         col("courseOrgID"),
