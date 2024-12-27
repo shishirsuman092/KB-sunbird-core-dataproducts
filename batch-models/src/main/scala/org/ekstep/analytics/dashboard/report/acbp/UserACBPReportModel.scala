@@ -49,7 +49,6 @@ object UserACBPReportModel extends AbsDashboardModel {
       .join(userCourseProgramEnrolmentDF, Seq("courseID", "userID"), "left")
       .na.drop(Seq("userID", "courseID"))
       .drop("acbpCourseIDList")
-    show(acbpAllEnrolmentDF, "acbpAllEnrolmentDF")
 
     // get cbplan data for warehouse
     val cbPlanWarehouseDF = acbpAllEnrolmentDF

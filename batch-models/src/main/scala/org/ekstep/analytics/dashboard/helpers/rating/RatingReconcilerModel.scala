@@ -36,7 +36,6 @@ object RatingReconcilerModel extends AbsDashboardModel {
         sum(when(col("rating") === 4, 1).otherwise(0)).alias("totalcount4stars"),
         sum(when(col("rating") === 5, 1).otherwise(0)).alias("totalcount5stars")
       )
-    show(aggDF)
 
     aggDF.write
       .format("org.apache.spark.sql.cassandra")

@@ -39,21 +39,17 @@ object CourseMetricsModel extends AbsDashboardModel {
         col("object_type").alias("category"),
         col("clicks")
       )
-    show(clickDF, "clickDF")
     val clickWithDetailsDF = clickDF.join(allCourseProgramDetailsWithRatingDF, Seq("courseID", "category"), "left")
-    show(clickWithDetailsDF, "clickWithDetailsDF")
 
     // click by id
     val clickByIDDF = clickWithDetailsDF.select("courseID", "courseName", "category", "clicks")
       .orderBy(desc("clicks"))
-    show(clickByIDDF, "clickByIDDF")
     csvWrite(clickByIDDF.coalesce(1), s"${loc}clicks-by-content-name.csv")
 
     // click by provider
     val clickByProviderDF = clickWithDetailsDF.groupBy("courseOrgID", "courseOrgName")
       .agg(expr("SUM(clicks)").alias("clicks"))
       .orderBy(desc("clicks"))
-    show(clickByProviderDF, "clickByProviderDF")
     csvWrite(clickByProviderDF.coalesce(1), s"${loc}clicks-by-provider.csv")
 
     // click by course duration
@@ -61,7 +57,6 @@ object CourseMetricsModel extends AbsDashboardModel {
       .groupBy("durationFloorHrs")
       .agg(expr("SUM(clicks)").alias("clicks"))
       .orderBy("durationFloorHrs")
-    show(clickByDuration, "clickByDuration")
     csvWrite(clickByDuration.coalesce(1), s"${loc}clicks-by-duration.csv")
 
     // click by course rating
@@ -69,7 +64,6 @@ object CourseMetricsModel extends AbsDashboardModel {
       .groupBy("ratingFloor")
       .agg(expr("SUM(clicks)").alias("clicks"))
       .orderBy("ratingFloor")
-    show(clickByRating, "clickByRating")
     csvWrite(clickByRating.coalesce(1), s"${loc}clicks-by-rating.csv")
 
     val allCourseProgramCompetencyDF = allCourseProgramCompetencyDataFrame(allCourseProgramDetailsWithCompDF)
@@ -79,7 +73,6 @@ object CourseMetricsModel extends AbsDashboardModel {
     val clickByCompetencyDF = clickWithCompetencyDF.groupBy("competencyID", "competencyName")
       .agg(expr("SUM(clicks)").alias("clicks"))
       .orderBy(desc("clicks"))
-    show(clickByCompetencyDF, "clickByCompetencyDF")
     csvWrite(clickByCompetencyDF.coalesce(1), s"${loc}clicks-by-comp.csv")
 
     // get course completion data, dispatch to kafka to be ingested by druid data-source: dashboards-user-course-program-progress
@@ -95,20 +88,15 @@ object CourseMetricsModel extends AbsDashboardModel {
         expr("SUM(CASE WHEN dbCompletionStatus=1 THEN 1 ELSE 0 END)").alias("countInProgress"),
         expr("SUM(CASE WHEN dbCompletionStatus=2 THEN 1 ELSE 0 END)").alias("countCompleted")
       )
-    show(contentUserStatusCountDF, "contentUserStatusCountDF")
     val clickWithProgressCountsDF = clickDF.join(contentUserStatusCountDF, Seq("courseID", "category"), "left")
-    show(clickWithProgressCountsDF, "clickWithProgressCountsDF")
 
     val clickByEnroll = bucketGroupBy(clickWithProgressCountsDF, "countEnrolled", "clicks")
-    show(clickByEnroll, "clickByEnroll")
     csvWrite(clickByEnroll.coalesce(1),s"${loc}clicks-by-enroll.csv")
 
     val clickByInProgress = bucketGroupBy(clickWithProgressCountsDF, "countInProgress", "clicks")
-    show(clickByInProgress, "clickByInProgress")
     csvWrite(clickByInProgress.coalesce(1), s"${loc}clicks-by-in-progress.csv")
 
     val clickByCompleted = bucketGroupBy(clickWithProgressCountsDF, "countCompleted", "clicks")
-    show(clickByCompleted, "clickByCompleted")
     csvWrite(clickByCompleted.coalesce(1),s"${loc}clicks-by-completed.csv")
 
     Redis.closeRedisConnect()

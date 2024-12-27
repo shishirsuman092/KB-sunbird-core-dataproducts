@@ -250,7 +250,6 @@ object DataExhaustModel extends AbsDashboardModel {
       .withColumn("duration", when(col("progress_details").isNotNull, col("progress_details.duration")).otherwise(null))
       .withColumn("event_duration_seconds", when(col("progress_details").isNotNull, col("progress_details.max_size")).otherwise(null))
       .drop(col("progress_details"))
-    show(eventsEnrolmentWithDurationDF, "eventsEnrolmentWithDurationDF")
     // write to cache
     cache.write(eventsEnrolmentWithDurationDF.coalesce(1), "eventEnrolmentDetails")
     eventsEnrolmentDF.unpersist()

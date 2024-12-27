@@ -37,7 +37,6 @@ object KCMModel extends AbsDashboardModel {
       .dropDuplicates(Seq("courseID", "competency_area_id", "competency_theme_id", "competency_sub_theme_id")).cache()
     val contentMappingDF = competencyContentMappingDF.withColumn("data_last_generated_on", currentDateTime)
       .select(col("courseID").alias("course_id"), col("competency_area_id"), col("competency_theme_id"), col("competency_sub_theme_id"), col("data_last_generated_on"))
-    show(contentMappingDF, "competency content mapping df")
 
     generateReport(contentMappingDF.coalesce(1), s"${reportPathContentCompetencyMapping}-warehouse")
 
@@ -87,7 +86,6 @@ object KCMModel extends AbsDashboardModel {
         col("competency_sub_theme"),
         col("competency_sub_theme_description")
       ).orderBy("content_id")
-    show(competencyReporting, "Competency reporting dataframe")
 
     generateReport(competencyReporting, reportPathContentCompetencyMapping, fileName=fileName)
 

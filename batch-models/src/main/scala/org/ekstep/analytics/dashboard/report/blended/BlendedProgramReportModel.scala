@@ -327,7 +327,6 @@ object BlendedProgramReportModel extends AbsDashboardModel {
 
   def bpChildDataFrame(blendedProgramESDF: DataFrame, hierarchyDF: DataFrame)(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
     val bpIDsDF = blendedProgramESDF.select("bpID")
-    show(bpIDsDF, "bpIDsDF")
 
     // L1 children with modules (course units)
     val bpChildL1WithModulesDF = addHierarchyColumn(bpIDsDF, hierarchyDF, "bpID", "data", children = true, l2Children = true)
