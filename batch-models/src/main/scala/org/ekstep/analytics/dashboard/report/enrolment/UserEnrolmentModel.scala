@@ -173,7 +173,7 @@ object UserEnrolmentModel extends AbsDashboardModel {
         col("Report_Last_Generated_On"),
         col("userStatus").alias("status"),
         col("live_cbp_plan_mandate").alias("Live_CBP_Plan_Mandate")
-      )
+      ).dropDuplicates("userID","Batch_Id","courseID")
       .coalesce(1)
 
     val reportPath = s"${conf.userEnrolmentReportPath}/${today}"
@@ -299,7 +299,6 @@ object UserEnrolmentModel extends AbsDashboardModel {
     allCourseProgramCompletionWithDetailsDFWithRating.unpersist()
 
     Redis.closeRedisConnect()
-
   }
 }
 
