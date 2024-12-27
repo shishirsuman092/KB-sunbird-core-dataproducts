@@ -299,7 +299,6 @@ object UserEnrolmentModel extends AbsDashboardModel {
     allCourseProgramCompletionWithDetailsDFWithRating.unpersist()
 
     Redis.closeRedisConnect()
-
   }
 }
 
