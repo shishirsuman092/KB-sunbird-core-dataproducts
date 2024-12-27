@@ -126,7 +126,6 @@ object ValidateDerivedTest extends Serializable {
       .withColumn("dateTimeIST", from_utc_timestamp(col("ets"), "Asia/Kolkata"))
       .withColumn("dateIST", to_date(col("dateTimeIST"),"yyyy-MM-dd"))
 
-    show(df)
     df
   }
 

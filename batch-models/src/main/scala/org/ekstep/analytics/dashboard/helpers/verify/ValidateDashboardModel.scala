@@ -78,21 +78,16 @@ object ValidateDashboardModel extends AbsDashboardModel {
     val mdoOnboardedDF = userOrgRoleDF
       .where(expr("userStatus=1 AND userOrgStatus=1 AND role='MDO_ADMIN'"))
       .agg(expr("COUNT(DISTINCT userOrgID)").as("mdoOnboarded"))
-    mdoOnboardedDF.show()
 
 
     val top5CoursesByCompletionDF = courseProgressCountsDF
       .orderBy(col("completed_count").desc).limit(5)
-    show(top5CoursesByCompletionDF, "top5CoursesByCompletionDF")
-    top5CoursesByCompletionDF.show()
 
     val top5MDOsByCompletionDF = filteredProgressDF
       .where(expr("userOrgStatus=1 AND dbCompletionStatus=2"))
       .groupBy("userOrgID", "userOrgName")
       .agg(expr("COUNT(userID)").alias("completed_count"))
       .orderBy(col("completed_count").desc).limit(5)
-    show(top5MDOsByCompletionDF, "top5MDOsByCompletionDF")
-    top5MDOsByCompletionDF.show()
 
     val enrolmentByStatusDF = filteredProgressDF
       .agg(
@@ -101,23 +96,17 @@ object ValidateDashboardModel extends AbsDashboardModel {
         expr("SUM(CASE WHEN dbCompletionStatus=1 THEN 1 ELSE 0 END)").alias("in_progress_count"),
         expr("SUM(CASE WHEN dbCompletionStatus=2 THEN 1 ELSE 0 END)").alias("completed_count")
       )
-    show(enrolmentByStatusDF, "enrolmentByStatusDF")
-    enrolmentByStatusDF.show()
 
     val uniqueUsersEnrolledDF = filteredProgressDF
       .agg(
         expr("COUNT(DISTINCT(userID))").alias("unique_users_enrolled")
       )
-    show(uniqueUsersEnrolledDF, "uniqueUsersEnrolledDF")
-    uniqueUsersEnrolledDF.show()
 
     val uniqueUsersCompletedDF = filteredProgressDF
       .where(expr("dbCompletionStatus=2"))
       .agg(
         expr("COUNT(DISTINCT(userID))").alias("unique_users_completed")
       )
-    show(uniqueUsersCompletedDF, "uniqueUsersCompletedDF")
-    uniqueUsersCompletedDF.show()
 
     Redis.closeRedisConnect()
 

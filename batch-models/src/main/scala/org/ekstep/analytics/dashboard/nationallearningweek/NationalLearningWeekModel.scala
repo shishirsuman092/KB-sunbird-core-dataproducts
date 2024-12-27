@@ -101,9 +101,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         coalesce(round(col("learning_hours"), 2), lit(0)).alias("total_learning_hours") // Replace null learning_hours with 0
       )
       .dropDuplicates("userid")
-    show(selectedColUserLeaderboardDF, "cols")
     // write to cassandra National Learning Week user table
-
     writeToCassandra(selectedColUserLeaderboardDF, conf.cassandraUserKeyspace, conf.cassandraNLWUserLeaderboardTable)
     val mdoNLWLeaderBoardDF = userLeaderBoardDataDF
       .groupBy("org_id", "org_name")

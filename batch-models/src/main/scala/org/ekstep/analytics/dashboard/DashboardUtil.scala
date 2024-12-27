@@ -81,6 +81,7 @@ case class DashboardConfig (
                              cassandraMDOLearnerLeaderboardTable: String,
                              cassandraPublicUserAssessmentDataTable: String,
                              cassandraUserEntityEnrolmentTable: String,
+                             cassandraFrameworkHierarchyTable: String,
 
                              //warehouse tables;
                              appPostgresHost: String,
@@ -294,6 +295,7 @@ object DashboardConfigParser extends Serializable {
       cassandraOldAssesmentTable = getConfigModelParam(config, "cassandraOldAssesmentTable"),
       cassandraPublicUserAssessmentDataTable = getConfigModelParam(config, "cassandraPublicUserAssessmentDataTable"),
       cassandraUserEntityEnrolmentTable = getConfigModelParam(config, "cassandraUserEntityEnrolmentTable"),
+      cassandraFrameworkHierarchyTable = getConfigModelParam(config, "cassandraFrameworkHierarchyTable"),
 
       // redis keys
       redisRegisteredOfficerCountKey = "mdo_registered_officer_count",

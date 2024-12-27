@@ -60,8 +60,6 @@ object InAppReviewModel extends AbsDashboardModel {
       .withColumn("updatedon", lit(null).cast("date"))
       .withColumn("version", lit("v1"))
 
-    show(resultDF)
-
     // write the dataframe to cassandra user_feed table
     resultDF.write
       .format("org.apache.spark.sql.cassandra")

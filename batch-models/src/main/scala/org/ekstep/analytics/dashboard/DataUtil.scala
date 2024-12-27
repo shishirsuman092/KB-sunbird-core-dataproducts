@@ -291,29 +291,6 @@ object DataUtil extends Serializable {
       StructField("context_pdata_pid", StringType, nullable = true)
     ))
 
-//    val solutionIdDataSchema: StructType = StructType(Seq(
-//      StructField("createdBy", StringType, nullable = true),
-//      StructField("user_type", StringType, nullable = true),
-//      StructField("user_subtype", StringType, nullable = true),
-//      StructField("state_name", StringType, nullable = true),
-//      StructField("district_name", StringType, nullable = true),
-//      StructField("block_name", StringType, nullable = true),
-//      StructField("school_code", StringType, nullable = true),
-//      StructField("school_name", StringType, nullable = true),
-//      StructField("board_name", StringType, nullable = true),
-//      StructField("organisation_name", StringType, nullable = true),
-//      StructField("programName", StringType, nullable = true),
-//      StructField("programExternalId", StringType, nullable = true),
-//      StructField("solutionName", StringType, nullable = true),
-//      StructField("solutionExternalId", StringType, nullable = true),
-//      StructField("surveySubmissionId", StringType, nullable = true),
-//      StructField("questionExternalId", StringType, nullable = true),
-//      StructField("questionName", StringType, nullable = true),
-//      StructField("questionResponseLabel", StringType, nullable = true),
-//      StructField("evidences", StringType, nullable = true),
-//      StructField("remarks", StringType, nullable = true)
-//    ))
-
     val uniqueSolutionIdsDataSchema: StructType = StructType(Seq(
       StructField("solutionIds", StringType, nullable = true)
     ))
@@ -333,12 +310,6 @@ object DataUtil extends Serializable {
       StructField("observationSubmissionId", StringType, nullable = true)
     ))
 
-//    val contentRatingSchema: StructType = StructType(Seq(
-//      StructField("courseID", StringType, nullable = false),
-//      StructField("userID", StringType, nullable = false),
-//      StructField("rating", IntegerType, nullable = true),
-//      StructField("review", StringType, nullable = true)
-//    ))
     // eventProgressDetailSchema
     val eventProgressDetailSchema: StructType = StructType(Seq(
       StructField("max_size", StringType, nullable = false),
@@ -347,6 +318,25 @@ object DataUtil extends Serializable {
       StructField("stateMetaData", IntegerType, nullable = true)
     ))
 
+    //kcm v6 schema
+    val kcmSchema: StructType = StructType(Seq(
+      StructField("categories", ArrayType(StructType(Seq(
+        StructField("code", StringType, false),
+        StructField("terms",ArrayType(StructType(Seq(
+          StructField("name", StringType, false),
+          StructField("description", StringType, false),
+          StructField("refId", StringType, false),
+          StructField("category", StringType, false),
+          StructField("associations", ArrayType(StructType(Seq(
+            StructField("name", StringType, false),
+            StructField("refType", StringType, false),
+            StructField("description", StringType, false),
+            StructField("refId", StringType, false),
+            StructField("category", StringType, false)
+          ))), false)
+        ))), false)
+      ))), false)
+    ))
   }
 
   def elasticSearchCourseProgramDataFrame(primaryCategories: Seq[String])(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
@@ -406,9 +396,6 @@ object DataUtil extends Serializable {
       ).na.fill("", Seq("orgName"))
 
     orgDF = timestampStringToLong(orgDF, Seq("orgCreatedDate"))
-
-    show(orgDF, "orgDataFrame")
-
     orgDF
   }
 
@@ -481,7 +468,6 @@ object DataUtil extends Serializable {
     )
 
     val df = userDF.join(joinOrgDF, Seq("userOrgID"), "left")
-    show(df, "userOrgDataFrame")
     df
   }
 
@@ -516,8 +502,6 @@ object DataUtil extends Serializable {
       col("userOrgID"), col("userOrgName"), col("userOrgStatus")
     )
     val userOrgRoleDF = joinUserOrgDF.join(roleDF, Seq("userID"), "left")
-    show(userOrgRoleDF)
-
     userOrgRoleDF
   }
 
@@ -530,8 +514,6 @@ object DataUtil extends Serializable {
     val roleCountDF = userOrgRoleDF
       .where(expr("userStatus=1 AND userOrgStatus=1"))
       .groupBy("role").agg(countDistinct("userID").alias("count"))
-    show(roleCountDF)
-
     roleCountDF
   }
 
@@ -550,9 +532,6 @@ object DataUtil extends Serializable {
         col("userOrgName").alias("orgName"),
         col("role"), col("count")
       )
-
-    show(orgRoleCount)
-
     orgRoleCount
   }
 
@@ -642,9 +621,9 @@ object DataUtil extends Serializable {
         col("leafNodesCount").alias("courseResourceCount"),
         col("lastStatusChangedOn").alias("lastStatusChangedOn"),
         col("courseOrgID"),
-        col("competencies_v5.competencyAreaId"),
-        col("competencies_v5.competencyThemeId"),
-        col("competencies_v5.competencySubThemeId"),
+        col("competencies_v6.competencyAreaRefId"),
+        col("competencies_v6.competencyThemeRefId"),
+        col("competencies_v6.competencySubThemeRefId"),
         col("contentLanguage"),
         col("courseCategory")
       ).dropDuplicates("courseID", "category")
@@ -685,8 +664,6 @@ object DataUtil extends Serializable {
       col("orgStatus").alias("assessOrgStatus")
     )
     val df = assessmentDF.join(assessOrgDF, Seq("assessOrgID"), "left")
-
-    show(df, "addAssessOrgDetails")
     df
   }
 
@@ -736,8 +713,6 @@ object DataUtil extends Serializable {
       col("orgStatus").alias("courseOrgStatus")
     )
     val df = courseDF.join(joinOrgDF, Seq("courseOrgID"), "left")
-
-    show(df, "addCourseOrgDetails")
     df
   }
 
@@ -797,8 +772,6 @@ object DataUtil extends Serializable {
    */
   def allCourseProgramDetailsDataFrame(allCourseProgramDetailsWithCompDF: DataFrame): DataFrame = {
     val df = allCourseProgramDetailsWithCompDF.drop("competenciesJson")
-
-    show(df)
     df
   }
 
@@ -832,8 +805,6 @@ object DataUtil extends Serializable {
     )
     val df = allCourseProgramDetailsDF
       .join(courseOrgDF, Seq("courseOrgID"), "left")
-
-    show(df)
     df
   }
 
@@ -961,7 +932,6 @@ object DataUtil extends Serializable {
         col("activitytype").alias("cbpType"),
         col("createdon").alias("createdOn")
       )
-    show(df, "Rating given by user")
     df
   }
 
@@ -980,8 +950,6 @@ object DataUtil extends Serializable {
   def allCourseProgramDetailsWithRatingDataFrame(allCourseProgramDetailsDF: DataFrame, courseRatingDF: DataFrame)(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
     val df = allCourseProgramDetailsDF.withColumn("categoryLower", expr("LOWER(category)"))
       .join(courseRatingDF, Seq("courseID", "categoryLower"), "left")
-
-    show(df)
     df
   }
 
@@ -1002,7 +970,6 @@ object DataUtil extends Serializable {
         col("end_date").alias("courseBatchEndDate"),
         col("batch_attributes").alias("courseBatchAttrs")
       ).na.fill("{}", Seq("courseBatchAttrs"))
-    show(df, "Course Batch Data")
     df
   }
 
@@ -1170,8 +1137,6 @@ object DataUtil extends Serializable {
     // userID, courseID, batchID, courseCompletedTimestamp, courseEnrolledTimestamp, lastContentAccessTimestamp, courseProgress, dbCompletionStatus, category, courseName, courseStatus, courseReviewStatus, courseOrgID, courseOrgName, courseOrgStatus, courseDuration, courseResourceCount
     var df = withCompletionPercentageColumn(userCourseProgramCompletionDF)
     df = withUserCourseCompletionStatusColumn(df)
-
-    show(df, "allCourseProgramCompletionWithDetailsDataFrame")
     df
   }
 
@@ -1457,8 +1422,6 @@ object DataUtil extends Serializable {
       col("ch.showTimer").alias("assessChildShowTimer"),
       col("ch.allowSkip").alias("assessChildAllowSkip")
     )
-
-    show(df)
     df
   }
 
@@ -1478,8 +1441,6 @@ object DataUtil extends Serializable {
    */
   def userAssessmentChildrenDataFrame(userAssessmentDF: DataFrame, assessChildrenDF: DataFrame): DataFrame = {
     val df = userAssessmentDF.join(assessChildrenDF, Seq("assessChildID"), "inner")
-
-    show(df)
     df
   }
 
@@ -1515,8 +1476,6 @@ object DataUtil extends Serializable {
       .join(assessWithDetailsDF, Seq("assessID"), "left")
       .join(courseDF, Seq("courseID"), "left")
       .join(userOrgDF, Seq("userID"), "left")
-
-    show(df, "userAssessmentDetailsDataFrame")
     df
   }
 
@@ -1888,11 +1847,6 @@ object DataUtil extends Serializable {
     statusInProgressFinalDf
   }
 
-  def getRatings()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
-    val df = cache.load("rating")
-    show(df, "ratings")
-    df
-  }
   def processOrgsL3(df: DataFrame, userOrgDF: DataFrame, orgHierarchyCompleteDF: DataFrame): DataFrame = {
     val organisationDF = df.dropDuplicates()
     val sumDF = organisationDF.withColumn("allIDs", lit(null).cast("string")).select(col("organisationID").alias("ministryID"), col("allIDs"))

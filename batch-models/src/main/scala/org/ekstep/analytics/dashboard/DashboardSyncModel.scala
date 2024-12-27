@@ -227,8 +227,6 @@ object DashboardSyncModel extends AbsDashboardModel {
       .withColumnRenamed("userid", "userID")
       .withColumn("firstCompletedOn", when(col("issued_certificates").isNull, "").otherwise(when(size(col("issued_certificates")) > 0, col("issued_certificates")(0).getItem("lastIssuedOn")).otherwise("")))
 
-    show(externalContentEnrolmentDF)
-
     // Filter based on firstCompletedOn being between the start and end of the previous day
     val externalContentCompletedYesDF = externalContentEnrolmentDF
       .filter(
@@ -606,8 +604,6 @@ object DashboardSyncModel extends AbsDashboardModel {
     cache.write(eventTotalLearningNLWByUserDF, "nlwEventLearningHours")
     //Redis.dispatchDataFrame[String]("dashboard_event_learning_hours_nlw_by_user", eventTotalLearningNLWByUserDF, "user_id", "totalLearningHours")
 
-    eventTotalLearningNLWByUserDF.show(false)
-
     //    val enrolmentContentDurationNLWByUserDF = cbpCompletionWithDetailsDF.filter($"courseCompletedTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseCompletedTimestamp" <= nationalLearningWeekEndDateTimeEpoch && $"userID" =!= "") .groupBy("userID").agg(sum(expr("(completionPercentage / 100) * courseDuration")).alias("totalLearningSeconds"))
     //      .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2)).select("userID", "totalLearningHours")
     val enrolmentContentDurationNLWByUserDF = cbpCompletionWithDetailsDF.filter($"courseCompletedTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseCompletedTimestamp" <= nationalLearningWeekEndDateTimeEpoch && $"userID" =!= "" && $"dbCompletionStatus" === 2 && $"certificateID".isNotNull).groupBy("userID").agg(sum("courseDuration").alias("totalLearningSeconds"))
@@ -655,11 +651,11 @@ object DashboardSyncModel extends AbsDashboardModel {
     val categories = Seq("Course", "Program", "Blended Program", "CuratedCollections", "Standalone Assessment", "Curated Program")
     val cbpDetails = allCourseProgramESDataFrame(categories)
       .where("courseStatus IN ('Live', 'Retired')")
-      .select("courseID", "competencyAreaId", "competencyThemeId", "competencySubThemeId", "courseName", "courseOrgID")
+      .select("courseID", "competencyAreaRefId", "competencyThemeRefId", "competencySubThemeRefId", "courseName", "courseOrgID")
     // explode area, theme and sub theme seperately
-    val areaExploded = cbpDetails.select(col("courseID"), expr("posexplode_outer(competencyAreaId) as (pos, competency_area_id)")).repartition(col("courseID"))
-    val themeExploded = cbpDetails.select(col("courseID"), expr("posexplode_outer(competencyThemeId) as (pos, competency_theme_id)")).repartition(col("courseID"))
-    val subThemeExploded = cbpDetails.select(col("courseID"), expr("posexplode_outer(competencySubThemeId) as (pos, competency_sub_theme_id)")).repartition(col("courseID"))
+    val areaExploded = cbpDetails.select(col("courseID"), expr("posexplode_outer(competencyAreaRefId) as (pos, competency_area_id)")).repartition(col("courseID"))
+    val themeExploded = cbpDetails.select(col("courseID"), expr("posexplode_outer(competencyThemeRefId) as (pos, competency_theme_id)")).repartition(col("courseID"))
+    val subThemeExploded = cbpDetails.select(col("courseID"), expr("posexplode_outer(competencySubThemeRefId) as (pos, competency_sub_theme_id)")).repartition(col("courseID"))
     // Joining area, theme and subtheme based on position
     val competencyJoinedDF = areaExploded.join(themeExploded, Seq("courseID", "pos")).join(subThemeExploded, Seq("courseID", "pos"))
     // joining with cbpDetails for getting courses with no competencies mapped to it
@@ -670,9 +666,9 @@ object DashboardSyncModel extends AbsDashboardModel {
     val areaWiseCountsDF = contentMappingDF.groupBy("courseOrgID", "competency_area_id").agg(countDistinct("competency_theme_id").alias("area_count")).filter(expr("competency_area_id IS NOT NULL"))
     val totalCountDF = contentMappingDF.groupBy("courseOrgID").agg(coalesce(countDistinct("competency_theme_id"), lit(0)).alias("total_count"))
     // Create a mapping for competency_area_id to descriptive keys
-    val mappedAreaWiseCountsDF = areaWiseCountsDF.withColumn("mapped_area_id", when(col("competency_area_id") === 56, "Functional")
-      .when(col("competency_area_id") === 1, "Behavioural")
-      .when(col("competency_area_id") === 145, "Domain")
+    val mappedAreaWiseCountsDF = areaWiseCountsDF.withColumn("mapped_area_id", when(col("competency_area_id") === "COMAREA-000003", "Functional")
+      .when(col("competency_area_id") === "COMAREA-000001", "Behavioural")
+      .when(col("competency_area_id") === "COMAREA-000002", "Domain")
       .otherwise(col("competency_area_id")))
 
     val resultDF = mappedAreaWiseCountsDF.join(totalCountDF, "courseOrgID").groupBy("courseOrgID").agg(
@@ -1259,7 +1255,7 @@ object DashboardSyncModel extends AbsDashboardModel {
 
   def cbpTop10Reviews(allCourseProgramDetailsWithRatingDF: DataFrame)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
     // get rating table DF
-    val ratingDf = getRatings()
+    val ratingDf = cache.load("rating")
       .join(allCourseProgramDetailsWithRatingDF, col("activityid").equalTo(col("courseID")), "inner")
       .filter(col("review").isNotNull && col("rating").>=("4.5"))
       .select(
