@@ -396,9 +396,6 @@ object DataUtil extends Serializable {
       ).na.fill("", Seq("orgName"))
 
     orgDF = timestampStringToLong(orgDF, Seq("orgCreatedDate"))
-
-    show(orgDF, "orgDataFrame")
-
     orgDF
   }
 
@@ -471,7 +468,6 @@ object DataUtil extends Serializable {
     )
 
     val df = userDF.join(joinOrgDF, Seq("userOrgID"), "left")
-    show(df, "userOrgDataFrame")
     df
   }
 
@@ -506,8 +502,6 @@ object DataUtil extends Serializable {
       col("userOrgID"), col("userOrgName"), col("userOrgStatus")
     )
     val userOrgRoleDF = joinUserOrgDF.join(roleDF, Seq("userID"), "left")
-    show(userOrgRoleDF)
-
     userOrgRoleDF
   }
 
@@ -520,8 +514,6 @@ object DataUtil extends Serializable {
     val roleCountDF = userOrgRoleDF
       .where(expr("userStatus=1 AND userOrgStatus=1"))
       .groupBy("role").agg(countDistinct("userID").alias("count"))
-    show(roleCountDF)
-
     roleCountDF
   }
 
@@ -540,9 +532,6 @@ object DataUtil extends Serializable {
         col("userOrgName").alias("orgName"),
         col("role"), col("count")
       )
-
-    show(orgRoleCount)
-
     orgRoleCount
   }
 
@@ -675,8 +664,6 @@ object DataUtil extends Serializable {
       col("orgStatus").alias("assessOrgStatus")
     )
     val df = assessmentDF.join(assessOrgDF, Seq("assessOrgID"), "left")
-
-    show(df, "addAssessOrgDetails")
     df
   }
 
@@ -726,8 +713,6 @@ object DataUtil extends Serializable {
       col("orgStatus").alias("courseOrgStatus")
     )
     val df = courseDF.join(joinOrgDF, Seq("courseOrgID"), "left")
-
-    show(df, "addCourseOrgDetails")
     df
   }
 
@@ -787,8 +772,6 @@ object DataUtil extends Serializable {
    */
   def allCourseProgramDetailsDataFrame(allCourseProgramDetailsWithCompDF: DataFrame): DataFrame = {
     val df = allCourseProgramDetailsWithCompDF.drop("competenciesJson")
-
-    show(df)
     df
   }
 
@@ -822,8 +805,6 @@ object DataUtil extends Serializable {
     )
     val df = allCourseProgramDetailsDF
       .join(courseOrgDF, Seq("courseOrgID"), "left")
-
-    show(df)
     df
   }
 
@@ -951,7 +932,6 @@ object DataUtil extends Serializable {
         col("activitytype").alias("cbpType"),
         col("createdon").alias("createdOn")
       )
-    show(df, "Rating given by user")
     df
   }
 
@@ -970,8 +950,6 @@ object DataUtil extends Serializable {
   def allCourseProgramDetailsWithRatingDataFrame(allCourseProgramDetailsDF: DataFrame, courseRatingDF: DataFrame)(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
     val df = allCourseProgramDetailsDF.withColumn("categoryLower", expr("LOWER(category)"))
       .join(courseRatingDF, Seq("courseID", "categoryLower"), "left")
-
-    show(df)
     df
   }
 
@@ -992,7 +970,6 @@ object DataUtil extends Serializable {
         col("end_date").alias("courseBatchEndDate"),
         col("batch_attributes").alias("courseBatchAttrs")
       ).na.fill("{}", Seq("courseBatchAttrs"))
-    show(df, "Course Batch Data")
     df
   }
 
@@ -1160,8 +1137,6 @@ object DataUtil extends Serializable {
     // userID, courseID, batchID, courseCompletedTimestamp, courseEnrolledTimestamp, lastContentAccessTimestamp, courseProgress, dbCompletionStatus, category, courseName, courseStatus, courseReviewStatus, courseOrgID, courseOrgName, courseOrgStatus, courseDuration, courseResourceCount
     var df = withCompletionPercentageColumn(userCourseProgramCompletionDF)
     df = withUserCourseCompletionStatusColumn(df)
-
-    show(df, "allCourseProgramCompletionWithDetailsDataFrame")
     df
   }
 
@@ -1447,8 +1422,6 @@ object DataUtil extends Serializable {
       col("ch.showTimer").alias("assessChildShowTimer"),
       col("ch.allowSkip").alias("assessChildAllowSkip")
     )
-
-    show(df)
     df
   }
 
@@ -1468,8 +1441,6 @@ object DataUtil extends Serializable {
    */
   def userAssessmentChildrenDataFrame(userAssessmentDF: DataFrame, assessChildrenDF: DataFrame): DataFrame = {
     val df = userAssessmentDF.join(assessChildrenDF, Seq("assessChildID"), "inner")
-
-    show(df)
     df
   }
 
@@ -1505,8 +1476,6 @@ object DataUtil extends Serializable {
       .join(assessWithDetailsDF, Seq("assessID"), "left")
       .join(courseDF, Seq("courseID"), "left")
       .join(userOrgDF, Seq("userID"), "left")
-
-    show(df, "userAssessmentDetailsDataFrame")
     df
   }
 
@@ -1878,11 +1847,6 @@ object DataUtil extends Serializable {
     statusInProgressFinalDf
   }
 
-  def getRatings()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
-    val df = cache.load("rating")
-    show(df, "ratings")
-    df
-  }
   def processOrgsL3(df: DataFrame, userOrgDF: DataFrame, orgHierarchyCompleteDF: DataFrame): DataFrame = {
     val organisationDF = df.dropDuplicates()
     val sumDF = organisationDF.withColumn("allIDs", lit(null).cast("string")).select(col("organisationID").alias("ministryID"), col("allIDs"))

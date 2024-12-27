@@ -227,8 +227,6 @@ object DashboardSyncModel extends AbsDashboardModel {
       .withColumnRenamed("userid", "userID")
       .withColumn("firstCompletedOn", when(col("issued_certificates").isNull, "").otherwise(when(size(col("issued_certificates")) > 0, col("issued_certificates")(0).getItem("lastIssuedOn")).otherwise("")))
 
-    show(externalContentEnrolmentDF)
-
     // Filter based on firstCompletedOn being between the start and end of the previous day
     val externalContentCompletedYesDF = externalContentEnrolmentDF
       .filter(
@@ -605,8 +603,6 @@ object DashboardSyncModel extends AbsDashboardModel {
       .select("user_id", "totalLearningHours")
     cache.write(eventTotalLearningNLWByUserDF, "nlwEventLearningHours")
     //Redis.dispatchDataFrame[String]("dashboard_event_learning_hours_nlw_by_user", eventTotalLearningNLWByUserDF, "user_id", "totalLearningHours")
-
-    eventTotalLearningNLWByUserDF.show(false)
 
     //    val enrolmentContentDurationNLWByUserDF = cbpCompletionWithDetailsDF.filter($"courseCompletedTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseCompletedTimestamp" <= nationalLearningWeekEndDateTimeEpoch && $"userID" =!= "") .groupBy("userID").agg(sum(expr("(completionPercentage / 100) * courseDuration")).alias("totalLearningSeconds"))
     //      .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2)).select("userID", "totalLearningHours")
@@ -1259,7 +1255,7 @@ object DashboardSyncModel extends AbsDashboardModel {
 
   def cbpTop10Reviews(allCourseProgramDetailsWithRatingDF: DataFrame)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
     // get rating table DF
-    val ratingDf = getRatings()
+    val ratingDf = cache.load("rating")
       .join(allCourseProgramDetailsWithRatingDF, col("activityid").equalTo(col("courseID")), "inner")
       .filter(col("review").isNotNull && col("rating").>=("4.5"))
       .select(

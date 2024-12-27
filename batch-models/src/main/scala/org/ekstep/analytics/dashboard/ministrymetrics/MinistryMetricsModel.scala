@@ -26,7 +26,6 @@ object MinistryMetricsModel extends AbsDashboardModel {
 
     val joinedDF = orgHierarchyCompleteDF.join(distinctMdoIDsDF, orgHierarchyCompleteDF("sborgid") === distinctMdoIDsDF("userOrgID"), "inner").cache()
     println("Number of distinct orgs in orgHierarchy: " + joinedDF.count())
-    show(joinedDF, "orgHierarchyCompleteDF")
 
     // Load Redis data as broadcasted DataFrames
     val userSumDF = broadcast(Redis.getMapAsDataFrame("dashboard_user_count_by_user_org", Schema.totalLearningHoursSchema))
@@ -71,9 +70,6 @@ object MinistryMetricsModel extends AbsDashboardModel {
           col("certSumValue"),
           col("enrolmentSumValue")
         )
-
-      show(finalResultDF, "finalresult")
-
 
       // Cast columns to integer and coalesce null values
       finalResultDF
@@ -135,8 +131,6 @@ object MinistryMetricsModel extends AbsDashboardModel {
         )
 
       // Show and return final result with type casting and null handling
-      show(finalResultDF, "finalresult")
-
       finalResultDF
         .withColumn("learningSumValue", coalesce(col("learningSumValue").cast("int"), lit(0)))
         .withColumn("loginSumValue", coalesce(col("loginSumValue").cast("int"), lit(0)))
@@ -158,7 +152,6 @@ object MinistryMetricsModel extends AbsDashboardModel {
       val organisationDF = departmentAndMapIDsDF
         .join(orgHierarchyCompleteDF, departmentAndMapIDsDF("departmentMapID") === orgHierarchyCompleteDF("l2mapid"), "left")
         .select(departmentAndMapIDsDF("ministryID"), departmentAndMapIDsDF("departmentID"), col("sborgid").alias("organisationID")).dropDuplicates()
-      show(organisationDF, "hierarchyF")
 
       // Step 3: Aggregate IDs
       val sumDF = organisationDF
@@ -206,8 +199,6 @@ object MinistryMetricsModel extends AbsDashboardModel {
           col("enrolmentSumValue")
         )
 
-      show(finalResultDF, "finalresult")
-
       // Final type casting and null handling
       finalResultDF
         .withColumn("learningSumValue", coalesce(col("learningSumValue").cast("int"), lit(0)))
@@ -227,7 +218,6 @@ object MinistryMetricsModel extends AbsDashboardModel {
     val orgsDF = processOrgsL3(orgsL3DF)
 
     val combinedMinistryMetricsDF = ministryOrgDF.union(deptOrgDF).union(orgsDF)
-    show(combinedMinistryMetricsDF, "MinistryMetrics")
 
     Redis.dispatchDataFrame[Int]("dashboard_rolled_up_user_count", combinedMinistryMetricsDF, "ministryID", "learningSumValue")
     Redis.dispatchDataFrame[Int]("dashboard_rolled_up_login_percent_last_24_hrs", combinedMinistryMetricsDF, "ministryID", "loginSumValue")

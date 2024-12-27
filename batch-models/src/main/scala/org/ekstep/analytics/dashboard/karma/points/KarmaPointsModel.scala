@@ -30,7 +30,6 @@ object KarmaPointsModel extends AbsDashboardModel {
       .withColumn("credit_date", timeUUIDToTimestampMills(col("createdOn")))
       .where(s"credit_date >= '${monthStartMills}' AND credit_date < '${monthEndMills}'")
       .withColumn("credit_date", col("credit_date") / 1000)
-    show(courseRatingKarmaPointsDF, "courseRatingKarmaPointsDF")
 
     // get cbp details like course name and category
     val categories = Seq("Course", "Program", "Blended Program", "CuratedCollections", "Standalone Assessment", "Curated Program")
@@ -54,24 +53,20 @@ object KarmaPointsModel extends AbsDashboardModel {
         col("addinfo"),
         col("points")
       )
-    show(karmaPointsFromRatingDF, "karmaPointsFromRatingDF")
 
     val userCourseCompletionDF = userCourseProgramCompletionDataFrame(datesAsLong = true)
       .where(s"dbCompletionStatus=2 AND courseCompletedTimestamp >= '${monthStartSeconds}' AND courseCompletedTimestamp < '${monthEndSeconds}'")
       .join(courseDetails, Seq("courseID"), "inner")
-    show(userCourseCompletionDF, "userCourseCompletionDF")
 
     val firstCompletionDataDF = userCourseCompletionDF
       .groupByLimit(Seq("userID"), "courseCompletedTimestamp", 4)
       .drop("rowNum")
-    show(firstCompletionDataDF, "firstCompletionDataDF")
 
     val coursesWithAssessmentDF = cache.load("userAssessment")
       .where("assessUserStatus='SUBMITTED' AND assessChildID IS NOT NULL")
       .select("courseID")
       .distinct()
       .withColumn("hasAssessment", lit(true))
-    show(coursesWithAssessmentDF, "coursesWithAssessmentDF")
 
     val karmaPointsFromCourseCompletionDF = firstCompletionDataDF
       .join(coursesWithAssessmentDF, Seq("courseID"), "left")
@@ -92,12 +87,10 @@ object KarmaPointsModel extends AbsDashboardModel {
         col("addinfo"),
         col("points")
       )
-    show(karmaPointsFromCourseCompletionDF, "karmaPointsFromCourseCompletionDF")
 
     // union both karma points dataframes, and write to cassandra
     val allKarmaPointsDF = karmaPointsFromRatingDF.union(karmaPointsFromCourseCompletionDF)
       .withColumn("credit_date", col("credit_date").cast(TimestampType))
-    show(allKarmaPointsDF, "allKarmaPointsDF")
     writeToCassandra(allKarmaPointsDF, conf.cassandraUserKeyspace, conf.cassandraKarmaPointsTable)
 
     // write to lookup table
@@ -105,13 +98,11 @@ object KarmaPointsModel extends AbsDashboardModel {
       .select("userid", "context_type", "context_id", "operation_type", "credit_date")
       .withColumn("user_karma_points_key", concat_ws("|", col("userid"), col("context_type"), col("context_id")))
       .drop("userid", "context_type", "context_id")
-    show(lookupDataDF, "lookupDataDF")
     writeToCassandra(lookupDataDF, conf.cassandraUserKeyspace, conf.cassandraKarmaPointsLookupTable)
 
     // update summary table
     val existingSummaryData = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraKarmaPointsSummaryTable)
       .select(col("userid"), col("total_points").alias("existing_total_points"))
-    show(existingSummaryData, "existingSummaryData")
 
     val summaryDataDF = allKarmaPointsDF
       .select("userid", "points", "context_id")
@@ -121,7 +112,6 @@ object KarmaPointsModel extends AbsDashboardModel {
       .na.fill(0, Seq("existing_total_points", "points"))
       .withColumn("total_points", expr("existing_total_points + points"))
       .select("userid", "total_points")
-    show(summaryDataDF, "summaryDataDF")
     writeToCassandra(summaryDataDF, conf.cassandraUserKeyspace, conf.cassandraKarmaPointsSummaryTable)
 
     Redis.closeRedisConnect()

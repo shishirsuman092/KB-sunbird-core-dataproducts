@@ -56,9 +56,7 @@ object NpsModel extends AbsDashboardModel {
       .withColumn("updatedby", lit(null).cast(StringType))
       .withColumn("updatedon", lit(null).cast(DateType))
       .withColumn("version", lit("v1"))
- 
-    show(additionalDF)
-    
+
     // write the dataframe to cassandra user_feed table
     additionalDF.write
       .format("org.apache.spark.sql.cassandra")

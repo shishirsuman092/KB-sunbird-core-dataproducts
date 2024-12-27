@@ -71,8 +71,6 @@ object SummaryRedisSyncModel extends AbsDashboardModel {
     if (df == null) return emptySchemaDataFrame(Schema.timeSpentSchema)
 
     df = df.withColumn("timeSpent", expr("CAST(timeSpent as FLOAT)"))  // Important to cast as float otherwise a cast will fail later on
-
-    show(df)
     df
   }
 
@@ -82,8 +80,6 @@ object SummaryRedisSyncModel extends AbsDashboardModel {
     if (df == null) return emptySchemaDataFrame(Schema.activeUsersSchema)
 
     df = df.withColumn("activeCount", expr("CAST(activeCount as LONG)"))  // Important to cast as long otherwise a cast will fail later on
-
-    show(df)
     df
   }
 
@@ -93,8 +89,6 @@ object SummaryRedisSyncModel extends AbsDashboardModel {
     if (df == null) return emptySchemaDataFrame(Schema.monthlyActiveUsersSchema)
 
     df = df.withColumn("activeCount", expr("CAST(activeCount as LONG)"))  // Important to cast as long otherwise a cast will fail later on
-
-    show(df)
     df
   }
 

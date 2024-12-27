@@ -32,8 +32,6 @@ object LearnerLeaderBoardModel extends AbsDashboardModel {
       .filter(col("credit_date") >= monthStart && col("credit_date") <= monthEnd)
       .groupBy(col("userid")).agg(sum(col("points")).alias("total_points"), max(col("credit_date")).alias("last_credit_date")).cache()
 
-    show(karmaPointsDataDF, "this is the kp_data")
-
     // Broadcast small DataFrames
     val adminUsersDF = broadcast(roleDataFrame()
       .groupBy("userID")
@@ -47,7 +45,6 @@ object LearnerLeaderBoardModel extends AbsDashboardModel {
       .join(broadcast(adminUsersDF), "userID")
       .select(userOrgDF("userOrgID"))
       .distinct()
-    show(orgWithAtleastOneMdoAdmin, "orgs with atleast 1 mdoAdmin")
 
     // get org_ids with atleast 'n' user [n=5 for preprod and 10 for prod]
     val orgWithMoreThanNusersDF = userOrgDF
@@ -55,7 +52,6 @@ object LearnerLeaderBoardModel extends AbsDashboardModel {
       .agg(count("userID").alias("count"))
       .filter(col("count") > 10)
       .select("userOrgID")
-    show(orgWithMoreThanNusersDF, "orgs with more than (n=10) users")
 
     // get intersection of orgs (with atleast one mdo admin and with more than n user)
 //    val commonOrgIdsDF = orgWithAtleastOneMdoAdmin.intersect(orgWithMoreThanNusersDF).cache()
@@ -65,7 +61,6 @@ object LearnerLeaderBoardModel extends AbsDashboardModel {
 
     //fetch the users from the above mentioned orgs only
     val filteredUserOrgDF = userOrgDF.join(commonOrgIdsDF, "userOrgID")
-    show(filteredUserOrgDF, "filterUserOrg")
 
     // fetch user details like fullname, profileImg etc for users of selected orgs
     val userOrgData = filteredUserOrgDF.withColumnRenamed("fullName","full_Name")
@@ -88,7 +83,6 @@ object LearnerLeaderBoardModel extends AbsDashboardModel {
         karmaPointsDataDF("last_credit_date"))
       .withColumn("month", (month - 1).cast("int"))
       .withColumn("year", lit(year))
-    show(userLeaderBoardDataDF, "finaluserdata")
 
     val windowSpecRank = Window.partitionBy("org_id").orderBy(desc("total_points"))
 
