@@ -286,9 +286,6 @@ object BlendedProgramReportModel extends AbsDashboardModel {
         col("bpProgramDirectorName").alias("program_coordinator_name"),
         col("data_last_generated_on")
       )
-
-    generateReport(df_warehouse.coalesce(1), s"${reportPath}-warehouse")
-
     // changes for creating avro file for warehouse
     warehouseCache.write(df_warehouse.coalesce(1), conf.dwBPEnrollmentsTable)
 

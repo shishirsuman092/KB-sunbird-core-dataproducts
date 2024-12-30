@@ -96,7 +96,6 @@ object CourseReportModel extends AbsDashboardModel {
     result1DF.unpersist()
 
     val reportPath = s"${conf.courseReportPath}/${today}"
-    generateReport(distinctDF.coalesce(1), s"${reportPath}-resource-warehouse")
 
     // changes for creating avro file for warehouse
     warehouseCache.write(distinctDF.coalesce(1), conf.dwContentResourceTable)
@@ -309,7 +308,6 @@ object CourseReportModel extends AbsDashboardModel {
         col("data_last_generated_on")
       )
     val df_warehouse = platformContentWarehouseDF.union(marketPlaceContentWarehouseDF)
-    generateReport(df_warehouse.coalesce(1), s"${reportPath}-warehouse")
     warehouseCache.write(df_warehouse.coalesce(1), conf.dwCourseTable)
     Redis.closeRedisConnect()
   }

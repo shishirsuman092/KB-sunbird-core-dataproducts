@@ -21,15 +21,9 @@ object DataWarehouseModel extends AbsDashboardModel {
    */
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
 
-    val today = getDate()
     val dwPostgresUrl = s"jdbc:postgresql://${conf.dwPostgresHost}/${conf.dwPostgresSchema}"
 
-    def readCSV(path: String): DataFrame = {
-      spark.read.option("header", "true").csv(path)
-    }
-
-    val userDetailsPath = s"${conf.localReportDir}/${conf.userReportPath}/${today}-warehouse"
-    val userDetails = readCSV(userDetailsPath)
+    val userDetails = warehouseCache.load(conf.dwUserTable)
       .withColumn("status", col("status").cast("int"))
       .withColumn("no_of_karma_points", col("no_of_karma_points").cast("int"))
       .withColumn("marked_as_not_my_user", col("marked_as_not_my_user").cast("boolean"))
@@ -39,8 +33,7 @@ object DataWarehouseModel extends AbsDashboardModel {
     truncateWarehouseTable(conf.dwUserTable)
     saveDataframeToPostgresTable_With_Append(userDetails, dwPostgresUrl, conf.dwUserTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
 
-    val contentDetailsPath = s"${conf.localReportDir}/${conf.courseReportPath}/${today}-warehouse"
-    val contentDetails = readCSV(contentDetailsPath)
+    val contentDetails = warehouseCache.load(conf.dwCourseTable)
       .withColumn("resource_count", col("resource_count").cast("int"))
       .withColumn("total_certificates_issued", col("total_certificates_issued").cast("int"))
       .withColumn("content_rating", col("content_rating").cast("float"))
@@ -48,8 +41,7 @@ object DataWarehouseModel extends AbsDashboardModel {
     truncateWarehouseTable(conf.dwCourseTable)
     saveDataframeToPostgresTable_With_Append(contentDetails, dwPostgresUrl, conf.dwCourseTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
 
-    val assessmentDetailsPath = s"${conf.localReportDir}/${conf.cbaReportPath}/${today}-warehouse"
-    val assessmentDetails = readCSV(assessmentDetailsPath)
+    val assessmentDetails =  warehouseCache.load(conf.dwAssessmentTable)
       .withColumn("score_achieved", col("score_achieved").cast("float"))
       .withColumn("overall_score", col("overall_score").cast("float"))
       .withColumn("cut_off_percentage", col("cut_off_percentage").cast("float"))
@@ -60,8 +52,7 @@ object DataWarehouseModel extends AbsDashboardModel {
     truncateWarehouseTable(conf.dwAssessmentTable)
     saveDataframeToPostgresTable_With_Append(assessmentDetails, dwPostgresUrl, conf.dwAssessmentTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
 
-    val bpEnrollmentsPath = s"${conf.localReportDir}/${conf.blendedReportPath}/${today}-warehouse"
-    val bpEnrollments = readCSV(bpEnrollmentsPath)
+    val bpEnrollments =  warehouseCache.load(conf.dwBPEnrollmentsTable)
       .withColumn("component_progress_percentage", col("component_progress_percentage").cast("float"))
       .withColumn("offline_session_date", to_date(col("offline_session_date"), dateFormat))
       .withColumn("component_completed_on", to_date(col("component_completed_on"), dateFormat))
@@ -73,41 +64,33 @@ object DataWarehouseModel extends AbsDashboardModel {
     truncateWarehouseTable(conf.dwBPEnrollmentsTable)
     saveDataframeToPostgresTable_With_Append(bpEnrollments, dwPostgresUrl, conf.dwBPEnrollmentsTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
 
-    val contentResourcePath = s"${conf.localReportDir}/${conf.courseReportPath}/${today}-resource-warehouse"
-    val contentResourceDetails = readCSV(contentResourcePath)
+    val contentResourceDetails =  warehouseCache.load(conf.dwContentResourceTable)
     truncateWarehouseTable(conf.dwContentResourceTable)
     saveDataframeToPostgresTable_With_Append(contentResourceDetails, dwPostgresUrl, conf.dwContentResourceTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
 
-    val cbPlanPath = s"${conf.localReportDir}/${conf.acbpReportPath}/${today}-warehouse"
-    val cbPlan = readCSV(cbPlanPath)
+    val cbPlan =  warehouseCache.load(conf.dwCBPlanTable)
     truncateWarehouseTable(conf.dwCBPlanTable)
     saveDataframeToPostgresTable_With_Append(cbPlan, dwPostgresUrl, conf.dwCBPlanTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
 
     val orgDwDf = cache.load("orgHierarchy")
       .withColumn("mdo_created_on", to_date(col("mdo_created_on"))).cache()
-    generateReport(orgDwDf.coalesce(1), s"${conf.orgHierarchyReportPath}/${today}-warehouse")
-
     warehouseCache.write(orgDwDf.coalesce(1), conf.dwOrgTable)
-
     truncateWarehouseTable(conf.dwOrgTable)
     saveDataframeToPostgresTable_With_Append(orgDwDf, dwPostgresUrl, conf.dwOrgTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
 
-    val kcmContentCompetencyMappingPath = s"${conf.localReportDir}/${conf.kcmReportPath}/${today}/ContentCompetencyMapping-warehouse"
-    val kcmContentCompetencyMapping = readCSV(kcmContentCompetencyMappingPath)
+    val kcmContentCompetencyMapping =  warehouseCache.load(conf.dwKcmContentTable)
       .select(col("course_id"), col("competency_area_id").cast("int"), col("competency_theme_id").cast("int"), col("competency_sub_theme_id").cast("int"), col("data_last_generated_on"))
     truncateWarehouseTable(conf.dwKcmContentTable)
     saveDataframeToPostgresTable_With_Append(kcmContentCompetencyMapping, dwPostgresUrl, conf.dwKcmContentTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
 
-    val kcmHierarchyPath = s"${conf.localReportDir}/${conf.kcmReportPath}/${today}/CompetencyHierarchy-warehouse"
-    val kcmHierarchy = readCSV(kcmHierarchyPath)
+    val kcmHierarchy =  warehouseCache.load(conf.dwKcmDictionaryTable)
       .withColumn("competency_area_id", col("competency_area_id").cast("int"))
       .withColumn("competency_theme_id", col("competency_theme_id").cast("int"))
       .withColumn("competency_sub_theme_id", col("competency_sub_theme_id").cast("int"))
     truncateWarehouseTable(conf.dwKcmDictionaryTable)
     saveDataframeToPostgresTable_With_Append(kcmHierarchy, dwPostgresUrl, conf.dwKcmDictionaryTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
 
-    val enrollmentDetailsPath = s"${conf.localReportDir}/${conf.userEnrolmentReportPath}/${today}-warehouse"
-    val enrollmentDetails = readCSV(enrollmentDetailsPath)
+    val enrollmentDetails =  warehouseCache.load(conf.dwEnrollmentsTable)
       .withColumn("content_progress_percentage", col("content_progress_percentage").cast("float"))
       .withColumn("user_rating", col("user_rating").cast("float"))
       .withColumn("resource_count_consumed", col("resource_count_consumed").cast("int"))
@@ -123,14 +106,11 @@ object DataWarehouseModel extends AbsDashboardModel {
       )
     truncateWarehouseTable(conf.dwEventsTable)
     saveDataframeToPostgresTable_With_Append(eventsDataDF, dwPostgresUrl, conf.dwEventsTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
+    warehouseCache.write(eventsDataDF, "event_details")
 
     val eventsEnrolmentDataDF = cache.load("eventEnrolmentDetails")
     truncateWarehouseTable("events_enrolment")
     saveDataframeToPostgresTable_With_Append(eventsEnrolmentDataDF, dwPostgresUrl, "events_enrolment", conf.dwPostgresUsername, conf.dwPostgresCredential)
-    warehouseCache.write(eventsEnrolmentDataDF, "event_enrolment_details")
-
-   //Writing event and event_enrollment data into warehouse cache
-    warehouseCache.write(eventsDataDF, "event_details")
     warehouseCache.write(eventsEnrolmentDataDF, "event_enrolment_details")
   }
 }
