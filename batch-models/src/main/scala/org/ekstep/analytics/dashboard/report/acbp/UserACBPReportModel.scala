@@ -114,7 +114,6 @@ object UserACBPReportModel extends AbsDashboardModel {
     if (conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", s"${conf.acbpMdoEnrolmentReportPath}/${today}")
     }
-    generateReport(cbPlanWarehouseDF.coalesce(1), s"${reportPath}-warehouse")
 
     // for user summary report
     val userSummaryDataDF = acbpEnrolmentDF

@@ -222,7 +222,6 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
         col("retakes").alias("number_of_retakes"),
         col("data_last_generated_on")
       )
-    generateReport(warehouseDF.coalesce(1), s"${reportPath}-warehouse")
 
     // changes for creating avro file for warehouse
     warehouseCache.write(warehouseDF.coalesce(1), conf.dwAssessmentTable)
