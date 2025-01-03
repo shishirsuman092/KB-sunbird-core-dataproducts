@@ -129,7 +129,7 @@ object TestUtil extends Serializable {
       "cassandraPublicUserAssessmentDataTable" -> "public_user_assessment_data",
       "cassandraUserEntityEnrolmentTable" -> "user_entity_enrolments",
       "cassandraFrameworkHierarchyTable" -> "framework_hierarchy",
-      "cassandraGroupDesignationTable" -> "kb_group_designation_content_data"
+      "cassandraGroupDesignationTable" -> "kb_group_designation_content_data",
 
       "mongoDatabase" -> "nodebb",
       "mongoDBCollection" -> "objects",

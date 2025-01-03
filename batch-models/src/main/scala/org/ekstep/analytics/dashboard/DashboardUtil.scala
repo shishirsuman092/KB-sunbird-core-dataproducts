@@ -299,6 +299,7 @@ object DashboardConfigParser extends Serializable {
       cassandraFrameworkHierarchyTable = getConfigModelParam(config, "cassandraFrameworkHierarchyTable"),
       cassandraGroupDesignationTable = getConfigModelParam(config, "cassandraGroupDesignationTable"),
 
+
       // redis keys
       redisRegisteredOfficerCountKey = "mdo_registered_officer_count",
       redisTotalOfficerCountKey = "mdo_total_officer_count",

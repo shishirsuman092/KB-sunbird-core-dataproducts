@@ -4,9 +4,13 @@ import org.apache.spark.SparkContext
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.types._
+import java.time.{Instant, LocalDate, ZoneOffset, ZonedDateTime, LocalDateTime}
+import java.time.format.DateTimeFormatter
+import java.util.UUID
 import org.ekstep.analytics.dashboard.DashboardUtil._
 import org.ekstep.analytics.dashboard.DataUtil._
-import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig}
+import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig, Redis}
 import org.ekstep.analytics.framework.FrameworkContext
 
 object OdcsRecomendationModel extends AbsDashboardModel {
@@ -265,7 +269,7 @@ object OdcsRecomendationModel extends AbsDashboardModel {
 
 
     //list of groups an designation (find the designations in the same group and fetch the content)
-    val otherDF = cassandraTableAsDataFrame(cassandraUserKeyspace, cassandraGroupDesignationTable)
+    val otherDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraGroupDesignationTable)
 
     val extendedDF = cbpPlanJoinedDF
       .join(
