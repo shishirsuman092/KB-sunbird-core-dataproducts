@@ -81,7 +81,11 @@ case class DashboardConfig (
                              cassandraMDOLearnerLeaderboardTable: String,
                              cassandraPublicUserAssessmentDataTable: String,
                              cassandraUserEntityEnrolmentTable: String,
+                             cassandraNLWUserLeaderboardTable: String,
+                             cassandraNLWMdoLeaderboardTable: String,
+                             cassandraOldAssesmentTable: String,
                              cassandraFrameworkHierarchyTable: String,
+                             cassandraGroupDesignationTable: String,
 
                              //warehouse tables;
                              appPostgresHost: String,
@@ -164,9 +168,6 @@ case class DashboardConfig (
                              ObservationStatusReportBatchSize: String,
                              nationalLearningWeekStart: String,
                              nationalLearningWeekEnd: String,
-                             cassandraNLWUserLeaderboardTable: String,
-                             cassandraNLWMdoLeaderboardTable: String,
-                             cassandraOldAssesmentTable: String,
 
                              // Anonymous Assessment
                              anonymousAssessmentLoggedInUserContentIDs: String,
@@ -296,6 +297,7 @@ object DashboardConfigParser extends Serializable {
       cassandraPublicUserAssessmentDataTable = getConfigModelParam(config, "cassandraPublicUserAssessmentDataTable"),
       cassandraUserEntityEnrolmentTable = getConfigModelParam(config, "cassandraUserEntityEnrolmentTable"),
       cassandraFrameworkHierarchyTable = getConfigModelParam(config, "cassandraFrameworkHierarchyTable"),
+      cassandraGroupDesignationTable = getConfigModelParam(config, "cassandraGroupDesignationTable"),
 
       // redis keys
       redisRegisteredOfficerCountKey = "mdo_registered_officer_count",

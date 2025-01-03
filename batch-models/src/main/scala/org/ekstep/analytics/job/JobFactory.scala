@@ -30,6 +30,7 @@ import org.ekstep.analytics.dashboard.ministryleaderboard.MinistryLearnerLeaderb
 import org.ekstep.analytics.dashboard.nationallearningweek.NationalLearningWeekJob
 import org.ekstep.analytics.dashboard.report.monthly.requests.MonthlyRequestJob
 import org.ekstep.analytics.dashboard.survey.npsUpgrade.NpsUpgradeJob
+import org.ekstep.analytics.dashboard.odcs.OdcsRecomendationJob
 
 import scala.reflect.runtime.universe
 import org.ekstep.analytics.framework.IJob
@@ -129,6 +130,8 @@ object JobFactory {
         MonthlyRequestJob
       case "user-activity" =>
         UserActivityJob
+      case "odcs-recomendation" =>
+        OdcsRecomendationJob
       case _ =>
         reflectModule(jobType);
     }
