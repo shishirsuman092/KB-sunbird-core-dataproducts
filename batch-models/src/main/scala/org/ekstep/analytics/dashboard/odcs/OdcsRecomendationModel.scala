@@ -141,10 +141,8 @@ object OdcsRecomendationModel extends AbsDashboardModel {
       )
 
 
-    val kcmContentCompetencyMappingPath = s"${conf.localReportDir}/${conf.kcmReportPath}/${today}/ContentCompetencyMapping-warehouse"
-    val kcmContentCompetencyMappingDF = readCSV(kcmContentCompetencyMappingPath) .select(col("course_id"), col("competency_area_id").cast("int"), col("competency_theme_id").cast("int"), col("competency_sub_theme_id").cast("int"))
-    val kcmHierarchyPath = s"${conf.localReportDir}/${conf.kcmReportPath}/${today}/CompetencyHierarchy-warehouse"
-    val kcmHierarchyDF = readCSV(kcmHierarchyPath).withColumn("competency_area_id", col("competency_area_id").cast("int"))
+    val kcmContentCompetencyMappingDF = warehouseCache.load(conf.dwKcmContentTable).select(col("course_id"), col("competency_area_id").cast("int"), col("competency_theme_id").cast("int"), col("competency_sub_theme_id").cast("int"))
+    val kcmHierarchyDF = warehouseCache.load(conf.dwKcmDictionaryTable).withColumn("competency_area_id", col("competency_area_id").cast("int"))
       .withColumn("competency_theme_id", col("competency_theme_id").cast("int"))
       .withColumn("competency_sub_theme_id", col("competency_sub_theme_id").cast("int"))
 
@@ -157,8 +155,7 @@ object OdcsRecomendationModel extends AbsDashboardModel {
         col("competency_sub_theme_id"),
         col("competency_sub_theme"))
 
-    val contentDetailsPath = s"${conf.localReportDir}/${conf.courseReportPath}/${today}-warehouse"
-    val contentDetailsDF = readCSV(contentDetailsPath)
+    val contentDetailsDF = warehouseCache.load(conf.dwCourseTable)
     val contentDetailsWithOrgDF = contentCompetencyMappingIdWithNames.withColumnRenamed("course_id", "content_id")
       .join(contentDetailsDF, Seq("content_id"), "inner").filter(col("content_type") === "Course")
       .select(
@@ -209,8 +206,7 @@ object OdcsRecomendationModel extends AbsDashboardModel {
         col("avg_rating")  // adding the avg_rating column
       )
 
-    val enrollmentDetailsPath = s"${conf.localReportDir}/${conf.userEnrolmentReportPath}/${today}-warehouse"
-    val enrollmentDetails = readCSV(enrollmentDetailsPath)
+    val enrollmentDetails = warehouseCache.load(conf.dwEnrollmentsTable)
       .withColumn("content_progress_percentage", col("content_progress_percentage").cast("float"))
       .withColumn("user_rating", col("user_rating").cast("float"))
       .withColumn("resource_count_consumed", col("resource_count_consumed").cast("int"))
@@ -225,9 +221,7 @@ object OdcsRecomendationModel extends AbsDashboardModel {
         count(when(col("user_consumption_status") === "completed", 1)).alias("completed_count"))
       .withColumn("completion_percentage", (col("completed_count") / col("enrolment_count") * 100).cast("double"))
 
-
-    val cbPlanPath = s"${conf.localReportDir}/${conf.acbpReportPath}/${today}-warehouse"
-    val cbPlan = readCSV(cbPlanPath)
+    val cbPlan = warehouseCache.load(conf.dwCBPlanTable)
     val finalDFWithOrgPartUnfiltered = joinedDF.withColumn("org_part", split(col("org"), "_").getItem(0))
 
     val finalDFWithOrgPart = finalDFWithOrgPartUnfiltered.filter(
@@ -312,7 +306,7 @@ object OdcsRecomendationModel extends AbsDashboardModel {
       slice(array_distinct(col("ordered_content_ids")), 1, 20)).withColumn("ordered_content_ids",
       concat_ws(",", col("ordered_content_ids")))
 
-    val odcsCourseRecomendationDF = finalDF.select(col("ordered_content_ids").alias("content_ids"), concat(split(col("org"), "_").getItem(0), lit("_"), col("designation")).alias("org_designation"))
+    val odcsCourseRecomendationDF = finalDF.select(col("ordered_content_ids").alias("content_ids"), concat(split(col("org"), "_").getItem(0), lit("_"), upper(col("designation"))).alias("org_designation"))
     Redis.dispatchDataFrame[Long]("odcs_course_recomendation", odcsCourseRecomendationDF, "org_designation", "content_ids")
   }
 }
