@@ -141,10 +141,8 @@ object OdcsRecomendationModel extends AbsDashboardModel {
       )
 
 
-    val kcmContentCompetencyMappingDF = warehouseCache.load(conf.dwKcmContentTable).select(col("course_id"), col("competency_area_id").cast("int"), col("competency_theme_id").cast("int"), col("competency_sub_theme_id").cast("int"))
-    val kcmHierarchyDF = warehouseCache.load(conf.dwKcmDictionaryTable).withColumn("competency_area_id", col("competency_area_id").cast("int"))
-      .withColumn("competency_theme_id", col("competency_theme_id").cast("int"))
-      .withColumn("competency_sub_theme_id", col("competency_sub_theme_id").cast("int"))
+    val kcmContentCompetencyMappingDF = warehouseCache.load(conf.dwKcmContentTable).select(col("course_id"), col("competency_area_id"), col("competency_theme_id"), col("competency_sub_theme_id"))
+    val kcmHierarchyDF = warehouseCache.load(conf.dwKcmDictionaryTable)
 
     val contentCompetencyMappingIdWithNames = kcmContentCompetencyMappingDF
       .join(kcmHierarchyDF, Seq("competency_theme_id", "competency_sub_theme_id"), "inner")
