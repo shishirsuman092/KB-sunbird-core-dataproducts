@@ -27,21 +27,18 @@ object CommsReportModel extends AbsDashboardModel {
     val lastUpdatedOn = date_format(current_timestamp(), "dd/MM/yyyy HH:mm:ss a")
     val commsConsoleReportPath = s"${conf.commsConsoleReportPath}/${today}"
 
-    val orgDF = spark.read.option("header", "true")
-      .csv(s"${conf.localReportDir}/${conf.orgHierarchyReportPath}/${today}-warehouse")
+    val orgDF = warehouseCache.load(conf.dwOrgTable)
       .withColumn("department", when(col("ministry").isNotNull && col("department").isNull, col("mdo_name")).otherwise(col("department")))
       .withColumn("ministry", when(col("ministry").isNull && col("department").isNull, col("mdo_name")).otherwise(col("ministry")))
       .select("mdo_id", "ministry", "department", "organization")
 
-    val userDF = spark.read.option("header", "true")
-      .csv(s"${conf.localReportDir}/${conf.userReportPath}/${today}-warehouse")
+    val userDF =warehouseCache.load(conf.dwUserTable)
       //.withColumn("registrationDate", to_date(col("user_registration_date"), dateFormat1))
       .withColumn("registrationDate",  date_format(col("user_registration_date"), "dd/MM/yyyy HH:mm:ss a"))
       .select("user_id", "mdo_id", "status", "full_name", "email", "phone_number", "roles", "registrationDate", "tag", "user_registration_date")
       .join(orgDF, Seq("mdo_id"), "left")
 
-    val rawEnrollmentsDF = spark.read.option("header", "true")
-      .csv(s"${conf.localReportDir}/${conf.userEnrolmentReportPath}/${today}-warehouse")
+    val rawEnrollmentsDF = warehouseCache.load(conf.dwEnrollmentsTable)
       //.withColumn("completionDate", to_date(col("completed_on"), dateFormat2))
       .withColumn("completionDate",  date_format(col("content_last_accessed_on"), "dd/MM/yyyy HH:mm:ss a"))
     val enrollmentsDF = rawEnrollmentsDF
