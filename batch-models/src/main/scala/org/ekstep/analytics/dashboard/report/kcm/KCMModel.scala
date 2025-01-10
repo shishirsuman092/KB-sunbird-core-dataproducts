@@ -74,6 +74,7 @@ object KCMModel extends AbsDashboardModel {
 
     // Competency reporting
     val competencyReporting = competencyContentMappingDF.join(competencyDetailsDF, Seq("competency_area_id", "competency_theme_id", "competency_sub_theme_id"))
+      .withColumn("competency_theme_type", lit("Null"))
       .select(
         col("courseID").alias("content_id"),
         col("courseName").alias("content_name"),
@@ -81,6 +82,7 @@ object KCMModel extends AbsDashboardModel {
         col("competency_area_description"),
         col("competency_theme"),
         col("competency_theme_description"),
+        col("competency_theme_type"),
         col("competency_sub_theme"),
         col("competency_sub_theme_description")
       ).orderBy("content_id").distinct()
