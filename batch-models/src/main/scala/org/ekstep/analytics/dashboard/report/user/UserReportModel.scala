@@ -66,6 +66,10 @@ object UserReportModel extends AbsDashboardModel {
       .withColumn("Report_Last_Generated_On", currentDateTime)
       .withColumn("Total_Enrolments", coalesce(col("total_event_enrolments"), lit(0)) + coalesce(col("total_content_enrolments"), lit(0)))
       .withColumn("Total_Completions", coalesce(col("total_event_completions"), lit(0)) + coalesce(col("total_content_completions"), lit(0)))
+      .withColumn("MDO_Name", col("userOrgName"))
+      .withColumn("Ministry", when(col("ministry_name").isNull, col("userOrgName")).otherwise(col("ministry_name")))
+      .withColumn("Department", when(col("ministry_name").isNotNull && col("dept_name").isNull, col("userOrgName")).otherwise(col("dept_name")))
+      .withColumn("Organization",when(col("ministry_name").isNotNull && col("dept_name").isNotNull, col("userOrgName")))
       .select(
         col("fullName").alias("Full_Name"),
         col("professionalDetails.designation").alias("Designation"),
@@ -73,9 +77,10 @@ object UserReportModel extends AbsDashboardModel {
         col("personalDetails.mobile").alias("Phone_Number"),
         col("professionalDetails.group").alias("Group"),
         col("Tag"),
-        col("ministry_name").alias("Ministry"),
-        col("dept_name").alias("Department"),
-        col("userOrgName").alias("Organization"),
+        col("Ministry"),
+        col("Department"),
+        col("Organization"),
+        col("MDO_Name"),
         from_unixtime(col("userCreatedTimestamp"), dateFormat).alias("User_Registration_Date"),
         col("role").alias("Roles"),
         col("personalDetails.gender").alias("Gender"),
