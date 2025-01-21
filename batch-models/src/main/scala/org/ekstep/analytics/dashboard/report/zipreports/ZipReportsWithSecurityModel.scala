@@ -172,30 +172,28 @@ object ZipReportsWithSecurityModel extends AbsDashboardModel {
     // End of zipping the reports and syncing to blob store
     // start zipping warehouse reports
     val today = getDate()
-    val warehousePath: String = s"${conf.localReportDir}/${conf.warehouseReportPath}/${today}"
-    val warehouseReportMap: Map[String, String] = Map("user_detail" -> s"${conf.localReportDir}/${conf.userReportPath}/${today}-warehouse",
-      "course" -> s"${conf.localReportDir}/${conf.courseReportPath}/${today}-warehouse",
-      "assessment_details" -> s"${conf.localReportDir}/${conf.cbaReportPath}/${today}-warehouse",
-      "bp_enrolments" -> s"${conf.localReportDir}/${conf.blendedReportPath}/${today}-warehouse",
-      "content_resource" -> s"${conf.localReportDir}/${conf.courseReportPath}/${today}-resource-warehouse",
-      "cb_plan" -> s"${conf.localReportDir}/${conf.acbpReportPath}/${today}-warehouse",
-      "org_hierarchy" -> s"${conf.localReportDir}/${conf.orgHierarchyReportPath}/${today}-warehouse",
-      "kcm_content_competency_mapping" -> s"${conf.localReportDir}/${conf.kcmReportPath}/${today}/ContentCompetencyMapping-warehouse",
-      "kcm_competency_hierarchy" -> s"${conf.localReportDir}/${conf.kcmReportPath}/${today}/CompetencyHierarchy-warehouse",
-      "enrolment_details" -> s"${conf.localReportDir}/${conf.userEnrolmentReportPath}/${today}-warehouse"
-    )
-    // copy all warehouse files to separate directory for zipping
-    // TODO file format will change to AVRO in future
-    warehouseReportMap.foreach(x => {
-      val inputCsvDir = new File(x._2)
-      if (inputCsvDir.isDirectory) {
-        inputCsvDir.listFiles().foreach(file => {
-          if (file.getName.endsWith(".csv")) {
-            FileUtils.copyFile(file, new File(warehousePath.concat("/").concat(x._1).concat(".csv")))
-          }
-        })
-      }
-    })
+    var warehousePath = s"${conf.localReportDir}/warehouseReportPath"
+    var userDetailDF = warehouseCache.load(conf.dwUserTable)
+    var courseDF = warehouseCache.load(conf.dwCourseTable)
+    var assessmentDetailsDF = warehouseCache.load(conf.dwAssessmentTable)
+    var bpEnrolmentsDF = warehouseCache.load(conf.dwBPEnrollmentsTable)
+    var contentResourceDF = warehouseCache.load(conf.dwContentResourceTable)
+    var cbPlanDF = warehouseCache.load(conf.dwCBPlanTable)
+    var orgHierarchyDF = cache.load("orgHierarchy")
+    var kcmContentCompetencyMappingDF = warehouseCache.load(conf.dwKcmContentTable)
+    var kcmCompetencyHierarchyDF =  warehouseCache.load(conf.dwKcmDictionaryTable)
+    var enrolmentDetailsDF = warehouseCache.load(conf.dwEnrollmentsTable)
+
+    userDetailDF.write.option("header", "true").csv(s"${warehousePath}/useDetails.csv")
+    courseDF.write.option("header", "true").csv(s"${warehousePath}/userDetails.csv")
+    assessmentDetailsDF.write.option("header", "true").csv(s"${warehousePath}/assessmentDetails.csv")
+    bpEnrolmentsDF.write.option("header", "true").csv(s"${warehousePath}/bpEnrolments.csv")
+    contentResourceDF.write.option("header", "true").csv(s"${warehousePath}/contentResource.csv")
+    cbPlanDF.write.option("header", "true").csv(s"${warehousePath}/cbPlan.csv")
+    orgHierarchyDF.write.option("header", "true").csv(s"${warehousePath}/orgHierarchy.csv")
+    kcmContentCompetencyMappingDF.write.option("header", "true").csv(s"${warehousePath}/kcmCompeetncyDetails.csv")
+    kcmCompetencyHierarchyDF.write.option("header", "true").csv(s"${warehousePath}/kcmHierarchyDetails.csv")
+    enrolmentDetailsDF.write.option("header", "true").csv(s"${warehousePath}/enrolmentDetails.csv")
     // zip warehouse report
     zipReports(warehousePath, Paths.get(warehousePath).toFile, s"${conf.password}")
     // delete files
