@@ -70,6 +70,10 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
       .cache()
 
     val fullReportDFNew = finalDF
+      .withColumn("MDO_Name", col("userOrgName"))
+      .withColumn("Ministry", when(col("ministry_name").isNull, col("userOrgName")).otherwise(col("ministry_name")))
+      .withColumn("Department", when(col("ministry_name").isNotNull && col("dept_name").isNull, col("userOrgName")).otherwise(col("dept_name")))
+      .withColumn("Organisation",when(col("ministry_name").isNotNull && col("dept_name").isNotNull, col("userOrgName")))
       .select(
         col("userID"),
         col("assessChildID").alias("assessment_id"),
@@ -81,11 +85,12 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
         col("professionalDetails.designation").alias("Designation"),
         col("personalDetails.primaryEmail").alias("E mail"),
         col("personalDetails.mobile").alias("Phone Number"),
+        col("MDO_Name"),
         col("professionalDetails.group").alias("Group"),
         col("Tags"),
-        col("ministry_name").alias("Ministry"),
-        col("dept_name").alias("Department"),
-        col("userOrgName").alias("Organisation"),
+        col("Ministry"),
+        col("Department"),
+        col("Organisation"),
         col("assessChildName").alias("assessment_name"),
         col("assessment_type"),
         col("assessOrgName").alias("assessment_content_provider"),
@@ -126,7 +131,7 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
       .withColumn("MDO_Name", col("userOrgName"))
       .withColumn("Ministry", when(col("ministry_name").isNull, col("userOrgName")).otherwise(col("ministry_name")))
       .withColumn("Department", when(col("ministry_name").isNotNull && col("dept_name").isNull, col("userOrgName")).otherwise(col("dept_name")))
-      .withColumn("Organization",when(col("ministry_name").isNotNull && col("dept_name").isNotNull, col("userOrgName")))
+      .withColumn("Organisation",when(col("ministry_name").isNotNull && col("dept_name").isNotNull, col("userOrgName")))
       .select(
         col("userID"),
         col("source_id").alias("assessment_id"),
