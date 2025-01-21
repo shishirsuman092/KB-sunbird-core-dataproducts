@@ -73,7 +73,7 @@ object DataWarehouseModel extends AbsDashboardModel {
     saveDataframeToPostgresTable_With_Append(cbPlan, dwPostgresUrl, conf.dwCBPlanTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
 
     val orgDwDf = cache.load("orgHierarchy")
-      .withColumn("mdo_created_on", to_date(col("mdo_created_on"))).cache()
+      .withColumn("mdo_created_on", to_date(col("mdo_created_on")).cast("string")).cache()
     warehouseCache.write(orgDwDf.coalesce(1), conf.dwOrgTable)
     truncateWarehouseTable(conf.dwOrgTable)
     saveDataframeToPostgresTable_With_Append(orgDwDf, dwPostgresUrl, conf.dwOrgTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
