@@ -239,7 +239,7 @@ object BlendedProgramReportModel extends AbsDashboardModel {
     // generateReport(fullReportDF, s"${reportPath}-full")
     val mdoReportDF = fullReportDF
       .select(
-        col("Name"),col("Email"),col("Phone_Number"),col("MDO_Name"),,col("Designation"),col("Group"),col("Gender"),col("status"),
+        col("Name"),col("Email"),col("Phone_Number"),col("MDO_Name"),col("Designation"),col("Group"),col("Gender"),col("status"),
         col("Category"),col("Tag"),col("Ministry"),col("Department"),col("Organization"),col("Provider_Name"),col("Program_Name"),col("Batch_Name"),
         col("Batch_Location"),col("Batch_Start_Date"),col("Batch_End_Date"),col("Enrolled_On"),col("Component_Name"),col("Component_Type"),
         col("Component_Mode"),col("Status"),col("Component_Duration"),col("Component_Progress_Percentage"),col("Component_Completed_On"),
