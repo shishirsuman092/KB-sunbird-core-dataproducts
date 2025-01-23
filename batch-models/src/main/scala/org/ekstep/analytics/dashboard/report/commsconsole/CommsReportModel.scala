@@ -32,13 +32,13 @@ object CommsReportModel extends AbsDashboardModel {
       .withColumn("ministry", when(col("ministry").isNull && col("department").isNull, col("mdo_name")).otherwise(col("ministry")))
       .select("mdo_id", "ministry", "department", "organization")
 
-    val userDF =warehouseCache.load(conf.dwUserTable)
+    val userDF =warehouseCache.load(conf.dwUserTable).repartition(200)
       //.withColumn("registrationDate", to_date(col("user_registration_date"), dateFormat1))
       .withColumn("registrationDate",  date_format(col("user_registration_date"), "dd/MM/yyyy HH:mm:ss a"))
       .select("user_id", "mdo_id", "status", "full_name", "email", "phone_number", "roles", "registrationDate", "tag", "user_registration_date")
       .join(orgDF, Seq("mdo_id"), "left")
 
-    val rawEnrollmentsDF = warehouseCache.load(conf.dwEnrollmentsTable)
+    val rawEnrollmentsDF = warehouseCache.load(conf.dwEnrollmentsTable).repartition(500)
       //.withColumn("completionDate", to_date(col("completed_on"), dateFormat2))
       .withColumn("completionDate",  date_format(col("content_last_accessed_on"), "dd/MM/yyyy HH:mm:ss a"))
     val enrollmentsDF = rawEnrollmentsDF
