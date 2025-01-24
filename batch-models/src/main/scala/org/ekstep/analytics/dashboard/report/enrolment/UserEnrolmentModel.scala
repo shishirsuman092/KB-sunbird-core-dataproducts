@@ -309,7 +309,7 @@ object UserEnrolmentModel extends AbsDashboardModel {
       .groupBy(col("user_id"), col("content_id")).agg(sum(col("points")).alias("karma_points"))
 
     val warehouseDFwithKarmaPoints = warehouseDF.join(karmaPointsData, Seq("user_id","content_id"), "left")
-      .na.fill(0,Seq("total_karma_points"))
+      .na.fill(0,Seq("karma_points"))
       .select(col("user_id"), col("batch_id"), col("content_id"), col("enrolled_on"), col("content_progress_percentage"),
         col("resource_count_consumed"), col("user_consumption_status"), col("first_completed_on"), col("first_certificate_generated_on"),
         col("last_completed_on"), col("last_certificate_generated_on"), col("content_last_accessed_on"), col("certificate_generated"),
