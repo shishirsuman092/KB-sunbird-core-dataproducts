@@ -106,8 +106,12 @@ object DataWarehouseModel extends AbsDashboardModel {
     warehouseCache.write(eventsDataDF, "event_details")
 
     val eventsEnrolmentDataDF = cache.load("eventEnrolmentDetails")
+    val karmaPointsData = cache.load("userKarmaPoints")
+      .select(col("userid").alias("user_id"),col("context_id").alias("event_id"),col("points"))
+      .groupBy(col("user_id"), col("event_id")).agg(sum(col("points")).alias("karma_points"))
+    val eventsEnrolmentDataDFWithKarmaPoints =  eventsEnrolmentDataDF.join(karmaPointsData, Seq("user_id", "event_id"), "left")
     truncateWarehouseTable("events_enrolment")
-    saveDataframeToPostgresTable_With_Append(eventsEnrolmentDataDF, dwPostgresUrl, "events_enrolment", conf.dwPostgresUsername, conf.dwPostgresCredential)
-    warehouseCache.write(eventsEnrolmentDataDF, "event_enrolment_details")
+    saveDataframeToPostgresTable_With_Append(eventsEnrolmentDataDFWithKarmaPoints, dwPostgresUrl, "events_enrolment", conf.dwPostgresUsername, conf.dwPostgresCredential)
+    warehouseCache.write(eventsEnrolmentDataDFWithKarmaPoints, "event_enrolment_details")
   }
 }

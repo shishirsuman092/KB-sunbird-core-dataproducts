@@ -69,7 +69,7 @@ object UserEnrolmentModel extends AbsDashboardModel {
       lit("External Content").as("category"),
       lit("LIVE").as("courseStatus"))
 
-    var marketPlaceContentEnrolmentsDF = extractedDF.durationFormat("courseDuration")
+    val marketPlaceContentEnrolmentsDF = extractedDF.durationFormat("courseDuration")
       .join(marketPlaceEnrolmentsDF, Seq("content_id"), "inner")
       .withColumn("courseCompletedTimestamp", date_format(col("completedon"), dateTimeFormat))
       .withColumn("courseEnrolledTimestamp", date_format(col("enrolled_date"), dateTimeFormat))
@@ -304,8 +304,21 @@ object UserEnrolmentModel extends AbsDashboardModel {
 
     val warehouseDF = platformWarehouseDF.union(marketPlaceWarehouseDF)
 
+    val karmaPointsData = cache.load("userKarmaPoints")
+      .select(col("userid").alias("user_id"),col("context_id").alias("content_id"),col("points"))
+      .groupBy(col("user_id"), col("content_id")).agg(sum(col("points")).alias("karma_points"))
+
+    val warehouseDFwithKarmaPoints = warehouseDF.join(karmaPointsData, Seq("user_id","content_id"), "left")
+      .na.fill(0,Seq("karma_points"))
+      .select(col("user_id"), col("batch_id"), col("content_id"), col("enrolled_on"), col("content_progress_percentage"),
+        col("resource_count_consumed"), col("user_consumption_status"), col("first_completed_on"), col("first_certificate_generated_on"),
+        col("last_completed_on"), col("last_certificate_generated_on"), col("content_last_accessed_on"), col("certificate_generated"),
+        col("number_of_certificate"), col("user_rating"), col("certificate_id"), col("live_cbp_plan_mandate"), col("karma_points"),
+        col("data_last_generated_on")
+      )
+
     // changes for creating avro file for warehouse
-    warehouseCache.write(warehouseDF.coalesce(1), conf.dwEnrollmentsTable)
+    warehouseCache.write(warehouseDFwithKarmaPoints.coalesce(1), conf.dwEnrollmentsTable)
 
     allCourseProgramCompletionWithDetailsDFWithRating.unpersist()
 

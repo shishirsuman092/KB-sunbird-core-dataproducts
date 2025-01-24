@@ -254,3 +254,7 @@ ALTER TABLE kcm_content_mapping ALTER COLUMN competency_sub_theme_id TYPE VARCHA
 ALTER TABLE kcm_dictionary ALTER COLUMN competency_area_id TYPE VARCHAR(255) USING competency_area_id::VARCHAR(255);
 ALTER TABLE kcm_dictionary ALTER COLUMN competency_theme_id TYPE VARCHAR(255) USING competency_theme_id::VARCHAR(255);
 ALTER TABLE kcm_dictionary ALTER COLUMN competency_sub_theme_id TYPE VARCHAR(255) USING competency_sub_theme_id::VARCHAR(255);
+
+-- adding karma points to user_enrolments and event_enrolment
+ALTER TABLE user_enrolments ADD COLUMN karma_points INTEGER;
+ALTER TABLE events_enrolment ADD COLUMN karma_points INTEGER;
