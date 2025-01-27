@@ -140,18 +140,26 @@ object DataExhaustModel extends AbsDashboardModel {
         col("createddate").alias("orgCreatedDate")
       )
     val orgDfWithOrgType = orgCassandraDF.join(orgPostgresDF, Seq("sborgid"), "left")
-    val orgHierarchyDF = orgDfWithOrgType
+    val orgDfWithSborgid = orgDfWithOrgType
+      .join(
+        orgPostgresDF.select(col("sborgid").alias("ministry_id_sborgid"), col("mapid").alias("l1mapid_lookup")),
+        col("l1mapid") === col("l1mapid_lookup"),
+        "left").join(
+        orgPostgresDF.select(col("sborgid").alias("department_id_sborgid"), col("mapid").alias("l2mapid_lookup")),
+        col("l2mapid") === col("l2mapid_lookup"),
+        "left").drop("l1mapid_lookup", "l2mapid_lookup")
+
+    val orgHierarchyDF = orgDfWithSborgid
       .select(
         col("sborgid").alias("mdo_id"),
         col("cassOrgName").alias("mdo_name"),
         col("l1orgname").alias("ministry"),
+        col("ministry_id_sborgid").alias("ministry_id"),
         col("l2orgname").alias("department"),
+        col("department_id_sborgid").alias("department_id"),
         col("orgCreatedDate").alias("mdo_created_on"),
         col("orgType")
       )
-      .withColumn("is_content_provider",
-        when(col("orgType").cast("int") === 128 || col("orgType").cast("int") === 128, lit("Y")).otherwise(lit("N")))
-      .withColumn("organization", when(col("ministry").isNotNull && col("department").isNotNull, col("mdo_name")).otherwise(null))
       .withColumn("data_last_generated_on", currentDateTime)
       .distinct()
       .drop("orgType")
