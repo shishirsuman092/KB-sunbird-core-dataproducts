@@ -69,7 +69,7 @@ object UserEnrolmentModel extends AbsDashboardModel {
       lit("External Content").as("category"),
       lit("LIVE").as("courseStatus"))
 
-    var marketPlaceContentEnrolmentsDF = extractedDF.durationFormat("courseDuration")
+    val marketPlaceContentEnrolmentsDF = extractedDF.durationFormat("courseDuration")
       .join(marketPlaceEnrolmentsDF, Seq("content_id"), "inner")
       .withColumn("courseCompletedTimestamp", date_format(col("completedon"), dateTimeFormat))
       .withColumn("courseEnrolledTimestamp", date_format(col("enrolled_date"), dateTimeFormat))
@@ -129,7 +129,12 @@ object UserEnrolmentModel extends AbsDashboardModel {
     val enrolmentWithACBP = df.join(acbpAllEnrolmentDF, Seq("userID", "userOrgID", "courseID"), "left")
       .withColumn("live_cbp_plan_mandate", when(col("liveCBPlan").isNull, false).otherwise(col("liveCBPlan")))
 
-    val fullReportDF = enrolmentWithACBP.select(
+    val fullReportDF = enrolmentWithACBP
+      .withColumn("MDO_Name", col("userOrgName"))
+      .withColumn("Ministry", when(col("ministry_name").isNull, col("userOrgName")).otherwise(col("ministry_name")))
+      .withColumn("Department", when(col("ministry_name").isNotNull && col("dept_name").isNull, col("userOrgName")).otherwise(col("dept_name")))
+      .withColumn("Organization",when(col("ministry_name").isNotNull && col("dept_name").isNotNull, col("userOrgName")))
+      .select(
         col("userID"),
         col("userOrgID"),
         col("courseID"),
@@ -138,11 +143,12 @@ object UserEnrolmentModel extends AbsDashboardModel {
         col("professionalDetails.designation").alias("Designation"),
         col("personalDetails.primaryEmail").alias("Email"),
         col("personalDetails.mobile").alias("Phone_Number"),
+        col("MDO_Name"),
         col("professionalDetails.group").alias("Group"),
         col("Tag"),
-        col("ministry_name").alias("Ministry"),
-        col("dept_name").alias("Department"),
-        col("userOrgName").alias("Organization"),
+        col("Ministry"),
+        col("Department"),
+        col("Organization"),
         col("courseOrgName").alias("Content_Provider"),
         col("courseName").alias("Content_Name"),
         col("category").alias("Content_Type"),
@@ -179,49 +185,55 @@ object UserEnrolmentModel extends AbsDashboardModel {
     val reportPath = s"${conf.userEnrolmentReportPath}/${today}"
     // generateReport(fullReportDF, s"${reportPath}-full")
 
-    val mdoMarketplaceReport = marketPlaceEnrolmentsWithUserDetailsDF.select(
-      col("fullName").alias("Full_Name"),
-      col("professionalDetails.designation").alias("Designation"),
-      col("personalDetails.primaryEmail").alias("Email"),
-      col("personalDetails.mobile").alias("Phone_Number"),
-      col("professionalDetails.group").alias("Group"),
-      col("Tag"),
-      col("ministry_name").alias("Ministry"),
-      col("dept_name").alias("Department"),
-      col("userOrgName").alias("Organization"),
-      col("courseOrgName").alias("Content_Provider"),
-      col("courseName").alias("Content_Name"),
-      col("category").alias("Content_Type"),
-      col("courseDuration").alias("Content_Duration"),
-      col("batchID").alias("Batch_Id"),
-      lit("Not Available").alias("Batch_Name"),
-      lit(null).cast("date").alias("Batch_Start_Date"),
-      lit(null).cast("date").alias("Batch_End_Date"),
-      col("courseEnrolledTimestamp").alias("Enrolled_On"),
-      when(col("dbCompletionStatus").isNull, "not-enrolled")
-        .when(col("dbCompletionStatus") === 0, "not-started")
-        .when(col("dbCompletionStatus") === 1, "in-progress")
-        .otherwise("completed")
-        .alias("Status"),
-      col("completionpercentage").alias("Content_Progress_Percentage"),
-      to_date(col("courseLastPublishedOn"), dateFormat).alias("Last_Published_On"),
-      lit(null).cast("date").alias("Content_Retired_On"),
-      col("courseCompletedTimestamp").alias("Completed_On"),
-      col("certificate_generated").alias("Certificate_Generated"),
-      col("userRating").alias("User_Rating"),
-      col("personalDetails.gender").alias("Gender"),
-      lit("External Content").as("category"),
-      col("additionalProperties.externalSystem").alias("External_System"),
-      col("additionalProperties.externalSystemId").alias("External_System_Id"),
-      col("userOrgID").alias("mdoid"),
-      col("certificateID").alias("Certificate_ID"),
-      col("Report_Last_Generated_On"),
-      col("userStatus"),
-      col("live_cbp_plan_mandate").alias("Live_CBP_Plan_Mandate")
+    val mdoMarketplaceReport = marketPlaceEnrolmentsWithUserDetailsDF
+      .withColumn("MDO_Name", col("userOrgName"))
+      .withColumn("Ministry", when(col("ministry_name").isNull, col("userOrgName")).otherwise(col("ministry_name")))
+      .withColumn("Department", when(col("ministry_name").isNotNull && col("dept_name").isNull, col("userOrgName")).otherwise(col("dept_name")))
+      .withColumn("Organization",when(col("ministry_name").isNotNull && col("dept_name").isNotNull, col("userOrgName")))
+      .select(
+        col("fullName").alias("Full_Name"),
+        col("professionalDetails.designation").alias("Designation"),
+        col("personalDetails.primaryEmail").alias("Email"),
+        col("personalDetails.mobile").alias("Phone_Number"),
+        col("MDO_Name"),
+        col("professionalDetails.group").alias("Group"),
+        col("Tag"),
+        col("Ministry"),
+        col("Department"),
+        col("Organization"),
+        col("courseOrgName").alias("Content_Provider"),
+        col("courseName").alias("Content_Name"),
+        col("category").alias("Content_Type"),
+        col("courseDuration").alias("Content_Duration"),
+        col("batchID").alias("Batch_Id"),
+        lit("Not Available").alias("Batch_Name"),
+        lit(null).cast("date").alias("Batch_Start_Date"),
+        lit(null).cast("date").alias("Batch_End_Date"),
+        col("courseEnrolledTimestamp").alias("Enrolled_On"),
+        when(col("dbCompletionStatus").isNull, "not-enrolled")
+          .when(col("dbCompletionStatus") === 0, "not-started")
+          .when(col("dbCompletionStatus") === 1, "in-progress")
+          .otherwise("completed")
+          .alias("Status"),
+        col("completionpercentage").alias("Content_Progress_Percentage"),
+        to_date(col("courseLastPublishedOn"), dateFormat).alias("Last_Published_On"),
+        lit(null).cast("date").alias("Content_Retired_On"),
+        col("courseCompletedTimestamp").alias("Completed_On"),
+        col("certificate_generated").alias("Certificate_Generated"),
+        col("userRating").alias("User_Rating"),
+        col("personalDetails.gender").alias("Gender"),
+        lit("External Content").as("category"),
+        col("additionalProperties.externalSystem").alias("External_System"),
+        col("additionalProperties.externalSystemId").alias("External_System_Id"),
+        col("userOrgID").alias("mdoid"),
+        col("certificateID").alias("Certificate_ID"),
+        col("Report_Last_Generated_On"),
+        col("userStatus"),
+        col("live_cbp_plan_mandate").alias("Live_CBP_Plan_Mandate")
     )
 
     val mdoPlatformReport = fullReportDF.select(
-      col("Full_Name"),col("Designation"),col("Email"),col("Phone_Number"),col("Group"),col("Tag"),col("Ministry"),col("Department"),
+      col("Full_Name"),col("Designation"),col("Email"),col("Phone_Number"),col("MDO_Name"),col("Group"),col("Tag"),col("Ministry"),col("Department"),
       col("Organization"),col("Content_Provider"),col("Content_Name"),col("Content_Type"),col("Content_Duration"),col("Batch_Id"),col("Batch_Name"),
       col("Batch_Start_Date"),col("Batch_End_Date"),col("Enrolled_On"),col("Status"),col("Content_Progress_Percentage"),col("Last_Published_On"),
       col("Content_Retired_On"),col("Completed_On"),col("Certificate_Generated"),col("User_Rating"),col("Gender"),col("Category"),col("External_System"),
@@ -292,8 +304,21 @@ object UserEnrolmentModel extends AbsDashboardModel {
 
     val warehouseDF = platformWarehouseDF.union(marketPlaceWarehouseDF)
 
+    val karmaPointsData = cache.load("userKarmaPoints")
+      .select(col("userid").alias("user_id"),col("context_id").alias("content_id"),col("points"))
+      .groupBy(col("user_id"), col("content_id")).agg(sum(col("points")).alias("karma_points"))
+
+    val warehouseDFwithKarmaPoints = warehouseDF.join(karmaPointsData, Seq("user_id","content_id"), "left")
+      .na.fill(0,Seq("karma_points"))
+      .select(col("user_id"), col("batch_id"), col("content_id"), col("enrolled_on"), col("content_progress_percentage"),
+        col("resource_count_consumed"), col("user_consumption_status"), col("first_completed_on"), col("first_certificate_generated_on"),
+        col("last_completed_on"), col("last_certificate_generated_on"), col("content_last_accessed_on"), col("certificate_generated"),
+        col("number_of_certificate"), col("user_rating"), col("certificate_id"), col("live_cbp_plan_mandate"), col("karma_points"),
+        col("data_last_generated_on")
+      )
+
     // changes for creating avro file for warehouse
-    warehouseCache.write(warehouseDF.coalesce(1), conf.dwEnrollmentsTable)
+    warehouseCache.write(warehouseDFwithKarmaPoints.coalesce(1), conf.dwEnrollmentsTable)
 
     allCourseProgramCompletionWithDetailsDFWithRating.unpersist()
 
