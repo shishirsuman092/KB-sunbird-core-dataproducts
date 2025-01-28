@@ -68,8 +68,8 @@ object UserReportModel extends AbsDashboardModel {
       .withColumn("Total_Completions", coalesce(col("total_event_completions"), lit(0)) + coalesce(col("total_content_completions"), lit(0)))
       .withColumn("MDO_Name", col("userOrgName"))
       .withColumn("Ministry", when(col("ministry_name").isNull, col("userOrgName")).otherwise(col("ministry_name")))
-      .withColumn("Department", when(col("ministry_name").isNotNull && col("dept_name").isNull, col("userOrgName")).otherwise(col("dept_name")))
-      .withColumn("Organization",when(col("ministry_name").isNotNull && col("dept_name").isNotNull, col("userOrgName")))
+      .withColumn("Department", when(col("Ministry").isNotNull && col("Ministry") =!=  col("userOrgName") && (col("dept_name").isNull || col("dept_name") === ""), col("userOrgName")).otherwise(col("dept_name")))
+      .withColumn("Organization",when(col("Ministry") =!=  col("userOrgName") && col("Department") =!= col("userOrgName"), col("userOrgName")).otherwise(lit("")))
       .select(
         col("fullName").alias("Full_Name"),
         col("professionalDetails.designation").alias("Designation"),
