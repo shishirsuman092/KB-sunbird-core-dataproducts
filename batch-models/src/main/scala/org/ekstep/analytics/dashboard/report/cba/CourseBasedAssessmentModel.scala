@@ -72,8 +72,8 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
     val fullReportDFNew = finalDF
       .withColumn("MDO_Name", col("userOrgName"))
       .withColumn("Ministry", when(col("ministry_name").isNull, col("userOrgName")).otherwise(col("ministry_name")))
-      .withColumn("Department", when(col("ministry_name").isNotNull && col("dept_name").isNull, col("userOrgName")).otherwise(col("dept_name")))
-      .withColumn("Organisation",when(col("ministry_name").isNotNull && col("dept_name").isNotNull, col("userOrgName")))
+      .withColumn("Department", when(col("Ministry").isNotNull && col("Ministry") =!=  col("userOrgName") && (col("dept_name").isNull || col("dept_name") === ""), col("userOrgName")).otherwise(col("dept_name")))
+      .withColumn("Organization",when(col("Ministry") =!=  col("userOrgName") && col("Department") =!= col("userOrgName"), col("userOrgName")).otherwise(lit("")))
       .select(
         col("userID"),
         col("assessChildID").alias("assessment_id"),
@@ -130,8 +130,8 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
     val fullReportDFOld = fullReportDFOldDraft
       .withColumn("MDO_Name", col("userOrgName"))
       .withColumn("Ministry", when(col("ministry_name").isNull, col("userOrgName")).otherwise(col("ministry_name")))
-      .withColumn("Department", when(col("ministry_name").isNotNull && col("dept_name").isNull, col("userOrgName")).otherwise(col("dept_name")))
-      .withColumn("Organisation",when(col("ministry_name").isNotNull && col("dept_name").isNotNull, col("userOrgName")))
+      .withColumn("Department", when(col("Ministry").isNotNull && col("Ministry") =!=  col("userOrgName") && (col("dept_name").isNull || col("dept_name") === ""), col("userOrgName")).otherwise(col("dept_name")))
+      .withColumn("Organization",when(col("Ministry") =!=  col("userOrgName") && col("Department") =!= col("userOrgName"), col("userOrgName")).otherwise(lit("")))
       .select(
         col("userID"),
         col("source_id").alias("assessment_id"),
