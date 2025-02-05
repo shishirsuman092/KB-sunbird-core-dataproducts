@@ -28,12 +28,12 @@ object MinistryMetricsModel extends AbsDashboardModel {
 
     val twentyFourHrActiveUserCountDeptDF = twentyFoutHrActiveUserDF.join(org_hierarchyDF, userDF("user_org_id") === org_hierarchyDF("mdo_id"), "left_outer")
       .groupBy("department")
-      .agg(count("user_ID").alias("userCount"))
+      .agg(count("user_ID").alias("activeUserCount"))
       .select(col("department").alias("ministry"), col("activeUserCount"))
 
     val twentyFourHrActiveUserCountOrgDF = twentyFoutHrActiveUserDF.join(org_hierarchyDF, userDF("user_org_id") === org_hierarchyDF("mdo_id"), "left_outer")
       .groupBy("organization")
-      .agg(count("user_ID").alias("userCount"))
+      .agg(count("user_ID").alias("activeUserCount"))
       .select(col("organization").alias("ministry"), col("activeUserCount"))
 
     val twentyFourHrActiveUserCountDF = twentyFourHrActiveUserCountMinistryDF.union(twentyFourHrActiveUserCountDeptDF).union(twentyFourHrActiveUserCountOrgDF)
