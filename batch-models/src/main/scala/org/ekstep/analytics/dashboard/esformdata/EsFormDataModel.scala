@@ -46,7 +46,7 @@ import scala.collection.JavaConverters._
 
       val formIds = conf.esFormDataIds.split(",").map(_.trim).toList
       val scriptPath="/mount/data/analytics/scripts/"
-      val filePath= "/tmp/"
+      val filePath= "/mount/data/analytics/es-form-data/"
       val tasks = formIds.map { formId =>
         val command = s"bash ${scriptPath}form-data-es.sh $formId"
         if (command.! == 0) {

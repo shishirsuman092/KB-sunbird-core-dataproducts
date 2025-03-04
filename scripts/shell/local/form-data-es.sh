@@ -3,8 +3,8 @@
 
 # Get the form ID from the argument
 FORM_ID=$1
-OUTPUT_FILE="/tmp/es_${FORM_ID}.json"
-LOG_FILE="/tmp/es_${FORM_ID}_log.txt"
+OUTPUT_FILE="/mount/data/analytics/es-form-data/es_${FORM_ID}.json"
+LOG_FILE="/mount/data/analytics/es-form-data/es_${FORM_ID}_log.txt"
 
 ES_HOST="10.175.4.9"
 ES_PORT="9200"
