@@ -152,6 +152,7 @@ case class DashboardConfig (
                              commsConsolePrarambhTags: String,
                              commsConsolePrarambhNCount: Int,
                              commsConsolePrarambhCbpIds: String,
+                             esFormDataDoIds: String,
 
                              //ml report config
                              gracePeriod: String,
@@ -369,7 +370,7 @@ object DashboardConfigParser extends Serializable {
       commsConsolePrarambhTags = getConfigModelParam(config, "commsConsolePrarambhTags", "rojgaar,rozgaar,rozgar"),
       commsConsolePrarambhNCount = getConfigModelParam(config, "commsConsolePrarambhNCount", "6").toInt,
       commsConsolePrarambhCbpIds = getConfigModelParam(config, "commsConsolePrarambhCbpIds", "do_11359618144357580811,do_113569878939262976132,do_113474579909279744117,do_113651330692145152128,do_1134122937914327041177,do_113473120005832704152,do_1136364244148060161889,do_1136364937253437441916"),
-
+      esFormDataDoIds= getConfigModelParam(config, "esFormDataDoIds", "1718964921012,1720793361489"),
       prefixDirectoryPath = getConfigModelParam(config, "prefixDirectoryPath"),
       destinationDirectoryPath = getConfigModelParam(config, "destinationDirectoryPath"),
       directoriesToSelect = getConfigModelParam(config, "directoriesToSelect"),
