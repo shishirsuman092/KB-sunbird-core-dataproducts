@@ -44,7 +44,7 @@ import scala.collection.JavaConverters._
         )
         .coalesce(1)
 
-      val formIds = conf.esFormDataDoIds.split(",").map(_.trim).toList
+      val formIds = conf.esFormDataIds.split(",").map(_.trim).toList
       val scriptPath="/mount/data/analytics/scripts/"
       val filePath= "/tmp/"
       val tasks = formIds.map { formId =>
