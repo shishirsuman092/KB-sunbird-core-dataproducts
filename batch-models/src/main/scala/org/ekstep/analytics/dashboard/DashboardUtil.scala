@@ -370,7 +370,7 @@ object DashboardConfigParser extends Serializable {
       commsConsolePrarambhTags = getConfigModelParam(config, "commsConsolePrarambhTags", "rojgaar,rozgaar,rozgar"),
       commsConsolePrarambhNCount = getConfigModelParam(config, "commsConsolePrarambhNCount", "6").toInt,
       commsConsolePrarambhCbpIds = getConfigModelParam(config, "commsConsolePrarambhCbpIds", "do_11359618144357580811,do_113569878939262976132,do_113474579909279744117,do_113651330692145152128,do_1134122937914327041177,do_113473120005832704152,do_1136364244148060161889,do_1136364937253437441916"),
-      esFormDataIds= getConfigModelParam(config, "esFormDataIds", "1718964921012,1720793361489"),
+      esFormDataIds= getConfigModelParam(config, "esFormDataIds"),
       prefixDirectoryPath = getConfigModelParam(config, "prefixDirectoryPath"),
       destinationDirectoryPath = getConfigModelParam(config, "destinationDirectoryPath"),
       directoriesToSelect = getConfigModelParam(config, "directoriesToSelect"),
