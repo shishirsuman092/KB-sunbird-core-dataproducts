@@ -31,6 +31,8 @@ import org.ekstep.analytics.dashboard.nationallearningweek.NationalLearningWeekJ
 import org.ekstep.analytics.dashboard.report.monthly.requests.MonthlyRequestJob
 import org.ekstep.analytics.dashboard.survey.npsUpgrade.NpsUpgradeJob
 import org.ekstep.analytics.dashboard.odcs.OdcsRecomendationJob
+import org.ekstep.analytics.dashboard.esformdata.EsFormDataJob
+
 
 import scala.reflect.runtime.universe
 import org.ekstep.analytics.framework.IJob
@@ -132,6 +134,8 @@ object JobFactory {
         UserActivityJob
       case "odcs-recomendation" =>
         OdcsRecomendationJob
+      case "es-form-data" =>
+        EsFormDataJob
       case _ =>
         reflectModule(jobType);
     }
