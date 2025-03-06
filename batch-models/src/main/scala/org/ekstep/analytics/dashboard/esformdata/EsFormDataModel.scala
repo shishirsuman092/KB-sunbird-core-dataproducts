@@ -48,7 +48,7 @@ import scala.collection.JavaConverters._
       val scriptPath="/mount/data/analytics/scripts/"
       val filePath= "/mount/data/analytics/es-form-data/"
       val tasks = formIds.map { formId =>
-        val command = s"bash ${scriptPath}form-data-es.sh $formId"
+        val command = s"bash ${scriptPath}es-form-data.sh $formId"
         if (command.! == 0) {
           println(s"Successfully fetched data for form ID: $formId")
           val sourceFilePath = s"${filePath}es_$formId.json"
@@ -156,10 +156,7 @@ import scala.collection.JavaConverters._
           val allColumns: Seq[Column] = Seq(
             col("formId"),
             col("createdBy"),
-            col("createdDate"),
-            col("status"),
-            col("timestamp"),
-            col("updatedBy")
+            col("timestamp")
           ) ++ dataObjectFields
 
           val flattenedDF = df.select(allColumns: _*)
