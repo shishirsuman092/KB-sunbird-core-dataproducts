@@ -75,7 +75,7 @@ import scala.collection.JavaConverters._
             transformedNode.set("formId", source.get("formId"))
             transformedNode.set("timestamp", source.get("timestamp"))
             transformedNode.set("dataObject", source.get("dataObject"))
-            transformedNode.set("createBy", source.get("createdBy"))
+            transformedNode.set("createdBy", source.get("createdBy"))
             mapper.writeValueAsString(transformedNode)
           }.toList
 
