@@ -48,6 +48,7 @@ import scala.collection.JavaConverters._
       val scriptPath="/mount/data/analytics/scripts/"
       val filePath= "/mount/data/analytics/es-form-data/"
       val tasks = formIds.map { formId =>
+       Try {
         val command = s"bash ${scriptPath}es-form-data.sh $formId"
         if (command.! == 0) {
           println(s"Successfully fetched data for form ID: $formId")
@@ -202,6 +203,10 @@ import scala.collection.JavaConverters._
             case Failure(ex) => println(s"Error in file operations: ${ex.getMessage}")
           }
         }
+       } match {
+         case Success(_) => // Continue processing
+         case Failure(ex) => println(s"Error processing form ID: $formId - ${ex.getMessage}")
+       }
       }
     }
   }
