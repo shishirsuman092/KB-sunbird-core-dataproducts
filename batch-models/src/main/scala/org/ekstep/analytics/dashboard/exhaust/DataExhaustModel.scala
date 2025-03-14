@@ -204,7 +204,7 @@ object DataExhaustModel extends AbsDashboardModel {
     //NLW event data
     val objectType = Seq("Event")
     val shouldClauseRequired = objectType.map(pc => s"""{"match":{"objectType.raw":"${pc}"}}""").mkString(",")
-    val fieldsRequired = Seq("identifier", "name", "objectType", "status", "startDate", "startTime", "duration", "registrationLink" ,"createdFor", "recordedLinks")
+    val fieldsRequired = Seq("identifier", "name", "objectType", "status", "startDate", "startTime", "duration", "registrationLink" ,"createdFor", "recordedLinks", "resourceType")
     val arrayFieldsRequired = Seq("createdFor","recordedLinks")
     val fieldsClauseRequired = fieldsRequired.map(f => s""""${f}"""").mkString(",")
     val eventQuery = s"""{"_source":[${fieldsClauseRequired}],"query":{"bool":{"should":[${shouldClauseRequired}]}}}"""
@@ -227,7 +227,8 @@ object DataExhaustModel extends AbsDashboardModel {
         col("objectType").alias("event_type"),
         col("presenters"),
         col("recording_link"),
-        col("registrationLink").alias("video_link")
+        col("registrationLink").alias("video_link"),
+        col("resourceType").alias("event_tag")
       ).dropDuplicates("event_id")
       .na.fill(0.0, Seq("duration"))
     cache.write(eventDetailsDF, "eventDetails")
