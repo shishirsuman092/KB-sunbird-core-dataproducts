@@ -303,7 +303,6 @@ object DashboardConfigParser extends Serializable {
       cassandraGroupDesignationTable = getConfigModelParam(config, "cassandraGroupDesignationTable"),
       cassandraSLWMdoTopLearnerTable = getConfigModelParam(config, "cassandraSLWMdoTopLearnerTable"),
       cassandraSLWMdoLeaderboardTable = getConfigModelParam(config, "cassandraSLWMdoLeaderboardTable"),
-      cassandraGroupDesignationTable = getConfigModelParam(config, "cassandraGroupDesignationTable"),
 
 
       // redis keys
