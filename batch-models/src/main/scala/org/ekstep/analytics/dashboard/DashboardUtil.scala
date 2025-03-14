@@ -86,6 +86,8 @@ case class DashboardConfig (
                              cassandraOldAssesmentTable: String,
                              cassandraFrameworkHierarchyTable: String,
                              cassandraGroupDesignationTable: String,
+                             cassandraSLWMdoTopLearnerTable: String,
+                             cassandraSLWMdoLeaderboardTable: String,
 
                              //warehouse tables;
                              appPostgresHost: String,
@@ -168,7 +170,8 @@ case class DashboardConfig (
                              ObservationStatusReportBatchSize: String,
                              nationalLearningWeekStart: String,
                              nationalLearningWeekEnd: String,
-
+                             stateLearningWeekStart: String,
+                             stateLearningWeekEnd: String,
                              // Anonymous Assessment
                              anonymousAssessmentLoggedInUserContentIDs: String,
                              anonymousAssessmentNonLoggedInUserAssessmentIDs: String,
@@ -298,6 +301,9 @@ object DashboardConfigParser extends Serializable {
       cassandraUserEntityEnrolmentTable = getConfigModelParam(config, "cassandraUserEntityEnrolmentTable"),
       cassandraFrameworkHierarchyTable = getConfigModelParam(config, "cassandraFrameworkHierarchyTable"),
       cassandraGroupDesignationTable = getConfigModelParam(config, "cassandraGroupDesignationTable"),
+      cassandraSLWMdoTopLearnerTable = getConfigModelParam(config, "cassandraSLWMdoTopLearnerTable"),
+      cassandraSLWMdoLeaderboardTable = getConfigModelParam(config, "cassandraSLWMdoLeaderboardTable"),
+      cassandraGroupDesignationTable = getConfigModelParam(config, "cassandraGroupDesignationTable"),
 
 
       // redis keys
@@ -357,6 +363,9 @@ object DashboardConfigParser extends Serializable {
 
       nationalLearningWeekStart = getConfigModelParam(config, "nationalLearningWeekStart"),
       nationalLearningWeekEnd = getConfigModelParam(config, "nationalLearningWeekEnd"),
+      stateLearningWeekStart = getConfigModelParam(config, "stateLearningWeekStart"),
+      stateLearningWeekEnd = getConfigModelParam(config, "stateLearningWeekEnd"),
+
       cassandraNLWUserLeaderboardTable = getConfigModelParam(config, "cassandraNLWUserLeaderboardTable"),
       cassandraNLWMdoLeaderboardTable = getConfigModelParam(config, "cassandraNLWMdoLeaderboardTable"),
 
