@@ -273,7 +273,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         col("total_learning_hours")
       )
 
-    writeToCassandra(ministryTopLearnersFilteredDF, "sunbird", "slw_mdo_top_learners")
+    writeToCassandra(ministryTopLearnersFilteredDF, conf.cassandraUserKeyspace, conf.cassandraSLWMdoTopLearnerTable)
 
     val filteredOrgHierarchyDF = orgHierarchyDF
       .filter(col("ministry_id").isNotNull && col("department_id").isNotNull) // Keep only valid departments
@@ -316,7 +316,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
       col("total_learning_hours"),
       col("row_num"))
 
-    writeToCassandra(finalDF, "sunbird", "slw_mdo_leaderboard")
+    writeToCassandra(finalDF, conf.cassandraUserKeyspace, conf.cassandraSLWMdoLeaderboardTable)
   }
 }
 
