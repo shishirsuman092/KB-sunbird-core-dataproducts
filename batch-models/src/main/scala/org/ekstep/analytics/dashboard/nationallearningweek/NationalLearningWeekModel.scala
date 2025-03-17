@@ -114,7 +114,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
 
     val contentCertificatesGeneratedInSLWDF = contentEnrolmentsDF
       .filter(col("first_completed_on") >= stateLearningWeekStartString && col("first_completed_on") <= stateLearningWeekEndString)
-      .filter(col("certificated_id").isNotNull)
+      .filter(col("certificate_id").isNotNull)
       .join(userDetailsDF,Seq("user_id"), "left")
       .join(orgHierarchyDF, Seq("mdo_id"), "left")
       .withColumn("ministry_id", coalesce(col("ministry_id"), col("mdo_id")))
@@ -128,7 +128,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
       .filter(col("ministry_id").isNotNull)
 
     Redis.dispatchDataFrame[Int]("dashboard_certificates_generated_by_ministry_slw_count", totalCertificatesGeneratedInSLWByMinistryDF, "ministry_id", "total_certificates")
-    */
+
     val slwStartDate = stateLearningWeekStartString.split(" ")(0)
     val slwEndDate = stateLearningWeekEndString.split(" ")(0)
     val slwDateConditions = s"""{"range": {"startDate": {"gte": "${slwStartDate}", "lte": "${slwEndDate}"}}}"""
@@ -153,13 +153,13 @@ object NationalLearningWeekModel extends AbsDashboardModel {
 
     val userContentCertificatesDF = contentEnrolmentsDF
       .filter(col("first_completed_on") >= stateLearningWeekStartString && col("first_completed_on") <= stateLearningWeekEndString)
-      .filter(col("certificated_id").isNotNull)
+      .filter(col("certificate_id").isNotNull)
       .groupBy("user_id")
       .agg(count("*").alias("content_certificate_count"))
 
     val userEventLearningHoursDF = eventsEnrolmentsDF
       .filter(col("completed_on_datetime") >= stateLearningWeekStartString && col("completed_on_datetime") <= stateLearningWeekEndString)
-      .filter(col("certificated_id").isNotNull)
+      .filter(col("certificate_id").isNotNull)
       .join(eventsDF.withColumnRenamed("duration", "event_complete_duration"), Seq("event_id"), "left")
       .withColumn("event_duration_hours", timeToHoursUDF(col("event_complete_duration"))) // Convert directly from eventsEnrolmentsDF
       .groupBy("user_id")
@@ -167,7 +167,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
 
     val userContentLearningHoursDF = contentEnrolmentsDF
       .filter(col("first_completed_on") >= stateLearningWeekStartString && col("first_completed_on") <= stateLearningWeekEndString) // Fixed end date condition
-      .filter(col("certificated_id").isNotNull)
+      .filter(col("certificate_id").isNotNull)
       .join(contentDF, Seq("content_id"), "left") // Join first to get content_duration
       .withColumn("content_duration_hours", timeToHoursUDF(col("content_duration"))) // Convert after join
       .groupBy("user_id")
