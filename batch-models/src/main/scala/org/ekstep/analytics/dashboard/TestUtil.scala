@@ -169,6 +169,10 @@ object TestUtil extends Serializable {
       "nationalLearningWeekEnd" -> "2024-10-27 23:59:59",
       "cassandraNLWUserLeaderboardTable" -> "nlw_user_leaderboard",
       "cassandraNLWMdoLeaderboardTable" -> "nlw_mdo_leaderboard",
+      "stateLearningWeekStart" -> "2024-10-19 00:00:00",
+      "stateLearningWeekEnd" -> "2025-03-14 23:59:59",
+      "cassandraSLWMdoLeaderboardTable" -> "slw_mdo_leaderboard",
+      "cassandraSLWMdoTopLearnerTable" -> "slw_mdo_top_learners",
       "anonymousAssessmentLoggedInUserContentIDs" -> "do_1141533540853432321675,do_1141533857591132161321,do_1141525365329264641663,do_1141527106280980481664",
       "anonymousAssessmentNonLoggedInUserAssessmentIDs" -> "do_11415336159226265611",
 
