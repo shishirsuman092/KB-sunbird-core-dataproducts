@@ -81,7 +81,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
           .join(orgHierarchyDF, Seq("mdo_id"), "left")
           .withColumn("ministry_id", coalesce(col("ministry_id"), col("mdo_id")))
           .groupBy("ministry_id")
-          .agg(countDistinct("certificate_id").alias("event_enrolment_count"))
+          .agg(count("*").alias("event_enrolment_count"))
 
     val contentEnrolmentsInSLWDF = contentEnrolmentsDF
           .filter(col("enrolled_on") >= stateLearningWeekStartString && col("enrolled_on") <= stateLearningWeekEndString)
