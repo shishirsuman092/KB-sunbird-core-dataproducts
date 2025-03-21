@@ -81,7 +81,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
           .join(orgHierarchyDF, Seq("mdo_id"), "left")
           .withColumn("ministry_id", coalesce(col("ministry_id"), col("mdo_id")))
           .groupBy("ministry_id")
-          .agg(countDistinct("certificate_id").alias("event_enrolment_count"))
+          .agg(count("*").alias("event_enrolment_count"))
 
     val contentEnrolmentsInSLWDF = contentEnrolmentsDF
           .filter(col("enrolled_on") >= stateLearningWeekStartString && col("enrolled_on") <= stateLearningWeekEndString)
@@ -167,7 +167,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
     val userContentLearningHoursDF = contentEnrolmentsDF
       .filter(col("first_completed_on") >= stateLearningWeekStartString && col("first_completed_on") <= stateLearningWeekEndString) // Fixed end date condition
       .filter(col("certificate_id").isNotNull)
-      .join(contentDF, Seq("content_id"), "left") // Join first to get content_duration
+      .join(contentDF.filter(col("content_sub_type").isin("Course", "Moderated Course")), Seq("content_id"), "inner")
       .withColumn("content_duration_hours", timeToHoursUDF(col("content_duration"))) // Convert after join
       .groupBy("user_id")
       .agg(sum(coalesce(col("content_duration_hours"), lit(0))).alias("content_learning_hours"))
