@@ -204,7 +204,7 @@ object ZipReportsWithSecurityModel extends AbsDashboardModel {
     }
     // end of zipping of warehouse reports
     // upload zip to cloud storage
-    syncReports(warehousePath, s"${conf.destinationFullReportPath}/${today}")
+    syncReports(warehousePath, s"${conf.destinationFullReportPath}")
     //deleting the tmp merged folder
     try {
       FileUtils.deleteDirectory(new File(destinationPath))

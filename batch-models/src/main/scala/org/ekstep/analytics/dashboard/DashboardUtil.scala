@@ -396,7 +396,7 @@ object DashboardConfigParser extends Serializable {
       bqScriptPath = getConfigModelParam(config, "bqScriptPath", "/mount/data/analytics/bq-scripts.sh"),
       // warehouse report path
       warehouseReportPath = getConfigModelParam(config, "warehouseReportPath", "warehouse"),
-      destinationFullReportPath = getConfigModelParam(config, "destinationFullReportPath", "destinationFullReportPath")
+      destinationFullReportPath = getConfigModelParam(config, "destinationFullReportPath", "/standalone-reports/full_report")
     )
   }
   /* Config functions end */
