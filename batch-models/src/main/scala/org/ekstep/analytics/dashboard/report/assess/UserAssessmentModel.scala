@@ -21,6 +21,7 @@ object UserAssessmentModel extends AbsDashboardModel {
    * @param timestamp unique timestamp from the start of the processing
    */
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
+    try{
     val today = getDate()
 
     // obtain user org data
@@ -86,7 +87,11 @@ object UserAssessmentModel extends AbsDashboardModel {
     generateAndSyncReports(df.filter(col("status").cast("int") === 1).select(columnsToKeepInReport.map(col): _*), "mdoid",reportPath, "StandaloneAssessmentReport")
 
     Redis.closeRedisConnect()
-
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during UserAssessmentModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 
 }

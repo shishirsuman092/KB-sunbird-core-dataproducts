@@ -13,6 +13,7 @@ object UserReportModel extends AbsDashboardModel {
   override def name() = "UserReportModel"
 
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
+    try{
     val today = getDate()
 
     // get user roles data
@@ -147,5 +148,10 @@ object UserReportModel extends AbsDashboardModel {
     warehouseCache.write(df_warehouse.coalesce(1), conf.dwUserTable)
 
     Redis.closeRedisConnect()
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during UserReportModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 }

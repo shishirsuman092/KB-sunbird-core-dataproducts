@@ -17,7 +17,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
   override def name() = "NationalLearningWeekModel"
 
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-
+    try{
     // get previous month start and end dates
     val monthStart = conf.nationalLearningWeekStart
     val monthEnd = conf.nationalLearningWeekEnd
@@ -126,5 +126,10 @@ object NationalLearningWeekModel extends AbsDashboardModel {
     val rankedDF = sizedDF.withColumn("row_num", row_number().over(windowSpec2))
     val selectedColMdoLeaderboardDF = rankedDF.select(col("org_id"), col("size"), col("total_users"), col("org_name"), col("row_num"), col("total_points"), col("last_credit_date"))
     writeToCassandra(selectedColMdoLeaderboardDF, conf.cassandraUserKeyspace, conf.cassandraNLWMdoLeaderboardTable)
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during NationalLearningWeekModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 }

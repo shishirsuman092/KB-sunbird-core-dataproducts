@@ -17,7 +17,7 @@ object WeeklyClapsModel extends AbsDashboardModel {
   override def name() = "WeeklyClapsModel"
 
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-
+  try{
     // get weekStart, weekEnd and dataTillDate(previous day) from today's date
     val (weekStart, weekEnd, weekEndTime, dataTillDate) = getThisWeekDates()
 //    val weekStart = ""     //for manual testing
@@ -72,5 +72,10 @@ object WeeklyClapsModel extends AbsDashboardModel {
     df = df.drop("platformEngagementTime","sessionCount")
 
     writeToCassandra(df, conf.cassandraUserKeyspace, conf.cassandraLearnerStatsTable)
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during WeeklyClapsModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 }
