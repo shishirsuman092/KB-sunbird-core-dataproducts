@@ -15,7 +15,7 @@ object InAppReviewModel extends AbsDashboardModel {
 
   override def name() = "InAppReviewModel"
   def processData(timestamp: Long) (implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-
+    try{
 
     //gives data from cache for weekly claps
     val weeklyClapsDF = cache.load("weeklyClaps")
@@ -66,6 +66,11 @@ object InAppReviewModel extends AbsDashboardModel {
       .options(Map("keyspace" -> conf.cassandraUserFeedKeyspace , "table" -> conf.cassandraUserFeedTable))
       .mode("append")
       .save()
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during InAppReviewModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 
 }

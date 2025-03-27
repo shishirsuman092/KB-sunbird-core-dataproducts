@@ -19,6 +19,7 @@ import scala.collection.JavaConverters._
 
     override def name() = "EsFormDataModel"
     def processData(timestamp: Long) (implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
+      try{
       val mapper = new ObjectMapper()
       mapper.registerModule(DefaultScalaModule)
 
@@ -48,6 +49,7 @@ import scala.collection.JavaConverters._
       val scriptPath="/mount/data/analytics/scripts/"
       val filePath= "/mount/data/analytics/es-form-data/"
       val tasks = formIds.map { formId =>
+       Try {
         val command = s"bash ${scriptPath}es-form-data.sh $formId"
         if (command.! == 0) {
           println(s"Successfully fetched data for form ID: $formId")
@@ -202,6 +204,15 @@ import scala.collection.JavaConverters._
             case Failure(ex) => println(s"Error in file operations: ${ex.getMessage}")
           }
         }
+       } match {
+         case Success(_) => // Continue processing
+         case Failure(ex) => println(s"Error processing form ID: $formId - ${ex.getMessage}")
+       }
       }
+    }catch {
+      case e: Exception =>
+        println(s"Error occurred during EsFormDataModel processing: ${e.getMessage}", e)
+        System.exit(1)
+    }
     }
   }

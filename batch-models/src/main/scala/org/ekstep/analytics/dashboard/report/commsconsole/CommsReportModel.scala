@@ -14,7 +14,7 @@ object CommsReportModel extends AbsDashboardModel {
   override def name() = "CommsReportModel"
 
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-
+    try{
     val today = getDate()
 
     val dateFormat1 = "dd/MM/yyyy"
@@ -180,6 +180,10 @@ object CommsReportModel extends AbsDashboardModel {
     syncReports(s"${conf.localReportDir}/${commsConsoleReportPath}", commsConsoleReportPath)
 
     Redis.closeRedisConnect()
-
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during CommsReportModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 }

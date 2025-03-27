@@ -19,6 +19,7 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
    * @param timestamp unique timestamp from the start of the processing
    */
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
+    try{
     val today = getDate()
 
     val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
@@ -238,6 +239,10 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
     warehouseCache.write(warehouseDF.coalesce(1), conf.dwAssessmentTable)
 
     Redis.closeRedisConnect()
-
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during CourseBasedAssessmentModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 }

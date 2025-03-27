@@ -32,7 +32,7 @@ object ZipReportsWithSecurityModel extends AbsDashboardModel {
    * @param timestamp unique timestamp from the start of the processing
    */
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-
+    try{
 
     val prefixDirectoryPath = s"${conf.localReportDir}/${conf.prefixDirectoryPath}"
     val destinationPath = s"${conf.localReportDir}/${conf.destinationDirectoryPath}"
@@ -212,5 +212,10 @@ object ZipReportsWithSecurityModel extends AbsDashboardModel {
     } catch {
       case e: Exception => println(s"Error deleting directory: ${e.getMessage}")
     }
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during ZipReportsWithSecurityModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 }
