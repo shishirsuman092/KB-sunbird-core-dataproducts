@@ -99,7 +99,7 @@ object DataWarehouseModel extends AbsDashboardModel {
     val eventsDataDF = cache.load("eventDetails")
       .select(
         col("event_id"),col("event_name"),col("event_provider_mdo_id"),col("event_start_datetime"),
-        col("duration"),col("event_status"),col("event_type"),col("presenters"),col("video_link"),col("recording_link")
+        col("duration"),col("event_status"),col("event_type"),col("presenters"),col("video_link"),col("recording_link"), col("event_tag")
       )
     truncateWarehouseTable(conf.dwEventsTable)
     saveDataframeToPostgresTable_With_Append(eventsDataDF, dwPostgresUrl, conf.dwEventsTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
