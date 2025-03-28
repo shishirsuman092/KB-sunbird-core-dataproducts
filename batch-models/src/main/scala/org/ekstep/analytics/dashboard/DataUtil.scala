@@ -431,7 +431,7 @@ object DataUtil extends Serializable {
       .withColumn("userProfileImgUrl", col("profileDetails.profileImageUrl"))
       .withColumn("userProfileStatus", col("profileDetails.profileStatus"))
       .withColumn("userPhoneVerified", expr("LOWER(personalDetails.phoneVerified) = 'true'"))
-      .withColumn("fullName", concat_ws(" ", col("firstName"), col("lastName")))
+      .withColumn("fullName", rtrim(concat_ws(" ", col("firstName"), col("lastName"))))
 
     userDF = userDF
       .withColumn("additionalProperties",
