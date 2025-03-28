@@ -30,7 +30,7 @@ object DashboardSyncModel extends AbsDashboardModel {
    * @param timestamp unique timestamp from the start of the processing
    */
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-
+    try{
     val processingTime = new SimpleDateFormat(s"${dateFormat}'T'${timeFormat}'Z'").format(timestamp)
     Redis.update("dashboard_update_time", processingTime)
 
@@ -124,6 +124,11 @@ object DashboardSyncModel extends AbsDashboardModel {
     cbpTop10Reviews(allCourseProgramDetailsWithRatingDF)
 
     Redis.closeRedisConnect()
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during DashboardSyncModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 
   def dashboardRedisUpdates(orgRoleCount: DataFrame, activeUsers: DataFrame, allCourseProgramDetailsWithRatingDF: DataFrame,

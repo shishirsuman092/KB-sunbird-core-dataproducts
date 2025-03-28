@@ -20,7 +20,7 @@ object UserActivityModel extends AbsDashboardModel {
    * @param timestamp unique timestamp from the start of the processing
    */
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-    //GET ORG DATA
+    try{ //GET ORG DATA
     val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
     val orgHierarchyData = orgHierarchyDataframe()
     val userDataDF = userOrgDF
@@ -113,5 +113,10 @@ object UserActivityModel extends AbsDashboardModel {
 
     // writing data to warehouse cache to populate BQ tables
     warehouseCache.write(userActivityDF.coalesce(1), conf.dwUserActivityTable)
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during UserActivityModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 }

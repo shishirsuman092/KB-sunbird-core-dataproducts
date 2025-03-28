@@ -21,7 +21,7 @@ object SummaryRedisSyncModel extends AbsDashboardModel {
    * @param timestamp unique timestamp from the start of the processing
    */
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-
+  try{
     // Users active
     // SELECT dimension_channel, COUNT(DISTINCT(uid)) as active_count FROM \"summary-events\"
     // WHERE dimensions_type='app' AND __time > CURRENT_TIMESTAMP - INTERVAL '12' MONTH GROUP BY 1
@@ -51,7 +51,11 @@ object SummaryRedisSyncModel extends AbsDashboardModel {
 
 
     Redis.closeRedisConnect()
-
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during SummaryRedisSyncModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 
 //  def activeUsersLast12MonthsDataFrame()(implicit spark: SparkSession, conf: DashboardConfig) : DataFrame = {

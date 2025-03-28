@@ -14,7 +14,7 @@ object MinistryMetricsModel extends AbsDashboardModel {
   override def name() = "MinistryMetricsModel"
 
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-
+    try{
     val org_hierarchyDF = cache.load("orgHierarchy")
     val ministryNamesDF = org_hierarchyDF.select(col("mdo_name").alias("ministry"), col("mdo_id").alias("ministryID"))
     val enrolmentDF = warehouseCache.load("user_enrolments")
@@ -99,5 +99,10 @@ object MinistryMetricsModel extends AbsDashboardModel {
     Redis.dispatchDataFrame[Int]("dashboard_rolled_up_user_count", finalUserCountDF, "ministryID", "userCount")
     Redis.dispatchDataFrame[Double]("dashboard_rolled_up_certificates_generated_count", finalCertificateCountDF, "ministryID", "certificateCount")
     Redis.dispatchDataFrame[Double]("dashboard_rolled_up_enrolment_content_count",finalEnrolmentCountDF, "ministryID", "enrolmentCount")
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during MinistryMetricsModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 }

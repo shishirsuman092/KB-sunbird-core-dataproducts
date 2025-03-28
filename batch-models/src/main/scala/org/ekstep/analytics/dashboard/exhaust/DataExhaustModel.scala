@@ -23,6 +23,7 @@ object DataExhaustModel extends AbsDashboardModel {
    * @param timestamp unique timestamp from the start of the processing
    */
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
+    try{
     val enrolmentDF = cassandraTableAsDataFrame(conf.cassandraCourseKeyspace, conf.cassandraUserEnrolmentsTable)
     cache.write(enrolmentDF, "enrolment")
     enrolmentDF.unpersist()
@@ -262,6 +263,10 @@ object DataExhaustModel extends AbsDashboardModel {
     // write to cache
     cache.write(eventsEnrolmentWithDurationDF.coalesce(1), "eventEnrolmentDetails")
     eventsEnrolmentDF.unpersist()
-
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during DataExhaustModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 }

@@ -26,6 +26,7 @@ object QuestionReportModel extends AbsDashboardModel {
   override def name() = "QuestionReportModel"
 
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
+    try{
     val today = getDate()
     println("Querying mongo database to get report configurations")
     val surveyQuestionReportColumnsConfig = getReportConfig("surveyQuestionReport")
@@ -204,7 +205,11 @@ object QuestionReportModel extends AbsDashboardModel {
         outputStream.close()
       }
     }
-
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during QuestionReportModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 
 }

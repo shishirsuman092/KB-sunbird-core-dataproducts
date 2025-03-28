@@ -20,7 +20,7 @@ object DataWarehouseModel extends AbsDashboardModel {
    * @param timestamp unique timestamp from the start of the processing
    */
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-
+    try{
     val dwPostgresUrl = s"jdbc:postgresql://${conf.dwPostgresHost}/${conf.dwPostgresSchema}"
 
     val userDetails = warehouseCache.load(conf.dwUserTable)
@@ -113,5 +113,10 @@ object DataWarehouseModel extends AbsDashboardModel {
     truncateWarehouseTable("events_enrolment")
     saveDataframeToPostgresTable_With_Append(eventsEnrolmentDataDFWithKarmaPoints, dwPostgresUrl, "events_enrolment", conf.dwPostgresUsername, conf.dwPostgresCredential)
     warehouseCache.write(eventsEnrolmentDataDFWithKarmaPoints, "event_enrolment_details")
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during DataWarehouseModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 }

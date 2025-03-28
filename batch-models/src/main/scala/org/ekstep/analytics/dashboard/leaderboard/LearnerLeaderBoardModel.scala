@@ -16,7 +16,7 @@ object LearnerLeaderBoardModel extends AbsDashboardModel {
   override def name() = "LearnerLeaderBoardModel"
 
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-
+    try{
     // get previous month start and end dates
     val monthStart = date_format(date_trunc("MONTH", add_months(current_date(), -1)), dateTimeFormat)
     val monthEnd = date_format(last_day(add_months(current_date(), -1)), dateFormat+" 23:59:59")
@@ -115,5 +115,10 @@ object LearnerLeaderBoardModel extends AbsDashboardModel {
     // write to cassandra learner_leaderboard and lookup tables respectively
     writeToCassandra(finalUserLeaderBoardDF,conf.cassandraUserKeyspace, conf.cassandraLearnerLeaderBoardTable)
     writeToCassandra(finalUserLeaderBoardDF.select("userid", "row_num"),conf.cassandraUserKeyspace, conf.cassandraLearnerLeaderBoardLookupTable)
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during LearnerLeaderBoardModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 }

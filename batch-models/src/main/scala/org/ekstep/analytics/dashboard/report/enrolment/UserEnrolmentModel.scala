@@ -23,7 +23,8 @@ object UserEnrolmentModel extends AbsDashboardModel {
    * @param timestamp unique timestamp from the start of the processing
    */
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-    val today = getDate()
+    try{
+      val today = getDate()
 
     //GET ORG DATA
     val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
@@ -323,6 +324,11 @@ object UserEnrolmentModel extends AbsDashboardModel {
     allCourseProgramCompletionWithDetailsDFWithRating.unpersist()
 
     Redis.closeRedisConnect()
+    }catch {
+      case e: Exception =>
+        println(s"Error occurred during UserEnrolmentModel processing: ${e.getMessage}", e)
+        System.exit(1)
+    }
   }
 }
 

@@ -26,7 +26,7 @@ object ObservationStatusReportModel extends AbsDashboardModel {
   override def name() = "ObservationStatusReportModel"
 
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-
+    try{
     val today = getDate()
     println("Querying mongo database to get report configurations")
     val observationStatusReportColumnsConfig = getReportConfig("observationStatusReport")
@@ -238,7 +238,11 @@ object ObservationStatusReportModel extends AbsDashboardModel {
       }
       completedStatus
     }
-
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during ObservationStatusReportModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 
 }

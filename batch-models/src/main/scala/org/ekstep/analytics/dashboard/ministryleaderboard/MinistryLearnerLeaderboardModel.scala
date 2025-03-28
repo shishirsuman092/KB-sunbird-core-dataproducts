@@ -16,7 +16,7 @@ object MinistryLearnerLeaderboardModel extends AbsDashboardModel {
   override def name() = "MinistryLearnerLeaderboardModel"
 
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-
+    try{
     // Get user and user-org data
     var (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
     val orgHierarchyCompleteDF = orgCompleteHierarchyDataFrame().cache() // Cache as it's used multiple times
@@ -113,5 +113,10 @@ object MinistryLearnerLeaderboardModel extends AbsDashboardModel {
     userLeaderBoardDataDF = userLeaderBoardDataDF.withColumn("row_num", row_number.over(windowSpecRow))
     // Write to Cassandra
     writeToCassandra(userLeaderBoardDataDF, conf.cassandraUserKeyspace, conf.cassandraMDOLearnerLeaderboardTable)
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during MinistryLearnerLeaderboardModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 }

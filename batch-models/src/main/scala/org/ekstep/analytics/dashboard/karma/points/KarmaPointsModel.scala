@@ -16,7 +16,7 @@ object KarmaPointsModel extends AbsDashboardModel {
   implicit val className: String = "org.ekstep.analytics.dashboard.karma.points.KarmaPointsModel"
 
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-
+    try{
     val currentDate = DateTime.now()
     val monthStartMills = currentDate.minusMonths(1).withDayOfMonth(1).getMillis
     val monthEndMills = currentDate.withDayOfMonth(1).getMillis
@@ -115,6 +115,11 @@ object KarmaPointsModel extends AbsDashboardModel {
     writeToCassandra(summaryDataDF, conf.cassandraUserKeyspace, conf.cassandraKarmaPointsSummaryTable)
 
     Redis.closeRedisConnect()
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during KarmaPointsModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 
 }

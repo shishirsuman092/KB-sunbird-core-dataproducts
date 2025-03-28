@@ -15,7 +15,7 @@ object NpsModel extends AbsDashboardModel {
 
   override def name() = "NpsModel"
   def processData(timestamp: Long) (implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-
+    try{
     val druidData1 = npsTriggerC1DataFrame() //gives data from druid for users who have submitted the survey form in last 3 months
     val druidData2 = npsTriggerC2DataFrame() // gives data from druid for users who have either completed 1 course or have more than 30 telemetry events
     val mongodbData = npsTriggerC3DataFrame() // gives the data from mongoDB for the users who have posted atleast 1 discussion
@@ -70,6 +70,11 @@ object NpsModel extends AbsDashboardModel {
       .options(Map("keyspace" -> "sunbird_notifications" , "table" -> "notification_feed_history"))
       .mode("append")
       .save()
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during NpsModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 
 }

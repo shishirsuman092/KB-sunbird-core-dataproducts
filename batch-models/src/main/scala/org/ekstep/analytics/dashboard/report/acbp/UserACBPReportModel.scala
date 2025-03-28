@@ -15,6 +15,7 @@ object UserACBPReportModel extends AbsDashboardModel {
   override def name() = "UserACBPReportModel"
 
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
+    try{
     val today = getDate()
 
     // get user and org data frames
@@ -165,6 +166,11 @@ object UserACBPReportModel extends AbsDashboardModel {
     warehouseCache.write(cbPlanWarehouseDF.coalesce(1), conf.dwCBPlanTable)
 
     Redis.closeRedisConnect()
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during UserACBPReportModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 }
 

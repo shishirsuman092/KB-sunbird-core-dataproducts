@@ -20,7 +20,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
   override def name() = "NationalLearningWeekModel"
 
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-
+  try{
     def timeToHoursUDF: UserDefinedFunction = udf((timeStr: String) => {
       if (timeStr != null && timeStr.matches("\\d{1,2}:\\d{2}:\\d{2}")) {
         val parts = timeStr.split(":").map(_.toDouble)
@@ -49,8 +49,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
     val orgHierarchyDF = cache.load("orgHierarchy")
 
     val eventCertificatesGeneratedSLWYdayDF = eventsEnrolmentsDF
-         .filter(col("status") === "completed")
-         .filter(col("enrolled_on_datetime") >= previousStart && col("enrolled_on_datetime") <= previousEnd)
+         .filter(col("completed_on_datetime") >= previousStart && col("completed_on_datetime") <= previousEnd)
          .filter(col("certificate_id").isNotNull)
          .join(userDetailsDF, Seq("user_id"), "left")
          .join(orgHierarchyDF, Seq("mdo_id"), "left")
@@ -59,8 +58,8 @@ object NationalLearningWeekModel extends AbsDashboardModel {
          .agg(countDistinct("certificate_id").alias("event_certificate_count"))
 
     val contentCertificatesGeneratedSLWYdayDF = contentEnrolmentsDF
-          .filter(col("last_certificate_generated_on") >= previousStart && col("last_certificate_generated_on") <= previousEnd)
-          .filter(col("certificate_generated") === "Yes")
+          .filter(col("first_completed_on") >= previousStart && col("first_completed_on") <= previousEnd)
+          .filter(col("certificate_id").isNotNull)
           .join(userDetailsDF,Seq("user_id"), "left")
           .join(orgHierarchyDF, Seq("mdo_id"), "left")
           .withColumn("ministry_id", coalesce(col("ministry_id"), col("mdo_id")))
@@ -82,7 +81,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
           .join(orgHierarchyDF, Seq("mdo_id"), "left")
           .withColumn("ministry_id", coalesce(col("ministry_id"), col("mdo_id")))
           .groupBy("ministry_id")
-          .agg(countDistinct("certificate_id").alias("event_enrolment_count"))
+          .agg(count("*").alias("event_enrolment_count"))
 
     val contentEnrolmentsInSLWDF = contentEnrolmentsDF
           .filter(col("enrolled_on") >= stateLearningWeekStartString && col("enrolled_on") <= stateLearningWeekEndString)
@@ -140,7 +139,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
     val eventQuery = s"""{"_source":[${fieldsClauseRequired}],"query":{"bool":{"must": [${slwDateConditions}], "should":[${shouldClauseRequired}]}}}"""
     val eventDataDF = elasticSearchDataFrame(conf.sparkElasticsearchConnectionHost, "compositesearch", eventQuery, fieldsRequired, arrayFieldsRequired)
     val eventsPublishedDF = eventDataDF.agg(
-      lit("01397282245867929648").alias("ministry_id"), count("identifier").alias("events_published_count"))
+      lit("01358339558246809669").alias("ministry_id"), count("identifier").alias("events_published_count"))
 
 
     Redis.dispatchDataFrame[Int]("dashboard_events_published_by_ministry_slw_count", eventsPublishedDF, "ministry_id", "events_published_count")
@@ -168,7 +167,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
     val userContentLearningHoursDF = contentEnrolmentsDF
       .filter(col("first_completed_on") >= stateLearningWeekStartString && col("first_completed_on") <= stateLearningWeekEndString) // Fixed end date condition
       .filter(col("certificate_id").isNotNull)
-      .join(contentDF, Seq("content_id"), "left") // Join first to get content_duration
+      .join(contentDF.filter(col("content_sub_type").isin("Course", "Moderated Course")), Seq("content_id"), "inner")
       .withColumn("content_duration_hours", timeToHoursUDF(col("content_duration"))) // Convert after join
       .groupBy("user_id")
       .agg(sum(coalesce(col("content_duration_hours"), lit(0))).alias("content_learning_hours"))
@@ -309,7 +308,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
       .withColumn("size", when(col("total_users") < 200, "S").otherwise("M"))
 
 
-    val windowSpec = Window.partitionBy("parent_id").orderBy(col("total_learning_hours").desc, rand())
+    val windowSpec = Window.partitionBy("parent_id", "size").orderBy(col("total_learning_hours").desc, rand())
 
     val rankedDF = ministryWiseDeptDF.withColumn("row_num", row_number().over(windowSpec))
 
@@ -323,6 +322,11 @@ object NationalLearningWeekModel extends AbsDashboardModel {
       col("row_num"))
 
     writeToCassandra(finalDF, conf.cassandraUserKeyspace, conf.cassandraSLWMdoLeaderboardTable)
+  }catch {
+    case e: Exception =>
+      println(s"Error occurred during NationalLearningWeekModel processing: ${e.getMessage}", e)
+      System.exit(1)
+  }
   }
 }
 
