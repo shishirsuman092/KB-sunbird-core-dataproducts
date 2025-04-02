@@ -114,11 +114,12 @@ object DashboardSyncModel extends AbsDashboardModel {
     cbpDetailsWithRatingDF) = contentDataFrames(orgDF, Seq("Course", "Program", "Blended Program", "Curated Program"))
     val cbpCompletionWithDetailsDF = allCourseProgramCompletionWithDetailsDataFrame(userCourseProgramCompletionDF, cbpDetailsDF, userOrgDF)
     val eventsEnrolmentDataDF = cache.load("eventEnrolmentDetails")
+      val eventDetails = cache.load("eventDetails")
     // update redis data for learner home page
     updateLearnerHomePageData(orgDF, userOrgDF, userCourseProgramCompletionDF, cbpCompletionWithDetailsDF, cbpDetailsWithRatingDF, eventsEnrolmentDataDF)
 
     // update redis data for dashboards
-    dashboardRedisUpdates(orgRoleCount, activeUsers, allCourseProgramDetailsWithRatingDF, allCourseProgramCompletionWithDetailsDF, allCourseProgramCompetencyDF, cbpCompletionWithDetailsDF, eventsEnrolmentDataDF)
+    dashboardRedisUpdates(orgRoleCount, activeUsers, allCourseProgramDetailsWithRatingDF, allCourseProgramCompletionWithDetailsDF, allCourseProgramCompetencyDF, cbpCompletionWithDetailsDF, eventsEnrolmentDataDF, eventDetails)
 
     // update cbp top 10 reviews
     cbpTop10Reviews(allCourseProgramDetailsWithRatingDF)
@@ -132,7 +133,7 @@ object DashboardSyncModel extends AbsDashboardModel {
   }
 
   def dashboardRedisUpdates(orgRoleCount: DataFrame, activeUsers: DataFrame, allCourseProgramDetailsWithRatingDF: DataFrame,
-                            allCourseProgramCompletionWithDetailsDF: DataFrame, allCourseProgramCompetencyDF: DataFrame, cbpCompletionWithDetailsDF: DataFrame, eventsEnrolmentDataDF: DataFrame)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
+                            allCourseProgramCompletionWithDetailsDF: DataFrame, allCourseProgramCompetencyDF: DataFrame, cbpCompletionWithDetailsDF: DataFrame, eventsEnrolmentDataDF: DataFrame, eventDetails: DataFrame)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
     import spark.implicits._
     // new redis updates - start
     // MDO onboarded, with atleast one MDO_ADMIN/MDO_LEADER
@@ -968,6 +969,31 @@ object DashboardSyncModel extends AbsDashboardModel {
     Redis.update("dashboard_top_5_mdo_by_live_courses", top5MdoByLiveCoursesJson)
 
     // new redis updates - end
+
+    // trending events and featured events for events hub - start
+    val liveEventsDF = eventsEnrolmentDataDF.join(eventDetails, Seq("event_id"), "inner").filter(eventDetails("event_status") === "Live").select(eventsEnrolmentDataDF("*"))
+    val joinedDF = liveEventsDF.join(userOrgDF.withColumnRenamed("userID", "user_id"), Seq("user_id"), "inner")
+
+    // Step 2: Compute event counts per userOrgID
+    val trendingEventsByMDODF = joinedDF
+      .groupBy("userOrgID", "event_id")
+      .agg(count("*").alias("event_count")) // Count occurrences of each event per userOrgID
+      .withColumn("rank", dense_rank().over(Window.partitionBy("userOrgID").orderBy(col("event_count").desc))) // Rank events per userOrgID
+      .filter(col("rank") <= 20) // Keep only top 20 events per userOrgID
+      .groupBy("userOrgID")
+      .agg(concat_ws(",", collect_list("event_id")).alias("events")) // Collect top 20 event_ids into a CSV string
+
+    // Step 3: Compute top 20 event_ids overall (without grouping)
+    val featuredEventsDF = joinedDF
+      .groupBy("event_id")
+      .agg(count("*").alias("event_count")) // Count occurrences of each event
+      .orderBy(col("event_count").desc) // Order events by frequency
+      .limit(20) // Take the top 20 events
+      .agg(concat_ws(",", collect_list("event_id")).alias("events")) // Collect event_ids into a CSV string
+    Redis.dispatchDataFrame[String]("dashboard_trending_events_by_mdo", trendingEventsByMDODF, "userOrgID", "events")
+    Redis.update("dashboard_overall_featured_events", featuredEventsDF.first().getString(0))
+
+    // trending events and featured events for events hub - end
   }
 
   def averageMonthlyActiveUsersDataFrame()(implicit spark: SparkSession, conf: DashboardConfig) : Long = {
