@@ -119,7 +119,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     updateLearnerHomePageData(orgDF, userOrgDF, userCourseProgramCompletionDF, cbpCompletionWithDetailsDF, cbpDetailsWithRatingDF, eventsEnrolmentDataDF)
 
     // update redis data for dashboards
-    dashboardRedisUpdates(orgRoleCount, activeUsers, allCourseProgramDetailsWithRatingDF, allCourseProgramCompletionWithDetailsDF, allCourseProgramCompetencyDF, cbpCompletionWithDetailsDF, eventsEnrolmentDataDF, eventDetails)
+    dashboardRedisUpdates(orgRoleCount, activeUsers, allCourseProgramDetailsWithRatingDF, allCourseProgramCompletionWithDetailsDF, allCourseProgramCompetencyDF, cbpCompletionWithDetailsDF, userOrgDF, eventsEnrolmentDataDF, eventDetails)
 
     // update cbp top 10 reviews
     cbpTop10Reviews(allCourseProgramDetailsWithRatingDF)
@@ -133,7 +133,7 @@ object DashboardSyncModel extends AbsDashboardModel {
   }
 
   def dashboardRedisUpdates(orgRoleCount: DataFrame, activeUsers: DataFrame, allCourseProgramDetailsWithRatingDF: DataFrame,
-                            allCourseProgramCompletionWithDetailsDF: DataFrame, allCourseProgramCompetencyDF: DataFrame, cbpCompletionWithDetailsDF: DataFrame, eventsEnrolmentDataDF: DataFrame, eventDetails: DataFrame)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
+                            allCourseProgramCompletionWithDetailsDF: DataFrame, allCourseProgramCompetencyDF: DataFrame, cbpCompletionWithDetailsDF: DataFrame, userOrgDF: DataFrame, eventsEnrolmentDataDF: DataFrame, eventDetails: DataFrame)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
     import spark.implicits._
     // new redis updates - start
     // MDO onboarded, with atleast one MDO_ADMIN/MDO_LEADER
