@@ -1538,24 +1538,24 @@ object DataUtil extends Serializable {
   }
 
   //Anonymous Assessment KPIs START
-  def loggedInUserAccessCountDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
-    val query = """SELECT COUNT(DISTINCT(actor_id)) AS user_count FROM \"telemetry-events-syncts\" WHERE eid='IMPRESSION' AND actor_type = 'User' AND edata_uri IN('app/toc/do_1141533857591132161321/overview', 'app/toc/do_1141525365329264641663/overview','app/toc/do_1141527106280980481664/overview', 'app/toc/do_1141533540853432321675/overview' ) AND context_env = 'Learn'"""
-    val df = druidDFOption(query, conf.sparkDruidRouterHost, limit = 1000000).orNull
-    if (df == null) return emptySchemaDataFrame(Schema.anonymousAssessmentContentAccessUserCountSchema)
-    df
-  }
-
-  def nonLoggedInUserAccessCountDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
-    val query = """SELECT COUNT(*) AS user_count FROM \"telemetry-events-syncts\" WHERE eid='IMPRESSION' and actor_type = 'AnonymousUser' AND context_env = 'Learn' AND edata_uri IN('public/toc/do_1141533857591132161321/overview', 'public/toc/do_1141525365329264641663/overview','public/toc/do_1141527106280980481664/overview', 'public/toc/do_1141533540853432321675/overview')"""
-    val df = druidDFOption(query, conf.sparkDruidRouterHost, limit = 1000000).orNull
-    if (df == null) return emptySchemaDataFrame(Schema.anonymousAssessmentContentAccessUserCountSchema)
-    df
-  }
+//  def loggedInUserAccessCountDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
+//    val query = """SELECT COUNT(DISTINCT(actor_id)) AS user_count FROM \"telemetry-events-syncts\" WHERE eid='IMPRESSION' AND actor_type = 'User' AND edata_uri IN('app/toc/do_1141533857591132161321/overview', 'app/toc/do_1141525365329264641663/overview','app/toc/do_1141527106280980481664/overview', 'app/toc/do_1141533540853432321675/overview' ) AND context_env = 'Learn'"""
+//    val df = druidDFOption(query, conf.sparkDruidRouterHost, limit = 1000000).orNull
+//    if (df == null) return emptySchemaDataFrame(Schema.anonymousAssessmentContentAccessUserCountSchema)
+//    df
+//  }
+//
+//  def nonLoggedInUserAccessCountDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
+//    val query = """SELECT COUNT(*) AS user_count FROM \"telemetry-events-syncts\" WHERE eid='IMPRESSION' and actor_type = 'AnonymousUser' AND context_env = 'Learn' AND edata_uri IN('public/toc/do_1141533857591132161321/overview', 'public/toc/do_1141525365329264641663/overview','public/toc/do_1141527106280980481664/overview', 'public/toc/do_1141533540853432321675/overview')"""
+//    val df = druidDFOption(query, conf.sparkDruidRouterHost, limit = 1000000).orNull
+//    if (df == null) return emptySchemaDataFrame(Schema.anonymousAssessmentContentAccessUserCountSchema)
+//    df
+//  }
   // Anonymous Assessment KPIs END
 
   // Monthly once request START
   def userDayCountWallOfFameDataFrame(fromDate: String, toDate: String)(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
-    val query = raw"""SELECT COUNT(DISTINCT(DATE_TRUNC('DAY', MILLIS_TO_TIMESTAMP(ets)))) as day_count,actor_id FROM \"telemetry-events-syncts\" WHERE MILLIS_TO_TIMESTAMP(ets) >= TIMESTAMP '${fromDate}' and MILLIS_TO_TIMESTAMP(ets) < TIMESTAMP '${toDate}' and actor_type = 'User' AND eid IN ('IMPRESSION') AND REGEXP_LIKE(actor_id, ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}') GROUP BY 2 ORDER BY 1 DESC"""
+    val query = raw"""SELECT COUNT(DISTINCT(DATE_TRUNC('DAY', MILLIS_TO_TIMESTAMP(ets)))) as day_count,actor_id FROM \"telemetry-events-syncts\" WHERE MILLIS_TO_TIMESTAMP(ets) >= TIMESTAMP '${fromDate}' and MILLIS_TO_TIMESTAMP(ets) < TIMESTAMP '${toDate}' and actor_type = 'User' AND eid IN ('IMPRESSION') AND REGEXP_LIKE(actor_id, '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}') GROUP BY 2 ORDER BY 1 DESC"""
     val df = druidDFOption(query, conf.sparkDruidRouterHost, limit = 1000000).orNull
     if (df == null) return emptySchemaDataFrame(Schema.userDayCountWallOfFameSchema)
     df
