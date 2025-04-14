@@ -216,6 +216,7 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
 
     val warehouseDF = fullReportDF
       .withColumn("data_last_generated_on", currentDateTime)
+      .withColumn("cut_off_percentage", col("assessPercentage").cast("float"))
       .select(
         col("userID").alias("user_id"),
         col("course_id").alias("content_id"),
@@ -228,7 +229,7 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
         date_format(from_unixtime(col("assessEndTime")), dateTimeFormat).alias("completion_date"),
         col("latest_percentage_achieved").alias("score_achieved"),
         col("total_questions").alias("overall_score"),
-        col("assessPercentage").alias("cut_off_percentage"),
+        col("cut_off_percentage"),
         col("total_questions").alias("total_question"),
         col("incorrect_count").alias("number_of_incorrect_responses"),
         col("retakes").alias("number_of_retakes"),
