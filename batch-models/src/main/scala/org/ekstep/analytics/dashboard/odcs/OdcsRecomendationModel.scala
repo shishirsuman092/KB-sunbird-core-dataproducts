@@ -20,9 +20,12 @@ import org.ekstep.analytics.framework.FrameworkContext
     override def name() = "OdcsRecomendationModel"
     def processData(timestamp: Long) (implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
       try{
-        val enrolmentsDF = warehouseCache.load(conf.dwEnrollmentsTable)
+        val allEnrolmentsDF = warehouseCache.load(conf.dwEnrollmentsTable)
+        val contentDF = warehouseCache.load(conf.dwCourseTable).filter(col("content_sub_type").isin("Course","Program", "Moderated Course", "Moderated Program"))
+        val enrolmentsDF = allEnrolmentsDF.join(contentDF.select("content_id"), Seq("content_id"), "inner")
         val userDF = warehouseCache.load(conf.dwUserTable)
         val ratingDraftDF = cache.load("rating")  // Contains content_id, rating
+
 
         val completionDF = enrolmentsDF
           .groupBy("content_id")
