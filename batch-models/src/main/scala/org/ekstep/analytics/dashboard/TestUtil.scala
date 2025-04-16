@@ -182,6 +182,7 @@ object TestUtil extends Serializable {
       "directoriesToSelect" -> "blended-program-report-mdo,cbp-report-mdo-summary,course-report,cba-report,cbp-report-mdo-enrolment,user-report,user-enrollment-report",
       "password" -> "123456",
       "bqScriptPath" -> "/mount/data/analytics/bq-scripts.sh",
+      "sizeBucketString" -> "1-100-XS,101-500-S,501-1000-M,1001-10000-L,10001-25000-X,above 25000-XXL",
 
       "sideOutput" -> sideOutput
     )

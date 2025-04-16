@@ -302,15 +302,50 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         coalesce(col("total_learning_hours"), lit(0)).alias("total_learning_hours"))
 
 
-    val ministryWiseDeptDF = userWithDeptDF
-      .groupBy("parent_id", "org_id", "org_name")
-      .agg(sum("total_learning_hours").alias("total_learning_hours"), countDistinct("userid").alias("total_users"))
-      .withColumn("size", when(col("total_users") < 200, "S").otherwise("M"))
+    //   val ministryWiseDeptDF = userWithDeptDF
+    //     .groupBy("parent_id", "org_id", "org_name")
+    //     .agg(sum("total_learning_hours").alias("total_learning_hours"), countDistinct("userid").alias("total_users"))
+    //     .withColumn("size", when(col("total_users") < 200, "S").otherwise("M"))
 
 
-    val windowSpec = Window.partitionBy("parent_id", "size").orderBy(col("total_learning_hours").desc, rand())
+    //   val windowSpec = Window.partitionBy("parent_id").orderBy(col("total_learning_hours").desc, rand())
 
-    val rankedDF = ministryWiseDeptDF.withColumn("row_num", row_number().over(windowSpec))
+    //   val rankedDF = ministryWiseDeptDF.withColumn("row_num", row_number().over(windowSpec))
+
+    //   val finalDF = rankedDF.select(
+    //    col("parent_id"),
+    //    col("org_id"),
+    //    col("org_name"),
+    //    col("size"),
+    //    col("total_users"),
+    //    col("total_learning_hours"),
+    //    col("row_num"))), lit(0)).alias("total_learning_hours"))
+
+
+    val userWithDeptFilteredDF = userWithDeptDF.filter(col("total_learning_hours") >= 4)
+    val ministryWiseDeptDF = userWithDeptFilteredDF.groupBy("parent_id", "org_id", "org_name").agg(countDistinct("userid").alias("active_users_count"))
+    val bucketRegex = """(\d+)-(\d+)-(\w+)""".r
+    val aboveRegex = """above\s+(\d+)-(\w+)""".r
+
+    val conditions: Seq[(Column, String)] = conf.sizeBucketString.split(",").flatMap {
+      case bucketRegex(start, end, label) =>
+        Some((col("total_users") >= start.toInt && col("total_users") <= end.toInt, label))
+      case aboveRegex(min, label) =>
+        Some((col("total_users") > min.toInt, label))
+      case _ => None
+    }
+
+    val sizeColumn: Column = conditions.foldLeft(lit(null: String))
+    {
+      case (colExpr, (cond, label)) => when(cond, label).otherwise(colExpr)
+    }
+
+    val ministryWiseDeptWithSizeDF = ministryWiseDeptDF.join(userWithDeptDF.groupBy("parent_id", "org_id").agg(countDistinct("userid")
+      .alias("total_users")), Seq("parent_id", "org_id"),"left").withColumn("size", sizeColumn)
+
+    val windowSpec = Window.partitionBy("parent_id").orderBy(col("active_users_count").desc, rand())
+
+    val rankedDF = ministryWiseDeptWithSizeDF.withColumn("row_num", row_number().over(windowSpec))
 
     val finalDF = rankedDF.select(
       col("parent_id"),
@@ -318,7 +353,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
       col("org_name"),
       col("size"),
       col("total_users"),
-      col("total_learning_hours"),
+      col("active_users_count").alias("total_learning_hours"),
       col("row_num"))
 
     writeToCassandra(finalDF, conf.cassandraUserKeyspace, conf.cassandraSLWMdoLeaderboardTable)

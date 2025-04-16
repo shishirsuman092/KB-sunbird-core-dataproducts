@@ -173,6 +173,7 @@ case class DashboardConfig (
                              nationalLearningWeekEnd: String,
                              stateLearningWeekStart: String,
                              stateLearningWeekEnd: String,
+                             sizeBucketString: String,
                              // Anonymous Assessment
                              anonymousAssessmentLoggedInUserContentIDs: String,
                              anonymousAssessmentNonLoggedInUserAssessmentIDs: String,
@@ -365,6 +366,7 @@ object DashboardConfigParser extends Serializable {
       nationalLearningWeekEnd = getConfigModelParam(config, "nationalLearningWeekEnd"),
       stateLearningWeekStart = getConfigModelParam(config, "stateLearningWeekStart"),
       stateLearningWeekEnd = getConfigModelParam(config, "stateLearningWeekEnd"),
+      sizeBucketString = getConfigModelParam(config, "sizeBucketString"),
 
       cassandraNLWUserLeaderboardTable = getConfigModelParam(config, "cassandraNLWUserLeaderboardTable"),
       cassandraNLWMdoLeaderboardTable = getConfigModelParam(config, "cassandraNLWMdoLeaderboardTable"),
