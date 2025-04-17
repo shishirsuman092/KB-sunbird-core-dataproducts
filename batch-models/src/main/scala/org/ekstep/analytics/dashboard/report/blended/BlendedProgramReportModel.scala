@@ -263,7 +263,7 @@ object BlendedProgramReportModel extends AbsDashboardModel {
         col("Status"),col("Component_Duration"),col("Component_Progress_Percentage"),col("Component_Completed_On"),col("Last_Accessed_On"),
         col("Offline_Session_Date"),col("Offline_Session_Start_Time"),col("Offline_Session_End_Time"),col("Offline_Attendance_Status"),col("Instructor(s)_Name"),
         col("Program_Coordinator_Name"),col("Certificate_Generated"),col("Report_Last_Generated_On")
-      )
+      ).distinct()
     val columnsToKeepInCBPReport = cbpReportDF.columns.filter(_ != "status")
     generateAndSyncReports(cbpReportDF.filter(col("status").cast("int") === 1).select(columnsToKeepInCBPReport.map(col): _*), "mdoid", reportPathCBP, "BlendedProgramReport")
 
@@ -293,7 +293,7 @@ object BlendedProgramReportModel extends AbsDashboardModel {
         col("data_last_generated_on")
       )
     // changes for creating avro file for warehouse
-    warehouseCache.write(df_warehouse.coalesce(1), conf.dwBPEnrollmentsTable)
+    warehouseCache.write(df_warehouse.coalesce(1).distinct(), conf.dwBPEnrollmentsTable)
 
     Redis.closeRedisConnect()
   }catch {
