@@ -50,6 +50,7 @@ object TestUtil extends Serializable {
       "sparkCassandraConnectionHost" -> "192.168.3.211",
       "sparkDruidRouterHost" -> "192.168.3.91",
       "sparkElasticsearchConnectionHost" -> "192.168.3.211",
+      "sparkElasticsearchAuditConnectionHost" -> "10.175.5.10",
       "fracBackendHost" -> "frac-dictionary.karmayogi.nic.in",
       "sparkMongoConnectionHost" -> "192.168.3.178",
 

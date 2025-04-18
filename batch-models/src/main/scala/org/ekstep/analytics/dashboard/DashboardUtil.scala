@@ -51,7 +51,7 @@ case class DashboardConfig (
                              secret: String,
                              // other hosts connection config
                              sparkCassandraConnectionHost: String, sparkDruidRouterHost: String,
-                             sparkElasticsearchConnectionHost: String, fracBackendHost: String,
+                             sparkElasticsearchConnectionHost: String, sparkElasticsearchAuditConnectionHost: String, fracBackendHost: String,
                              sparkMongoConnectionHost: String, mlSparkDruidRouterHost: String,
                              mlSparkMongoConnectionHost: String,
                              // kafka topics
@@ -226,6 +226,7 @@ object DashboardConfigParser extends Serializable {
       sparkCassandraConnectionHost = getConfigModelParam(config, "sparkCassandraConnectionHost"),
       sparkDruidRouterHost = getConfigModelParam(config, "sparkDruidRouterHost"),
       sparkElasticsearchConnectionHost = getConfigModelParam(config, "sparkElasticsearchConnectionHost"),
+      sparkElasticsearchAuditConnectionHost = getConfigModelParam(config, "sparkElasticsearchAuditConnectionHost"),
       sparkMongoConnectionHost =  getConfigModelParam(config, "sparkMongoConnectionHost"),
       fracBackendHost = getConfigModelParam(config, "fracBackendHost"),
       mlSparkDruidRouterHost = getConfigModelParam(config, "mlSparkDruidRouterHost"),
