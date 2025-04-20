@@ -309,9 +309,7 @@ object CourseReportModel extends AbsDashboardModel {
         col("data_last_generated_on")
       )
       val df_warehouse = platformContentWarehouseDF.union(marketPlaceContentWarehouseDF)
-      val contentPublishedOnDF = cache.load("contentPublishedOn")
-      val enrichedDF = df_warehouse.join(contentPublishedOnDF, Seq("content_id"), "left").withColumn("first_published_on", date_format(col("published_on"), dateFormat))
-      warehouseCache.write(enrichedDF.coalesce(1), conf.dwCourseTable)
+      warehouseCache.write(df_warehouse.coalesce(1), conf.dwCourseTable)
       Redis.closeRedisConnect()
   }catch {
     case e: Exception =>
