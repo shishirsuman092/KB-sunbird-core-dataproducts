@@ -344,7 +344,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
     val ministryWiseDeptWithSizeDF = ministryWiseDeptDF.join(userWithDeptDF.groupBy("parent_id", "org_id").agg(countDistinct("userid")
       .alias("total_users")), Seq("parent_id", "org_id"),"left").withColumn("size", sizeColumn)
 
-    val windowSpec = Window.partitionBy("parent_id").orderBy(col("active_users_count").desc, rand())
+    val windowSpec = Window.partitionBy("parent_id", "size").orderBy(col("active_users_count").desc, rand())
 
     val rankedDF = ministryWiseDeptWithSizeDF.withColumn("row_num", row_number().over(windowSpec))
 
