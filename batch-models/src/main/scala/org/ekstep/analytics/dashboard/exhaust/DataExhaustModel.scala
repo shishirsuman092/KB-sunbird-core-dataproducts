@@ -28,6 +28,8 @@ object DataExhaustModel extends AbsDashboardModel {
    */
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
     try {
+
+    import spark.implicits._
     val enrolmentDF = cassandraTableAsDataFrame(conf.cassandraCourseKeyspace, conf.cassandraUserEnrolmentsTable)
     cache.write(enrolmentDF, "enrolment")
     enrolmentDF.unpersist()
