@@ -28,7 +28,7 @@ object DataExhaustModel extends AbsDashboardModel {
    * @param timestamp unique timestamp from the start of the processing
    */
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-    try{
+    try {
     val enrolmentDF = cassandraTableAsDataFrame(conf.cassandraCourseKeyspace, conf.cassandraUserEnrolmentsTable)
     cache.write(enrolmentDF, "enrolment")
     enrolmentDF.unpersist()
@@ -182,7 +182,6 @@ object DataExhaustModel extends AbsDashboardModel {
         .toDF("content_id", "published_on")
 
       cache.write(contentPublishedOnDF, "contentPublishedOn")
-    }
 
     def fetchLivePublishLogsForBatch(courseIds: Seq[String], ES_HOST: String, ES_INDEX: String, log_record_schema: StructType, timeoutSeconds: Int)(implicit spark: SparkSession): Seq[(String, String)] = {
       val fields = Seq("objectId", "logRecord", "createdOn")
@@ -223,6 +222,7 @@ object DataExhaustModel extends AbsDashboardModel {
           Seq.empty
       }
 
+    }
       // org hierarchy
     val appPostgresUrl = s"jdbc:postgresql://${conf.appPostgresHost}/${conf.appPostgresSchema}"
     val orgPostgresDF = postgresTableAsDataFrame(appPostgresUrl, conf.appOrgHierarchyTable, conf.appPostgresUsername, conf.appPostgresCredential)
@@ -357,7 +357,7 @@ object DataExhaustModel extends AbsDashboardModel {
     // write to cache
     cache.write(eventsEnrolmentWithDurationDF.coalesce(1), "eventEnrolmentDetails")
     eventsEnrolmentDF.unpersist()
-  }catch {
+  } catch {
     case e: Exception =>
       println(s"Error occurred during DataExhaustModel processing: ${e.getMessage}", e)
       System.exit(1)
