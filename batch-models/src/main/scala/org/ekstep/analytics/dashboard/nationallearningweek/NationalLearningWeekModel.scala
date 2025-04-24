@@ -134,14 +134,13 @@ object NationalLearningWeekModel extends AbsDashboardModel {
     val slwDateConditions = s"""{"range": {"startDate": {"gte": "${slwStartDate}", "lte": "${slwEndDate}"}}}"""
     val objectType = Seq("Event")
     val shouldClauseRequired = objectType.map(pc => s"""{"match":{"objectType.raw":"${pc}"}}""").mkString(",")
-    val fieldsRequired = Seq("identifier", "name", "objectType", "status", "startDate", "startTime", "duration", "registrationLink" ,"createdFor", "recordedLinks")
+    val fieldsRequired = Seq("identifier", "name", "objectType", "resourcetype", "status", "startDate", "startTime", "duration", "registrationLink" ,"createdFor", "recordedLinks")
     val arrayFieldsRequired = Seq("createdFor","recordedLinks")
     val fieldsClauseRequired = fieldsRequired.map(f => s""""${f}"""").mkString(",")
     val eventQuery = s"""{"_source":[${fieldsClauseRequired}],"query":{"bool":{"must": [${slwDateConditions}], "should":[${shouldClauseRequired}]}}}"""
     val eventDataDF = elasticSearchDataFrame(conf.sparkElasticsearchConnectionHost, "compositesearch", eventQuery, fieldsRequired, arrayFieldsRequired)
-    // val eventsPublishedDF = eventDataDF.agg(
-    // lit("01397282245867929648").alias("ministry_id"), count("identifier").alias("events_published_count"))
-    val publishedEventsCount = eventDataDF.select(countDistinct("identifier")).first().getLong(0)
+    val filteredDF = eventDataDF.filter($"resourcetype" === "Rajya Karmayogi Saptah")
+    val publishedEventsCount = filteredDF.select(countDistinct("identifier")).first().getLong(0)
 
     Redis.update("dashboard_events_published_by_ministry_slw_count", publishedEventsCount.toString)
 
