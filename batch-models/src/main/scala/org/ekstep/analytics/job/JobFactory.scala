@@ -32,6 +32,7 @@ import org.ekstep.analytics.dashboard.report.monthly.requests.MonthlyRequestJob
 import org.ekstep.analytics.dashboard.survey.npsUpgrade.NpsUpgradeJob
 import org.ekstep.analytics.dashboard.odcs.OdcsRecomendationJob
 import org.ekstep.analytics.dashboard.esformdata.EsFormDataJob
+import org.ekstep.analytics.dashboard.dsr.DSRComputationJob
 
 
 import scala.reflect.runtime.universe
@@ -136,6 +137,8 @@ object JobFactory {
         OdcsRecomendationJob
       case "es-form-data" =>
         EsFormDataJob
+      case "dsr-computation" =>
+        DSRComputationJob
       case _ =>
         reflectModule(jobType);
     }
