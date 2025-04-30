@@ -150,9 +150,10 @@ object DSRComputationModel extends AbsDashboardModel {
 
       val query = raw"""SELECT DISTINCT(uid) as user_id FROM \"summary-events\" WHERE dimensions_type='app' AND __time > CURRENT_TIMESTAMP - INTERVAL '30' DAY"""
       val monthlyActiveUsersDF = druidDFOption(query, conf.sparkDruidRouterHost, limit = 1000000).getOrElse(emptySchemaDataFrame(loginSchema))
-      val monthlyActiveUsersWithMdoDF = monthlyActiveUsersDF.join(userWithOrgDF, Seq("user_id"), "left").filter(col("user_id").isNotNull && col("mdo_id").isNotNull)
+      val monthlyActiveUsersWithMdoDF = monthlyActiveUsersDF.join(userWithOrgDF, Seq("user_id"), "inner")
+      val totalMonthlyActiveUserCount = monthlyActiveUsersWithMdoDF.agg(countDistinct("user_id")).first().getLong(0)
       val stateMonthlyActiveUserCount = monthlyActiveUsersWithMdoDF.filter(col("ministry").isin(stateList: _*) || col("mdo_name").isin(stateList: _*)).agg(countDistinct("user_id")).first().getLong(0)
-      val centralMonthlyActiveUserCount = monthlyActiveUsersWithMdoDF.filter(!(col("ministry").isin(stateList: _*) || col("mdo_name").isin(stateList: _*))).agg(countDistinct("user_id")).first().getLong(0)
+      val centralMonthlyActiveUserCount = totalMonthlyActiveUserCount - stateMonthlyActiveUserCount
       println("monthly active users state : "+ stateMonthlyActiveUserCount)
       println("monthly active users centre : "+ centralMonthlyActiveUserCount)
       Redis.update("dashboard_state_monthly_active_users", stateMonthlyActiveUserCount.toString)
@@ -160,10 +161,11 @@ object DSRComputationModel extends AbsDashboardModel {
 
 
       val loginYdayQuery = raw"""SELECT DISTINCT(actor_id) AS user_id FROM \"telemetry-events-syncts\" WHERE eid='IMPRESSION' AND actor_type='User' AND __time >= TIME_FLOOR(CURRENT_TIMESTAMP + INTERVAL '5:30' HOUR TO MINUTE - INTERVAL '24' HOUR, 'P1D') AND __time < TIME_FLOOR(CURRENT_TIMESTAMP + INTERVAL '5:30' HOUR TO MINUTE, 'P1D')""".stripMargin
-      val loggedInUsersDF = druidDFOption(loginYdayQuery, conf.sparkDruidRouterHost, limit = 1000000).getOrElse(emptySchemaDataFrame(loginSchema)) // Fallback to empty if Druid returns nothing
-      val loggedInWithMdoDF = loggedInUsersDF.join(userWithOrgDF, Seq("user_id"), "left").filter(col("user_id").isNotNull && col("mdo_id").isNotNull)
+      val loggedInUsersDF = druidDFOption(loginYdayQuery, conf.sparkDruidRouterHost, limit = 1000000).getOrElse(emptySchemaDataFrame(loginSchema))
+      val loggedInWithMdoDF = loggedInUsersDF.join(userWithOrgDF, Seq("user_id"), "inner")
+      val totalUserLoggedInYesterday = loggedInUsersDF.agg(countDistinct("user_id")).first().getLong(0)
       val stateUserLoggedInYesterday = loggedInWithMdoDF.filter(col("ministry").isin(stateList: _*) || col("mdo_name").isin(stateList: _*)).agg(countDistinct("user_id")).first().getLong(0)
-      val centralUserLoggedInYesterday = loggedInWithMdoDF.filter(!(col("ministry").isin(stateList: _*) || col("mdo_name").isin(stateList: _*))).agg(countDistinct("user_id")).first().getLong(0)
+      val centralUserLoggedInYesterday = totalUserLoggedInYesterday - stateUserLoggedInYesterday
       println("users logged in yday state : "+ stateUserLoggedInYesterday)
       println("users logged in yday centre : "+ centralUserLoggedInYesterday)
       Redis.update("dashboard_state_users_logged_in_yday", stateUserLoggedInYesterday.toString)
@@ -176,4 +178,3 @@ object DSRComputationModel extends AbsDashboardModel {
     }
   }
 }
-DSRComputationModel
