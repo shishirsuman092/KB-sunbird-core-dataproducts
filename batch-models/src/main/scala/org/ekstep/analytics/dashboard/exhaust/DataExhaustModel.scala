@@ -322,6 +322,9 @@ object DataExhaustModel extends AbsDashboardModel {
   }
   def fetchLivePublishLogsForBatch(courseIds: Seq[String], ES_HOST: String, ES_INDEX: String, log_record_schema: StructType, timeoutSeconds: Int)
                                   (implicit spark: SparkSession): Seq[(String, String)] = {
+
+    // Required for .as[(String, String)]
+    import spark.implicits._
     val fields = Seq("objectId", "logRecord", "createdOn")
     val batchQuery =
       s"""
