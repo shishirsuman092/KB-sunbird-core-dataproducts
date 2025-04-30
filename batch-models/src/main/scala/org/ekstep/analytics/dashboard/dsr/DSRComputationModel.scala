@@ -3,7 +3,8 @@ package org.ekstep.analytics.dashboard.dsr
 import org.apache.spark.SparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types.{MapType, StringType}
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.types._
 import org.ekstep.analytics.dashboard.DashboardUtil._
 import org.ekstep.analytics.dashboard.DataUtil._
 import java.time.format.DateTimeFormatter
