@@ -139,7 +139,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
     val fieldsClauseRequired = fieldsRequired.map(f => s""""${f}"""").mkString(",")
     val eventQuery = s"""{"_source":[${fieldsClauseRequired}],"query":{"bool":{"must": [${slwDateConditions}], "should":[${shouldClauseRequired}]}}}"""
     val eventDataDF = elasticSearchDataFrame(conf.sparkElasticsearchConnectionHost, "compositesearch", eventQuery, fieldsRequired, arrayFieldsRequired)
-    val filteredDF = eventDataDF.filter($"resourcetype" === "Rajya Karmayogi Saptah")
+    val filteredDF = eventDataDF.filter(col("resourcetype") === "Rajya Karmayogi Saptah")
     val publishedEventsCount = filteredDF.select(countDistinct("identifier")).first().getLong(0)
 
     Redis.update("dashboard_events_published_by_ministry_slw_count", publishedEventsCount.toString)
