@@ -177,50 +177,6 @@ object DataExhaustModel extends AbsDashboardModel {
     cache.write(orgPostgresDF, "orgCompleteHierarchy")
     orgDF.unpersist()
 
-    val ES_HOST = conf.sparkElasticsearchAuditConnectionHost
-    val ES_INDEX = "kp_audit"
-    val batchSize = 100
-    val timeoutSeconds = 30
-
-    val log_record_schema = StructType(Seq(
-        StructField("properties", StructType(Seq(
-          StructField("lastPublishedOn", StructType(Seq(
-            StructField("ov", StringType),
-            StructField("nv", StringType)
-          ))),
-          StructField("status", StructType(Seq(
-            StructField("ov", StringType),
-            StructField("nv", StringType)
-          )))
-        )))
-      ))
-
-    val (_, _, allCourseProgramDetailsDF, _) = contentDataFrames(
-        orgDF,
-        Seq("Course", "Program", "Blended Program", "Curated Program", "Standalone Assessment", "CuratedCollections", "Moderated Course")
-      )
-
-    val liveCourseIds = allCourseProgramDetailsDF
-        .filter(col("courseStatus") === "Live")
-        .select("courseID")
-        .distinct()
-        .collect()
-        .map(_.getAs[String]("courseID"))
-
-    println(s"Total live content IDs to process: ${liveCourseIds.length}")
-
-    val allLogs = liveCourseIds.grouped(batchSize).zipWithIndex.flatMap { case (batch, i) =>
-        println(s"Processing batch ${i + 1} / ${(liveCourseIds.length + batchSize - 1) / batchSize}")
-        fetchLivePublishLogsForBatch(batch, ES_HOST, ES_INDEX, log_record_schema, timeoutSeconds)
-      }.toSeq
-
-    println(s"Total content publish records fetched: ${allLogs.length}")
-    val contentPublishedOnDF = spark.createDataFrame(allLogs).toDF("content_id", "published_on")
-
-    println("Writing content publish logs to cache...")
-    cache.write(contentPublishedOnDF, "contentPublishedOn")
-    println("Writing complete.")
-
     val marketPlaceContentDF = postgresTableAsDataFrame(appPostgresUrl, "cios_content_entity", conf.appPostgresUsername, conf.appPostgresCredential)
     cache.write(marketPlaceContentDF, "externalContent")
     marketPlaceContentDF.unpersist()
@@ -314,6 +270,50 @@ object DataExhaustModel extends AbsDashboardModel {
     // write to cache
     cache.write(eventsEnrolmentWithDurationDF.coalesce(1), "eventEnrolmentDetails")
     eventsEnrolmentDF.unpersist()
+
+      val ES_HOST = conf.sparkElasticsearchAuditConnectionHost
+      val ES_INDEX = "kp_audit"
+      val batchSize = 100
+      val timeoutSeconds = 30
+
+      val log_record_schema = StructType(Seq(
+        StructField("properties", StructType(Seq(
+          StructField("lastPublishedOn", StructType(Seq(
+            StructField("ov", StringType),
+            StructField("nv", StringType)
+          ))),
+          StructField("status", StructType(Seq(
+            StructField("ov", StringType),
+            StructField("nv", StringType)
+          )))
+        )))
+      ))
+
+      val (_, _, allCourseProgramDetailsDF, _) = contentDataFrames(
+        orgDF,
+        Seq("Course", "Program", "Blended Program", "Curated Program", "Standalone Assessment", "CuratedCollections", "Moderated Course")
+      )
+
+      val liveCourseIds = allCourseProgramDetailsDF
+        .filter(col("courseStatus") === "Live")
+        .select("courseID")
+        .distinct()
+        .collect()
+        .map(_.getAs[String]("courseID"))
+
+      println(s"Total live content IDs to process: ${liveCourseIds.length}")
+
+      val allLogs = liveCourseIds.grouped(batchSize).zipWithIndex.flatMap { case (batch, i) =>
+        println(s"Processing batch ${i + 1} / ${(liveCourseIds.length + batchSize - 1) / batchSize}")
+        fetchLivePublishLogsForBatch(batch, ES_HOST, ES_INDEX, log_record_schema, timeoutSeconds)
+      }.toSeq
+
+      println(s"Total content publish records fetched: ${allLogs.length}")
+      val contentPublishedOnDF = spark.createDataFrame(allLogs).toDF("content_id", "published_on")
+
+      println("Writing content publish logs to cache...")
+      cache.write(contentPublishedOnDF, "contentPublishedOn")
+      println("Writing complete.")
   } catch {
     case e: Exception =>
       println(s"Error occurred during DataExhaustModel processing: ${e.getMessage}", e)
