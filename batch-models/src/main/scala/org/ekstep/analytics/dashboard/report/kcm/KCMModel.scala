@@ -40,6 +40,7 @@ object KCMModel extends AbsDashboardModel {
 
     // changes for creating avro file for warehouse
     warehouseCache.write(contentMappingDF.distinct().coalesce(1), conf.dwKcmContentTable)
+    warehousePqCache.write(contentMappingDF.distinct().coalesce(1), conf.dwKcmContentTable)
 
     val kcmV6 = cache.load("kcmV6").withColumn("hierarchy", from_json(col("hierarchy"), Schema.kcmSchema))
     val kcmArea = kcmV6.withColumn("competencyAreaData", col("hierarchy.categories")(0))
@@ -71,6 +72,7 @@ object KCMModel extends AbsDashboardModel {
       .withColumn("data_last_generated_on", currentDateTime)
 
     warehouseCache.write(competencyDetailsDF.distinct().coalesce(1), conf.dwKcmDictionaryTable)
+    warehousePqCache.write(competencyDetailsDF.distinct().coalesce(1), conf.dwKcmDictionaryTable)
 
     // Competency reporting
     val competencyReporting = competencyContentMappingDF.join(competencyDetailsDF, Seq("competency_area_id", "competency_theme_id", "competency_sub_theme_id"))

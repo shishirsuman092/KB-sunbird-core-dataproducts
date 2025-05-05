@@ -294,8 +294,10 @@ object BlendedProgramReportModel extends AbsDashboardModel {
       )
     // changes for creating avro file for warehouse
     warehouseCache.write(df_warehouse.coalesce(1).distinct(), conf.dwBPEnrollmentsTable)
+    warehousePqCache.write(df_warehouse.coalesce(1).distinct(), conf.dwBPEnrollmentsTable)
 
-    Redis.closeRedisConnect()
+
+      Redis.closeRedisConnect()
   }catch {
     case e: Exception =>
       println(s"Error occurred during BlendedProgramReportModel processing: ${e.getMessage}", e)

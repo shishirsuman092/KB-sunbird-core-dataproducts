@@ -113,7 +113,9 @@ object UserActivityModel extends AbsDashboardModel {
 
     // writing data to warehouse cache to populate BQ tables
     warehouseCache.write(userActivityDF.coalesce(1), conf.dwUserActivityTable)
-  }catch {
+    warehousePqCache.write(userActivityDF.coalesce(1), conf.dwUserActivityTable)
+
+    }catch {
     case e: Exception =>
       println(s"Error occurred during UserActivityModel processing: ${e.getMessage}", e)
       System.exit(1)

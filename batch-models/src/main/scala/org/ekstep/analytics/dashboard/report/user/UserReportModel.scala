@@ -146,6 +146,7 @@ object UserReportModel extends AbsDashboardModel {
       )
     // changes for creating avro file for warehouse
     warehouseCache.write(df_warehouse.coalesce(1), conf.dwUserTable)
+    warehousePqCache.write(df_warehouse.coalesce(1), conf.dwUserTable)
 
     Redis.closeRedisConnect()
   }catch {
