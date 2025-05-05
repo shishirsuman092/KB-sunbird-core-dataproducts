@@ -267,8 +267,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
 
       val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
 
-      val userOrgData = userOrgDF.join(userDF, userOrgDF("userID") === userDF("userID"), "outer")
-        .select(
+      val userOrgData = userOrgDF.select(
           userOrgDF("userID").alias("userid"),
           userOrgDF("userOrgID").alias("org_id"),
           userOrgDF("fullName").alias("fullname"),
