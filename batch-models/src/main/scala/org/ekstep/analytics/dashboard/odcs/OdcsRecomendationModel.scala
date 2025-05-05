@@ -4,6 +4,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.functions.{trim, lower}
 import org.apache.spark.sql.types._
 import java.time.{Instant, LocalDate, ZoneOffset, ZonedDateTime, LocalDateTime}
 import java.time.format.DateTimeFormatter
