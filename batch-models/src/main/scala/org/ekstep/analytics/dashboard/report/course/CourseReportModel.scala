@@ -100,6 +100,7 @@ object CourseReportModel extends AbsDashboardModel {
 
     // changes for creating avro file for warehouse
     warehouseCache.write(distinctDF.coalesce(1), conf.dwContentResourceTable)
+    warehousePqCache.write(distinctDF.coalesce(1), conf.dwContentResourceTable)
 
     // Compute user ratings and join with course details
     val userRatingDF = userCourseRatingDataframe().groupBy("courseID").agg(avg(col("userRating")).alias("rating"))
@@ -312,6 +313,7 @@ object CourseReportModel extends AbsDashboardModel {
       val contentPublishedOnDF = cache.load("contentPublishedOn")
       val enrichedDF = df_warehouse.join(contentPublishedOnDF, Seq("content_id"), "left").withColumn("first_published_on", date_format(col("published_on"), dateFormat))
       warehouseCache.write(enrichedDF.coalesce(1), conf.dwCourseTable)
+      warehousePqCache.write(enrichedDF.coalesce(1), conf.dwCourseTable)
       Redis.closeRedisConnect()
   }catch {
     case e: Exception =>

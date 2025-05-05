@@ -415,6 +415,21 @@ class AvroFSCache(val path: String, val compression: String = "snappy") extends 
   }
 }
 
+class ParquetFSCache(val path: String, val compression: String = "snappy") extends Serializable {
+
+  def write(df: DataFrame, name: String): Unit = {
+    df.write
+      .mode(SaveMode.Overwrite)
+      .option("compression", compression)
+      .parquet(s"$path/$name")
+  }
+
+  def load(name: String)(implicit spark: SparkSession): DataFrame = {
+    spark.read
+      .parquet(s"$path/$name")
+  }
+}
+
 object StorageUtil extends Serializable {
 
   //  def getStorageService(config: DashboardConfig): BaseStorageService = {
@@ -605,8 +620,12 @@ object DashboardUtil extends Serializable {
   }
 
   val cache: AvroFSCache = new AvroFSCache("/mount/data/analytics/cache", "uncompressed")
+  val pqCache: ParquetFSCache = new ParquetFSCache("/mount/data/analytics/cache_pq")
+
 
   val warehouseCache: AvroFSCache = new AvroFSCache("/mount/data/analytics/warehouse", "uncompressed")
+  val warehousePqCache: ParquetFSCache = new ParquetFSCache("/mount/data/analytics/warehouse_pq")
+
 
   object Test extends Serializable {
     /**
