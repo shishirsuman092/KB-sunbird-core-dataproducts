@@ -76,7 +76,6 @@ object NationalLearningWeekModel extends AbsDashboardModel {
           coalesce(col("content_certificate_count"), lit(0)))
         .filter(col("ministry_id").isNotNull)
 
-      show(totalCertificatesGeneratedSLWYdayByOrgDF, "totalCertificatesGeneratedSLWYdayByOrgDF")
       Redis.dispatchDataFrame[Int]("dashboard_certificate_generated_yday_by_ministry_slw_count", totalCertificatesGeneratedSLWYdayByOrgDF, "ministry_id", "total_certificate_generatedYday_slw_count")
 
 
@@ -132,9 +131,6 @@ object NationalLearningWeekModel extends AbsDashboardModel {
           (coalesce(col("event_enrolment_count"), lit(0)) + coalesce(col("content_enrolment_count"), lit(0))).alias("total_enrolments"))
         .filter(col("ministry_id").isNotNull
         )
-
-      show(totalEnrolmentsInSLWByMinistryDF, "totalEnrolmentsInSLWByMinistryDF")
-      show(maharashtraTotalEnrolments, "maharashtraTotalEnrolments")
 
       Redis.dispatchDataFrame[Int]("dashboard_total_enrolment_by_ministry_slw_count", totalEnrolmentsInSLWByMinistryDF, "ministry_id", "total_enrolments")
       Redis.dispatchDataFrame[Int]("dashboard_total_enrolment_by_ministry_slw_count", maharashtraTotalEnrolments, "ministry_id", "total_enrolments")
@@ -196,8 +192,6 @@ object NationalLearningWeekModel extends AbsDashboardModel {
           (coalesce(col("event_certificate_count"), lit(0)) + coalesce(col("content_certificate_count"), lit(0))).alias("total_certificates"))
         .filter(col("ministry_id").isNotNull)
 
-      show(totalCertificatesGeneratedInSLWByMinistryDF, "totalCertificatesGeneratedInSLWByMinistryDF")
-      show(maharashtraTotalCertificates, "maharashtraTotalCertificates")
       Redis.dispatchDataFrame[Int]("dashboard_certificates_generated_by_ministry_slw_count", totalCertificatesGeneratedInSLWByMinistryDF, "ministry_id", "total_certificates")
       Redis.dispatchDataFrame[Int]("dashboard_certificates_generated_by_ministry_slw_count", maharashtraTotalCertificates, "ministry_id", "total_certificates")
       // certificate generated stats ends
@@ -215,11 +209,10 @@ object NationalLearningWeekModel extends AbsDashboardModel {
       val filteredDF = eventDataDF.filter(col("resourcetype") === "Rajya Karmayogi Saptah")
       val publishedEventsCount = filteredDF.select(countDistinct("identifier")).first().getLong(0)
 
-      println("publishedEventsCount == " + publishedEventsCount)
       Redis.update("dashboard_events_published_by_ministry_slw_count", publishedEventsCount.toString)
       // events published stats ends
 
-      we will not put event publsihed data
+      feedback - we will show event published data for Maharastra
 */
 
       val userEventCertificatesDF = eventsEnrolmentsDF
