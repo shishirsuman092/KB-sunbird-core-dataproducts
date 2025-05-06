@@ -320,8 +320,10 @@ object UserEnrolmentModel extends AbsDashboardModel {
 
     // changes for creating avro file for warehouse
     warehouseCache.write(warehouseDFwithKarmaPoints.coalesce(1), conf.dwEnrollmentsTable)
+    warehousePqCache.write(warehouseDFwithKarmaPoints.coalesce(1), conf.dwEnrollmentsTable)
 
-    allCourseProgramCompletionWithDetailsDFWithRating.unpersist()
+
+      allCourseProgramCompletionWithDetailsDFWithRating.unpersist()
 
     Redis.closeRedisConnect()
     }catch {

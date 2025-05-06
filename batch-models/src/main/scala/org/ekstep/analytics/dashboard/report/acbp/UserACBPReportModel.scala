@@ -164,6 +164,7 @@ object UserACBPReportModel extends AbsDashboardModel {
 
     // changes for creating avro file for warehouse
     warehouseCache.write(cbPlanWarehouseDF.coalesce(1), conf.dwCBPlanTable)
+    warehousePqCache.write(cbPlanWarehouseDF.coalesce(1), conf.dwCBPlanTable)
 
     Redis.closeRedisConnect()
   }catch {
