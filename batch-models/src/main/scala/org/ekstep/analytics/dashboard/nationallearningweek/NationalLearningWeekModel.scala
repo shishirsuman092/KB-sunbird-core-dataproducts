@@ -202,7 +202,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
       Redis.dispatchDataFrame[Int]("dashboard_certificates_generated_by_ministry_slw_count", maharashtraTotalCertificates, "ministry_id", "total_certificates")
       // certificate generated stats ends
 
-      val slwStartDate = stateLearningWeekStartString.split(" ")(0)
+     /* val slwStartDate = stateLearningWeekStartString.split(" ")(0)
       val slwEndDate = stateLearningWeekEndString.split(" ")(0)
       val slwDateConditions = s"""{"range": {"startDate": {"gte": "${slwStartDate}", "lte": "${slwEndDate}"}}}"""
       val objectType = Seq("Event")
@@ -219,6 +219,8 @@ object NationalLearningWeekModel extends AbsDashboardModel {
       Redis.update("dashboard_events_published_by_ministry_slw_count", publishedEventsCount.toString)
       // events published stats ends
 
+      we will not put event publsihed data
+*/
 
       val userEventCertificatesDF = eventsEnrolmentsDF
         .filter(col("completed_on_datetime") >= stateLearningWeekStartString && col("completed_on_datetime") <= stateLearningWeekEndString)
@@ -397,7 +399,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
       val bucketRegex = """(\d+)-(\d+)-(\w+)""".r
       val aboveRegex = """above\s+(\d+)-(\w+)""".r
 
-      val conditions: Seq[(Column, String)] = "1-500-XS,501-1000-S,1001-5000-M,5001-20000-L,above 20000-XL".split(",").flatMap {
+      val conditions: Seq[(Column, String)] = conf.sizeBucketString.split(",").flatMap {
         case bucketRegex(start, end, label) =>
           Some((col("total_users") >= start.toInt && col("total_users") <= end.toInt, label))
         case aboveRegex(min, label) =>
@@ -426,7 +428,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         col("row_num"))
 
       writeToCassandra(finalDF, conf.cassandraUserKeyspace, conf.cassandraSLWMdoLeaderboardTable)
-      //finalDF.write.mode(SaveMode.Overwrite).format("csv").option("header", "true").save("/tmp/SLW/")
+
 
     } catch {
       case e: Exception =>
