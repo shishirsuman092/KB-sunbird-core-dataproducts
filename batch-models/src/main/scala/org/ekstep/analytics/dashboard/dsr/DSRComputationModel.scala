@@ -37,7 +37,7 @@ object DSRComputationModel extends AbsDashboardModel {
 
       val userWithOrgDF = userDF.join(orgDF, Seq("mdo_id"), "inner")
       val activeUsersDF = userWithOrgDF.filter(col("status") === 1)
-      val enrichedEnrolmentsDF = contentEnrolmentDataDF.join(userWithOrgDF, Seq("user_id"), "inner")
+      val enrichedEnrolmentsDF = contentEnrolmentDataDF.join(activeUsersDF, Seq("user_id"), "inner")
       val totalEnrolments = enrichedEnrolmentsDF.count()
       println(totalEnrolments)
       val stateEnrolmentsCount = enrichedEnrolmentsDF.filter(col("ministry").isin(stateList: _*) || col("mdo_name").isin(stateList: _*)).count()
@@ -56,7 +56,7 @@ object DSRComputationModel extends AbsDashboardModel {
       Redis.update("dashboard_central_unique_users_enrolled", centralUniqueUsersEnroledCount.toString)
 
 
-      val enrichedCompletedDF = contentEnrolmentDataDF.filter(col("certificate_id").isNotNull).join(userWithOrgDF, Seq("user_id"), "inner")
+      val enrichedCompletedDF = contentEnrolmentDataDF.filter(col("certificate_id").isNotNull).join(activeUsersDF, Seq("user_id"), "inner")
       val totalCompletedCount = enrichedCompletedDF.count()
       println(totalCompletedCount)
       val stateCompletedCount = enrichedCompletedDF.filter(col("ministry").isin(stateList: _*) || col("mdo_name").isin(stateList: _*)).agg(countDistinct("certificate_id").as("content_state_completions")).first().getLong(0)
@@ -68,7 +68,7 @@ object DSRComputationModel extends AbsDashboardModel {
 
 
 
-      val enrichedEventEnrolmentsDF = eventsEnrolmentDataDF.join(userWithOrgDF, Seq("user_id"), "inner")
+      val enrichedEventEnrolmentsDF = eventsEnrolmentDataDF.join(activeUsersDF, Seq("user_id"), "inner")
       val totalEventEnrolments = enrichedEventEnrolmentsDF.count()
       val stateEventEnrolmentsCount = enrichedEventEnrolmentsDF.filter(col("ministry").isin(stateList: _*) || col("mdo_name").isin(stateList: _*)).count()
       val centralEventEnrolmentsCount = totalEventEnrolments - stateEventEnrolmentsCount
@@ -79,7 +79,7 @@ object DSRComputationModel extends AbsDashboardModel {
 
 
 
-      val enrichedEventCompletionsDF = eventsEnrolmentDataDF.filter(col("certificate_id").isNotNull).join(userWithOrgDF, Seq("user_id"), "inner")
+      val enrichedEventCompletionsDF = eventsEnrolmentDataDF.filter(col("certificate_id").isNotNull).join(activeUsersDF, Seq("user_id"), "inner")
       val totalEventCompletions = enrichedEventCompletionsDF.count()
       val stateEventCompletionCount = enrichedEventEnrolmentsDF.filter(col("ministry").isin(stateList: _*) || col("mdo_name").isin(stateList: _*)).agg(countDistinct("certificate_id").as("event_state_completions")).first().getLong(0)
       val centralEventCompletionCount = totalEventCompletions - stateEventCompletionCount
@@ -152,7 +152,7 @@ object DSRComputationModel extends AbsDashboardModel {
 
       val query = raw"""SELECT DISTINCT(uid) as user_id FROM \"summary-events\" WHERE dimensions_type='app' AND __time > CURRENT_TIMESTAMP - INTERVAL '30' DAY"""
       val monthlyActiveUsersDF = druidDFOption(query, conf.sparkDruidRouterHost, limit = 1000000).getOrElse(emptySchemaDataFrame(loginSchema))
-      val monthlyActiveUsersWithMdoDF = monthlyActiveUsersDF.join(userWithOrgDF, Seq("user_id"), "inner")
+      val monthlyActiveUsersWithMdoDF = monthlyActiveUsersDF.join(activeUsersDF, Seq("user_id"), "inner")
       val totalMonthlyActiveUserCount = monthlyActiveUsersWithMdoDF.agg(countDistinct("user_id")).first().getLong(0)
       val stateMonthlyActiveUserCount = monthlyActiveUsersWithMdoDF.filter(col("ministry").isin(stateList: _*) || col("mdo_name").isin(stateList: _*)).agg(countDistinct("user_id")).first().getLong(0)
       val centralMonthlyActiveUserCount = totalMonthlyActiveUserCount - stateMonthlyActiveUserCount
@@ -164,7 +164,7 @@ object DSRComputationModel extends AbsDashboardModel {
 
       val loginYdayQuery = raw"""SELECT DISTINCT(actor_id) AS user_id FROM \"telemetry-events-syncts\" WHERE eid='IMPRESSION' AND actor_type='User' AND __time >= TIME_FLOOR(CURRENT_TIMESTAMP + INTERVAL '5:30' HOUR TO MINUTE - INTERVAL '24' HOUR, 'P1D') AND __time < TIME_FLOOR(CURRENT_TIMESTAMP + INTERVAL '5:30' HOUR TO MINUTE, 'P1D')""".stripMargin
       val loggedInUsersDF = druidDFOption(loginYdayQuery, conf.sparkDruidRouterHost, limit = 1000000).getOrElse(emptySchemaDataFrame(loginSchema))
-      val loggedInWithMdoDF = loggedInUsersDF.join(userWithOrgDF, Seq("user_id"), "inner")
+      val loggedInWithMdoDF = loggedInUsersDF.join(activeUsersDF, Seq("user_id"), "inner")
       val totalUserLoggedInYesterday = loggedInUsersDF.agg(countDistinct("user_id")).first().getLong(0)
       val stateUserLoggedInYesterday = loggedInWithMdoDF.filter(col("ministry").isin(stateList: _*) || col("mdo_name").isin(stateList: _*)).agg(countDistinct("user_id")).first().getLong(0)
       val centralUserLoggedInYesterday = totalUserLoggedInYesterday - stateUserLoggedInYesterday
