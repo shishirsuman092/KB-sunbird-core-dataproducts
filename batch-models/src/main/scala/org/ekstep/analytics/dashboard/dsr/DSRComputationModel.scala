@@ -48,7 +48,8 @@ object DSRComputationModel extends AbsDashboardModel {
       Redis.update("dashboard_central_content_enrolments", centralEnrolmentsCount.toString)
 
       val stateUniqueUsersEnroledCount = enrichedEnrolmentsDF.filter(col("ministry").isin(stateList: _*) || col("mdo_name").isin(stateList: _*)).agg(countDistinct("user_id").as("unique_state_users")).first().getLong(0)
-      val centralUniqueUsersEnroledCount = enrichedEnrolmentsDF.filter(!(col("ministry").isin(stateList: _*) || col("mdo_name").isin(stateList: _*))).agg(countDistinct("user_id").as("unique_central_users")).first().getLong(0)
+      val totalUniqueUsersEnroledCount = enrichedEnrolmentsDF.agg(countDistinct("user_id").as("unique_total_users")).first().getLong(0)
+      val centralUniqueUsersEnroledCount = totalUniqueUsersEnroledCount - stateUniqueUsersEnroledCount
       println("state unique users enrolled : "+ stateUniqueUsersEnroledCount)
       println("central unique users enrolled : "+ centralUniqueUsersEnroledCount)
       Redis.update("dashboard_state_unique_users_enrolled", stateUniqueUsersEnroledCount.toString)
