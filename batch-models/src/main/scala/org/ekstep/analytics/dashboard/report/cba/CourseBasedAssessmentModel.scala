@@ -238,8 +238,9 @@ object CourseBasedAssessmentModel extends AbsDashboardModel {
 
     // changes for creating avro file for warehouse
     warehouseCache.write(warehouseDF.coalesce(1), conf.dwAssessmentTable)
+    warehousePqCache.write(warehouseDF.coalesce(1), conf.dwAssessmentTable)
 
-    Redis.closeRedisConnect()
+      Redis.closeRedisConnect()
   }catch {
     case e: Exception =>
       println(s"Error occurred during CourseBasedAssessmentModel processing: ${e.getMessage}", e)

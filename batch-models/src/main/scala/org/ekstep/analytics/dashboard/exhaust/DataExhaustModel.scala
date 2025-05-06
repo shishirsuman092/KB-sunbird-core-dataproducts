@@ -33,15 +33,19 @@ object DataExhaustModel extends AbsDashboardModel {
     import spark.implicits._
     val enrolmentDF = cassandraTableAsDataFrame(conf.cassandraCourseKeyspace, conf.cassandraUserEnrolmentsTable)
     cache.write(enrolmentDF, "enrolment")
-    enrolmentDF.unpersist()
+    pqCache.write(enrolmentDF, "enrolment")
+
+      enrolmentDF.unpersist()
 
     val batchDF = cassandraTableAsDataFrame(conf.cassandraCourseKeyspace, conf.cassandraCourseBatchTable)
     cache.write(batchDF, "batch")
+    pqCache.write(batchDF, "batch")
     batchDF.unpersist()
 
     val kcmV6Hierarchy = cassandraTableAsDataFrame(conf.cassandraHierarchyStoreKeyspace, conf.cassandraFrameworkHierarchyTable)
       .filter(col("identifier") === "kcmfinal_fw")
     cache.write(kcmV6Hierarchy, "kcmV6")
+    pqCache.write(kcmV6Hierarchy, "kcmV6")
     kcmV6Hierarchy.unpersist()
 
     val userAssessmentDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraUserAssessmentTable)
@@ -101,26 +105,32 @@ object DataExhaustModel extends AbsDashboardModel {
       col("assessEndTimestamp")
     )
     cache.write(finalAssessmentDF, "userAssessment")
+    pqCache.write(finalAssessmentDF, "userAssessment")
     userAssessmentDF.unpersist()
 
     val hierarchyDF = cassandraTableAsDataFrame(conf.cassandraHierarchyStoreKeyspace, conf.cassandraContentHierarchyTable)
     cache.write(hierarchyDF, "hierarchy")
+    pqCache.write(hierarchyDF, "hierarchy")
     hierarchyDF.unpersist()
 
     val ratingSummaryDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraRatingSummaryTable)
     cache.write(ratingSummaryDF, "ratingSummary")
+    pqCache.write(ratingSummaryDF, "ratingSummary")
     ratingSummaryDF.unpersist()
 
     val acbpDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraAcbpTable)
     cache.write(acbpDF, "acbp")
+    pqCache.write(acbpDF, "acbp")
     acbpDF.unpersist()
 
     val ratingDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraRatingsTable)
     cache.write(ratingDF, "rating")
+    pqCache.write(ratingDF, "rating")
     ratingDF.unpersist()
 
     val roleDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraUserRolesTable)
     cache.write(roleDF, "role")
+    pqCache.write(roleDF, "role")
     roleDF.unpersist()
 
     // ES content
@@ -132,81 +142,50 @@ object DataExhaustModel extends AbsDashboardModel {
     val query = s"""{"_source":[${fieldsClause}],"query":{"bool":{"should":[${shouldClause}]}}}"""
     val esContentDF = elasticSearchDataFrame(conf.sparkElasticsearchConnectionHost, "compositesearch", query, fields, arrayFields)
     cache.write(esContentDF, "esContent")
+    pqCache.write(esContentDF, "esContent")
 
     val orgDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraOrgTable)
     cache.write(orgDF, "org")
-
-      // org hierarchy
-    val appPostgresUrl = s"jdbc:postgresql://${conf.appPostgresHost}/${conf.appPostgresSchema}"
-    val orgPostgresDF = postgresTableAsDataFrame(appPostgresUrl, conf.appOrgHierarchyTable, conf.appPostgresUsername, conf.appPostgresCredential)
-    val orgCassandraDF = orgDF
-      .withColumn("createddate", to_timestamp(col("createddate"), "yyyy-MM-dd HH:mm:ss:SSSZ"))
-      .select(
-        col("id").alias("sborgid"),
-        col("organisationtype").alias("orgType"),
-        col("orgname").alias("cassOrgName"),
-        col("createddate").alias("orgCreatedDate")
-      )
-    val orgDfWithOrgType = orgCassandraDF.join(orgPostgresDF, Seq("sborgid"), "left")
-    val orgDfWithSborgid = orgDfWithOrgType
-      .join(
-        orgPostgresDF.select(col("sborgid").alias("ministry_id_sborgid"), col("mapid").alias("l1mapid_lookup")),
-        col("l1mapid") === col("l1mapid_lookup"),
-        "left").join(
-        orgPostgresDF.select(col("sborgid").alias("department_id_sborgid"), col("mapid").alias("l2mapid_lookup")),
-        col("l2mapid") === col("l2mapid_lookup"),
-        "left").drop("l1mapid_lookup", "l2mapid_lookup")
-
-    val orgHierarchyDF = orgDfWithSborgid
-      .select(
-        col("sborgid").alias("mdo_id"),
-        col("cassOrgName").alias("mdo_name"),
-        col("l1orgname").alias("ministry"),
-        col("ministry_id_sborgid").alias("ministry_id"),
-        col("l2orgname").alias("department"),
-        col("department_id_sborgid").alias("department_id"),
-        col("orgCreatedDate").alias("mdo_created_on"),
-        col("orgType")
-      )
-      .withColumn("data_last_generated_on", currentDateTime)
-      .distinct()
-      .drop("orgType")
-      .dropDuplicates(Seq("mdo_id"))
-      .repartition(16)
-    cache.write(orgHierarchyDF, "orgHierarchy")
-    cache.write(orgPostgresDF, "orgCompleteHierarchy")
-    orgDF.unpersist()
+    pqCache.write(orgDF, "org")
 
     val marketPlaceContentDF = postgresTableAsDataFrame(appPostgresUrl, "cios_content_entity", conf.appPostgresUsername, conf.appPostgresCredential)
     cache.write(marketPlaceContentDF, "externalContent")
+    pqCache.write(marketPlaceContentDF, "externalContent")
     marketPlaceContentDF.unpersist()
 
     val marketPlaceEnrolmentsDF = cassandraTableAsDataFrame("sunbird_courses", "user_external_enrolments")
     cache.write(marketPlaceEnrolmentsDF, "externalCourseEnrolments")
+    pqCache.write(marketPlaceEnrolmentsDF, "externalCourseEnrolments")
     marketPlaceEnrolmentsDF.unpersist()
 
     val userDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraUserTable)
     cache.write(userDF, "user")
+    pqCache.write(userDF, "user")
     userDF.unpersist()
 
     val learnerLeaderboardDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraLearnerLeaderBoardTable)
     cache.write(learnerLeaderboardDF, "learnerLeaderBoard")
+    pqCache.write(learnerLeaderboardDF, "learnerLeaderBoard")
     learnerLeaderboardDF.unpersist()
 
     val userKarmaPointsDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraKarmaPointsTable)
     cache.write(userKarmaPointsDF, "userKarmaPoints")
+    pqCache.write(userKarmaPointsDF, "userKarmaPoints")
     userKarmaPointsDF.unpersist()
 
     val userKarmaPointsSummaryDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraKarmaPointsSummaryTable)
     cache.write(userKarmaPointsSummaryDF, "userKarmaPointsSummary")
+    pqCache.write(userKarmaPointsSummaryDF, "userKarmaPointsSummary")
     userKarmaPointsSummaryDF.unpersist()
 
     val oldAssessmentDetailsDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraOldAssesmentTable)
     cache.write(oldAssessmentDetailsDF, "oldAssessmentDetails")
+    pqCache.write(oldAssessmentDetailsDF, "oldAssessmentDetails")
     oldAssessmentDetailsDF.unpersist()
 
     val weeklyClapsDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraLearnerStatsTable)
     cache.write(weeklyClapsDF, "weeklyClaps")
+    pqCache.write(weeklyClapsDF, "weeklyClaps")
     weeklyClapsDF.unpersist()
 
     //NLW event data
@@ -240,6 +219,7 @@ object DataExhaustModel extends AbsDashboardModel {
       ).dropDuplicates("event_id")
       .na.fill(0.0, Seq("duration"))
     cache.write(eventDetailsDF, "eventDetails")
+    pqCache.write(eventDetailsDF, "eventDetails")
 
     val caseExpression = "CASE WHEN ISNULL(status) THEN 'not-enrolled' WHEN status == 0 THEN 'not-started' WHEN status == 1 THEN 'in-progress' ELSE 'completed' END"
     val eventsEnrolmentDF = cassandraTableAsDataFrame(conf.cassandraCourseKeyspace, "user_entity_enrolments")
@@ -269,7 +249,50 @@ object DataExhaustModel extends AbsDashboardModel {
       .drop(col("progress_details"))
     // write to cache
     cache.write(eventsEnrolmentWithDurationDF.coalesce(1), "eventEnrolmentDetails")
+    pqCache.write(eventsEnrolmentWithDurationDF.coalesce(1), "eventEnrolmentDetails")
     eventsEnrolmentDF.unpersist()
+
+      val appPostgresUrl = s"jdbc:postgresql://${conf.appPostgresHost}/${conf.appPostgresSchema}"
+      val orgPostgresDF = postgresTableAsDataFrame(appPostgresUrl, conf.appOrgHierarchyTable, conf.appPostgresUsername, conf.appPostgresCredential)
+      val orgCassandraDF = orgDF
+        .withColumn("createddate", to_timestamp(col("createddate"), "yyyy-MM-dd HH:mm:ss:SSSZ"))
+        .select(
+          col("id").alias("sborgid"),
+          col("organisationtype").alias("orgType"),
+          col("orgname").alias("cassOrgName"),
+          col("createddate").alias("orgCreatedDate")
+        )
+      val orgDfWithOrgType = orgCassandraDF.join(orgPostgresDF, Seq("sborgid"), "left")
+      val orgDfWithSborgid = orgDfWithOrgType
+        .join(
+          orgPostgresDF.select(col("sborgid").alias("ministry_id_sborgid"), col("mapid").alias("l1mapid_lookup")),
+          col("l1mapid") === col("l1mapid_lookup"),
+          "left").join(
+          orgPostgresDF.select(col("sborgid").alias("department_id_sborgid"), col("mapid").alias("l2mapid_lookup")),
+          col("l2mapid") === col("l2mapid_lookup"),
+          "left").drop("l1mapid_lookup", "l2mapid_lookup")
+
+      val orgHierarchyDF = orgDfWithSborgid
+        .select(
+          col("sborgid").alias("mdo_id"),
+          col("cassOrgName").alias("mdo_name"),
+          col("l1orgname").alias("ministry"),
+          col("ministry_id_sborgid").alias("ministry_id"),
+          col("l2orgname").alias("department"),
+          col("department_id_sborgid").alias("department_id"),
+          col("orgCreatedDate").alias("mdo_created_on"),
+          col("orgType")
+        )
+        .withColumn("data_last_generated_on", currentDateTime)
+        .distinct()
+        .drop("orgType")
+        .dropDuplicates(Seq("mdo_id"))
+        .repartition(16)
+      cache.write(orgHierarchyDF, "orgHierarchy")
+      pqCache.write(orgHierarchyDF, "orgHierarchy")
+      cache.write(orgPostgresDF, "orgCompleteHierarchy")
+      pqCache.write(orgPostgresDF, "orgCompleteHierarchy")
+      orgDF.unpersist()
 
       val ES_HOST = conf.sparkElasticsearchAuditConnectionHost
       val ES_INDEX = "kp_audit"

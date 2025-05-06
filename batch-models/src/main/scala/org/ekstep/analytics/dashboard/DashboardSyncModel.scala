@@ -588,7 +588,9 @@ object DashboardSyncModel extends AbsDashboardModel {
     val certificateGeneratedInNLWByUserDF = certificateGeneratedInNLWDF.groupBy("userID").agg(count("*").alias("count"))
     val eventCertificateGeneratedInNLWByUserDF = eventCertificatesGeneratedNLWDF.groupBy("user_id").agg(count("*").alias("count"))
     cache.write(certificateGeneratedInNLWByUserDF.coalesce(1), "nlwContentCertificateGeneratedCount")
+    pqCache.write(certificateGeneratedInNLWByUserDF.coalesce(1), "nlwContentCertificateGeneratedCount")
     cache.write(eventCertificateGeneratedInNLWByUserDF.coalesce(1), "nlwEventCertificateGeneratedCount")
+    pqCache.write(eventCertificateGeneratedInNLWByUserDF.coalesce(1), "nlwEventCertificateGeneratedCount")
     //Redis.dispatchDataFrame[String]("dashboard_content_certificates_issued_nlw_by_user", certificateGeneratedInNLWByUserDF, "userID", "count")
     //Redis.dispatchDataFrame[String]("dashboard_event_certificates_issued_nlw_by_user", eventCertificateGeneratedInNLWByUserDF, "user_id", "count")
 
@@ -608,6 +610,8 @@ object DashboardSyncModel extends AbsDashboardModel {
       .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2))
       .select("user_id", "totalLearningHours")
     cache.write(eventTotalLearningNLWByUserDF, "nlwEventLearningHours")
+    pqCache.write(eventTotalLearningNLWByUserDF, "nlwEventLearningHours")
+
     //Redis.dispatchDataFrame[String]("dashboard_event_learning_hours_nlw_by_user", eventTotalLearningNLWByUserDF, "user_id", "totalLearningHours")
 
     //    val enrolmentContentDurationNLWByUserDF = cbpCompletionWithDetailsDF.filter($"courseCompletedTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseCompletedTimestamp" <= nationalLearningWeekEndDateTimeEpoch && $"userID" =!= "") .groupBy("userID").agg(sum(expr("(completionPercentage / 100) * courseDuration")).alias("totalLearningSeconds"))
@@ -615,6 +619,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     val enrolmentContentDurationNLWByUserDF = cbpCompletionWithDetailsDF.filter($"courseCompletedTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseCompletedTimestamp" <= nationalLearningWeekEndDateTimeEpoch && $"userID" =!= "" && $"dbCompletionStatus" === 2 && $"certificateID".isNotNull).groupBy("userID").agg(sum("courseDuration").alias("totalLearningSeconds"))
       .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2)).select("userID", "totalLearningHours")
     cache.write(enrolmentContentDurationNLWByUserDF, "nlwContentLearningHours")
+    pqCache.write(enrolmentContentDurationNLWByUserDF, "nlwContentLearningHours")
     //Redis.dispatchDataFrame[String]("dashboard_content_learning_hours_nlw_by_user", enrolmentContentDurationNLWByUserDF, "userID", "totalLearningHours")
     println("eventTotalLearningNLWByUserDF cache write")
 

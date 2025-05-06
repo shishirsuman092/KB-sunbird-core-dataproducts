@@ -75,6 +75,7 @@ object DataWarehouseModel extends AbsDashboardModel {
     val orgDwDf = cache.load("orgHierarchy")
       .withColumn("mdo_created_on", to_date(col("mdo_created_on")).cast("string")).cache()
     warehouseCache.write(orgDwDf.coalesce(1), conf.dwOrgTable)
+    warehousePqCache.write(orgDwDf.coalesce(1), conf.dwOrgTable)
     truncateWarehouseTable(conf.dwOrgTable)
     saveDataframeToPostgresTable_With_Append(orgDwDf, dwPostgresUrl, conf.dwOrgTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
 
@@ -104,6 +105,7 @@ object DataWarehouseModel extends AbsDashboardModel {
     truncateWarehouseTable(conf.dwEventsTable)
     saveDataframeToPostgresTable_With_Append(eventsDataDF, dwPostgresUrl, conf.dwEventsTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
     warehouseCache.write(eventsDataDF, "event_details")
+    warehousePqCache.write(eventsDataDF, "event_details")
 
     val eventsEnrolmentDataDF = cache.load("eventEnrolmentDetails")
     val karmaPointsData = cache.load("userKarmaPoints")
@@ -113,6 +115,7 @@ object DataWarehouseModel extends AbsDashboardModel {
     truncateWarehouseTable("events_enrolment")
     saveDataframeToPostgresTable_With_Append(eventsEnrolmentDataDFWithKarmaPoints, dwPostgresUrl, "events_enrolment", conf.dwPostgresUsername, conf.dwPostgresCredential)
     warehouseCache.write(eventsEnrolmentDataDFWithKarmaPoints, "event_enrolment_details")
+    warehousePqCache.write(eventsEnrolmentDataDFWithKarmaPoints, "event_enrolment_details")
   }catch {
     case e: Exception =>
       println(s"Error occurred during DataWarehouseModel processing: ${e.getMessage}", e)
