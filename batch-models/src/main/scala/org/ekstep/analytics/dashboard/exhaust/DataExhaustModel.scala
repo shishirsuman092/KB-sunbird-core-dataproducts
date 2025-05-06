@@ -294,98 +294,10 @@ object DataExhaustModel extends AbsDashboardModel {
     pqCache.write(eventsEnrolmentWithDurationDF.coalesce(1), "eventEnrolmentDetails")
     eventsEnrolmentDF.unpersist()
 
-      val ES_HOST = conf.sparkElasticsearchAuditConnectionHost
-      val ES_INDEX = "kp_audit"
-      val batchSize = 100
-      val timeoutSeconds = 30
-
-      val log_record_schema = StructType(Seq(
-        StructField("properties", StructType(Seq(
-          StructField("lastPublishedOn", StructType(Seq(
-            StructField("ov", StringType),
-            StructField("nv", StringType)
-          ))),
-          StructField("status", StructType(Seq(
-            StructField("ov", StringType),
-            StructField("nv", StringType)
-          )))
-        )))
-      ))
-
-      val (_, _, allCourseProgramDetailsDF, _) = contentDataFrames(
-        orgDF,
-        Seq("Course", "Program", "Blended Program", "Curated Program", "Standalone Assessment", "CuratedCollections", "Moderated Course")
-      )
-
-      val liveCourseIds = allCourseProgramDetailsDF
-        .filter(col("courseStatus") === "Live")
-        .select("courseID")
-        .distinct()
-        .collect()
-        .map(_.getAs[String]("courseID"))
-
-      println(s"Total live content IDs to process: ${liveCourseIds.length}")
-
-      val allLogs = liveCourseIds.grouped(batchSize).zipWithIndex.flatMap { case (batch, i) =>
-        println(s"Processing batch ${i + 1} / ${(liveCourseIds.length + batchSize - 1) / batchSize}")
-        fetchLivePublishLogsForBatch(batch, ES_HOST, ES_INDEX, log_record_schema, timeoutSeconds)
-      }.toSeq
-
-      println(s"Total content publish records fetched: ${allLogs.length}")
-      val contentPublishedOnDF = spark.createDataFrame(allLogs).toDF("content_id", "published_on")
-
-      println("Writing content publish logs to cache...")
-      cache.write(contentPublishedOnDF, "contentPublishedOn")
-      pqCache.write(contentPublishedOnDF, "contentPublishedOn")
-
-      println("Writing complete.")
   } catch {
     case e: Exception =>
       println(s"Error occurred during DataExhaustModel processing: ${e.getMessage}", e)
       System.exit(1)
   }
-  }
-  def fetchLivePublishLogsForBatch(courseIds: Seq[String], ES_HOST: String, ES_INDEX: String, log_record_schema: StructType, timeoutSeconds: Int)
-                                  (implicit spark: SparkSession): Seq[(String, String)] = {
-
-    // Required for .as[(String, String)]
-    import spark.implicits._
-    val fields = Seq("objectId", "logRecord", "createdOn")
-    val batchQuery =
-      s"""
-         |{
-         |  "query": {
-         |    "bool": {
-         |      "should": [
-         |        ${courseIds.map(id => s"""{"term": {"objectId": "$id"}}""").mkString(",")}
-         |      ]
-         |    }
-         |  }
-         |}
-     """.stripMargin
-
-    val future = Future {
-      val df = elasticSearchDataFrame(ES_HOST, ES_INDEX, batchQuery, fields)
-
-      df.withColumn("parsed_log", from_json(col("logRecord"), log_record_schema))
-        .filter(col("parsed_log.properties.status.nv") === "Live")
-        .select(
-          col("objectId").alias("content_id"),
-          col("createdOn").cast(StringType).alias("published_on")
-        )
-        .as[(String, String)]
-        .collect().toSeq
-    }
-
-    try {
-      Await.result(future, timeoutSeconds.seconds)
-    } catch {
-      case _: TimeoutException =>
-        println(s"Timeout while fetching logs for batch with ${courseIds.length} IDs")
-        Seq.empty
-      case e: Throwable =>
-        println(s"Error fetching logs: ${e.getMessage}")
-        Seq.empty
-    }
   }
 }
