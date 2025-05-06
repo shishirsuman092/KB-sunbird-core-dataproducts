@@ -148,6 +148,48 @@ object DataExhaustModel extends AbsDashboardModel {
     cache.write(orgDF, "org")
     pqCache.write(orgDF, "org")
 
+      val appPostgresUrl = s"jdbc:postgresql://${conf.appPostgresHost}/${conf.appPostgresSchema}"
+      val orgPostgresDF = postgresTableAsDataFrame(appPostgresUrl, conf.appOrgHierarchyTable, conf.appPostgresUsername, conf.appPostgresCredential)
+      val orgCassandraDF = orgDF
+        .withColumn("createddate", to_timestamp(col("createddate"), "yyyy-MM-dd HH:mm:ss:SSSZ"))
+        .select(
+          col("id").alias("sborgid"),
+          col("organisationtype").alias("orgType"),
+          col("orgname").alias("cassOrgName"),
+          col("createddate").alias("orgCreatedDate")
+        )
+      val orgDfWithOrgType = orgCassandraDF.join(orgPostgresDF, Seq("sborgid"), "left")
+      val orgDfWithSborgid = orgDfWithOrgType
+        .join(
+          orgPostgresDF.select(col("sborgid").alias("ministry_id_sborgid"), col("mapid").alias("l1mapid_lookup")),
+          col("l1mapid") === col("l1mapid_lookup"),
+          "left").join(
+          orgPostgresDF.select(col("sborgid").alias("department_id_sborgid"), col("mapid").alias("l2mapid_lookup")),
+          col("l2mapid") === col("l2mapid_lookup"),
+          "left").drop("l1mapid_lookup", "l2mapid_lookup")
+
+      val orgHierarchyDF = orgDfWithSborgid
+        .select(
+          col("sborgid").alias("mdo_id"),
+          col("cassOrgName").alias("mdo_name"),
+          col("l1orgname").alias("ministry"),
+          col("ministry_id_sborgid").alias("ministry_id"),
+          col("l2orgname").alias("department"),
+          col("department_id_sborgid").alias("department_id"),
+          col("orgCreatedDate").alias("mdo_created_on"),
+          col("orgType")
+        )
+        .withColumn("data_last_generated_on", currentDateTime)
+        .distinct()
+        .drop("orgType")
+        .dropDuplicates(Seq("mdo_id"))
+        .repartition(16)
+      cache.write(orgHierarchyDF, "orgHierarchy")
+      pqCache.write(orgHierarchyDF, "orgHierarchy")
+      cache.write(orgPostgresDF, "orgCompleteHierarchy")
+      pqCache.write(orgPostgresDF, "orgCompleteHierarchy")
+      orgDF.unpersist()
+
     val marketPlaceContentDF = postgresTableAsDataFrame(appPostgresUrl, "cios_content_entity", conf.appPostgresUsername, conf.appPostgresCredential)
     cache.write(marketPlaceContentDF, "externalContent")
     pqCache.write(marketPlaceContentDF, "externalContent")
@@ -252,48 +294,6 @@ object DataExhaustModel extends AbsDashboardModel {
     pqCache.write(eventsEnrolmentWithDurationDF.coalesce(1), "eventEnrolmentDetails")
     eventsEnrolmentDF.unpersist()
 
-      val appPostgresUrl = s"jdbc:postgresql://${conf.appPostgresHost}/${conf.appPostgresSchema}"
-      val orgPostgresDF = postgresTableAsDataFrame(appPostgresUrl, conf.appOrgHierarchyTable, conf.appPostgresUsername, conf.appPostgresCredential)
-      val orgCassandraDF = orgDF
-        .withColumn("createddate", to_timestamp(col("createddate"), "yyyy-MM-dd HH:mm:ss:SSSZ"))
-        .select(
-          col("id").alias("sborgid"),
-          col("organisationtype").alias("orgType"),
-          col("orgname").alias("cassOrgName"),
-          col("createddate").alias("orgCreatedDate")
-        )
-      val orgDfWithOrgType = orgCassandraDF.join(orgPostgresDF, Seq("sborgid"), "left")
-      val orgDfWithSborgid = orgDfWithOrgType
-        .join(
-          orgPostgresDF.select(col("sborgid").alias("ministry_id_sborgid"), col("mapid").alias("l1mapid_lookup")),
-          col("l1mapid") === col("l1mapid_lookup"),
-          "left").join(
-          orgPostgresDF.select(col("sborgid").alias("department_id_sborgid"), col("mapid").alias("l2mapid_lookup")),
-          col("l2mapid") === col("l2mapid_lookup"),
-          "left").drop("l1mapid_lookup", "l2mapid_lookup")
-
-      val orgHierarchyDF = orgDfWithSborgid
-        .select(
-          col("sborgid").alias("mdo_id"),
-          col("cassOrgName").alias("mdo_name"),
-          col("l1orgname").alias("ministry"),
-          col("ministry_id_sborgid").alias("ministry_id"),
-          col("l2orgname").alias("department"),
-          col("department_id_sborgid").alias("department_id"),
-          col("orgCreatedDate").alias("mdo_created_on"),
-          col("orgType")
-        )
-        .withColumn("data_last_generated_on", currentDateTime)
-        .distinct()
-        .drop("orgType")
-        .dropDuplicates(Seq("mdo_id"))
-        .repartition(16)
-      cache.write(orgHierarchyDF, "orgHierarchy")
-      pqCache.write(orgHierarchyDF, "orgHierarchy")
-      cache.write(orgPostgresDF, "orgCompleteHierarchy")
-      pqCache.write(orgPostgresDF, "orgCompleteHierarchy")
-      orgDF.unpersist()
-
       val ES_HOST = conf.sparkElasticsearchAuditConnectionHost
       val ES_INDEX = "kp_audit"
       val batchSize = 100
@@ -336,6 +336,8 @@ object DataExhaustModel extends AbsDashboardModel {
 
       println("Writing content publish logs to cache...")
       cache.write(contentPublishedOnDF, "contentPublishedOn")
+      pqCache.write(contentPublishedOnDF, "contentPublishedOn")
+
       println("Writing complete.")
   } catch {
     case e: Exception =>
