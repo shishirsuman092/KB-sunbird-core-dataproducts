@@ -32,10 +32,11 @@ object ZipReportsWithSecurityModel extends AbsDashboardModel {
    * @param timestamp unique timestamp from the start of the processing
    */
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
-    try{
-
     val prefixDirectoryPath = s"${conf.localReportDir}/${conf.prefixDirectoryPath}"
     val destinationPath = s"${conf.localReportDir}/${conf.destinationDirectoryPath}"
+    val warehousePath = s"${conf.localReportDir}/warehouseReportPath"
+    try{
+
     val directoriesToSelect = conf.directoriesToSelect.split(",").toSet
     val specificDate = getDate()
     val kcmFolderPath = s"${conf.localReportDir}/${conf.kcmReportPath}/${specificDate}/ContentCompetencyMapping"
@@ -118,6 +119,43 @@ object ZipReportsWithSecurityModel extends AbsDashboardModel {
       }
     }
 
+      /**
+       * Method to upload Parquet files to the specified GCP bucket
+       */
+    def uploadParquetFiles()(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
+        try {
+          println("Starting upload of Parquet files to GCP bucket")
+
+          val basePath = "/mount/data/analytics/warehouse_pq/unified/"
+          val userDetailsFile = basePath + "unified_user_details.parquet"
+          val enrolmentsFile = basePath + "unified_enrolments.parquet"
+          val orgHierarchyFile = basePath + "org_hierarchy.parquet"
+
+          // Check if individual Parquet files exist
+          val userDetailsExists = new File(userDetailsFile).isFile
+          val enrolmentsExists = new File(enrolmentsFile).isFile
+          val orgHierarchyExists = new File(orgHierarchyFile).isFile
+
+          // Log warnings for missing files
+          if (!userDetailsExists) println(s"WARNING: File not found: $userDetailsFile")
+          if (!enrolmentsExists) println(s"WARNING: File not found: $enrolmentsFile")
+          if (!orgHierarchyExists) println(s"WARNING: File not found: $orgHierarchyFile")
+
+          // Proceed only if all required files exist
+          if (userDetailsExists && enrolmentsExists && orgHierarchyExists) {
+            syncReports(basePath, "airflowData")
+            println("Completed uploading Parquet files to GCP bucket.")
+          } else {
+            println("Upload skipped: One or more required files are missing.")
+          }
+        } catch {
+          case e: Exception =>
+            println(s"Error uploading Parquet files: ${e.getMessage}", e)
+        }
+      }
+
+      uploadParquetFiles();
+
     // Start traversing the source directory
     traverseDirectory(new File(prefixDirectoryPath))
 
@@ -172,7 +210,6 @@ object ZipReportsWithSecurityModel extends AbsDashboardModel {
     // End of zipping the reports and syncing to blob store
     // start zipping warehouse reports
     val today = getDate()
-    val warehousePath = s"${conf.localReportDir}/warehouseReportPath"
     val userDetailDF = warehouseCache.load(conf.dwUserTable)
     val courseDF = warehouseCache.load(conf.dwCourseTable)
     val assessmentDetailsDF = warehouseCache.load(conf.dwAssessmentTable)
@@ -215,6 +252,13 @@ object ZipReportsWithSecurityModel extends AbsDashboardModel {
   }catch {
     case e: Exception =>
       println(s"Error occurred during ZipReportsWithSecurityModel processing: ${e.getMessage}", e)
+      //deleting the tmp merged folder
+      try {
+        println(s"Cleaning up destination directory: ${destinationPath}")
+        FileUtils.deleteDirectory(new File(destinationPath))
+      } catch {
+        case e: Exception => println(s"Error deleting directory: ${e.getMessage}")
+      }
       System.exit(1)
   }
   }
