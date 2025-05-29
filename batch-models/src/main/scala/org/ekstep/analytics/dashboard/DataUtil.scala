@@ -51,6 +51,7 @@ object DataUtil extends Serializable {
     val personalDetailsSchema: StructType = StructType(Seq(
       StructField("phoneVerified", StringType, nullable = true),
       StructField("gender", StringType, nullable = true),
+      StructField("pincode", StringType, nullable = true),
       StructField("category", StringType, nullable = true),
       StructField("mobile", StringType, nullable = true),
       StructField("primaryEmail", StringType, nullable = true)
