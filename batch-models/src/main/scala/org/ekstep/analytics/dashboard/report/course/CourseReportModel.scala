@@ -37,11 +37,13 @@ object CourseReportModel extends AbsDashboardModel {
         StructField("name", StringType),
         StructField("duration", StringType),
         StructField("expectedDuration", StringType),
+        StructField("mimeType", StringType),
         StructField("children", ArrayType(StructType(Seq(
           StructField("identifier", StringType),
           StructField("primaryCategory", StringType),
           StructField("name", StringType),
           StructField("duration", StringType),
+          StructField("mimeType", StringType),
           StructField("expectedDuration", StringType)
         ))))
       ))))
@@ -223,6 +225,7 @@ object CourseReportModel extends AbsDashboardModel {
       lit("Not Available").alias("content_substatus"), // Match order
       lit("Not Available").alias("language"), // Match order
       lit("External Content").alias("content_sub_type"),
+      lit("0").alias("scorm_flag"),
       col("data_last_generated_on")
     )
 
@@ -285,7 +288,32 @@ object CourseReportModel extends AbsDashboardModel {
     if (conf.reportSyncEnable) {
       syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
     }
+
+      val contentHierarchyExploded = contentResourceHierarchyDF.withColumn("hierarchy", from_json(col("hierarchy"), hierarchySchema))
+      val level1Exploded = contentHierarchyExploded
+        .withColumn("level1_child", explode_outer(col("hierarchy.children")))
+        .withColumn("lvl1_mime_match", when(col("level1_child.mimeType").endsWith("html-archive"), 1).otherwise(0))
+        .groupBy("courseID")
+        .agg(max("lvl1_mime_match").as("lvl1_flag"))
+
+      // 2. Check mimeType in level-2 children
+      val level2Exploded = contentHierarchyExploded
+        .withColumn("level1_child", explode_outer(col("hierarchy.children")))
+        .withColumn("level2_child", explode_outer(col("level1_child.children")))
+        .withColumn("lvl2_mime_match", when(col("level2_child.mimeType").endsWith("html-archive"), 1).otherwise(0))
+        .groupBy("courseID")
+        .agg(max("lvl2_mime_match").as("lvl2_flag"))
+
+      // Combine level-1 and level-2 flags
+      val scormFlagDF = level1Exploded
+        .join(level2Exploded, Seq("courseID"), "outer")
+        .na.fill(0, Seq("lvl1_flag", "lvl2_flag"))
+        .withColumn("scorm_flag", greatest(col("lvl1_flag"), col("lvl2_flag")))
+        .select("courseID", "scorm_flag")
+
     val platformContentWarehouseDF = fullDF
+      .join(scormFlagDF, Seq("courseID"), "left")
+      .na.fill(0, Seq("scorm_flag"))
       .withColumn("data_last_generated_on", currentDateTime)
       .select(
         col("courseID").alias("content_id"),
@@ -307,6 +335,7 @@ object CourseReportModel extends AbsDashboardModel {
         col("courseReviewStatus").alias("content_substatus"),
         col("contentLanguage").alias("language"),
         col("courseCategory").alias("content_sub_type"),
+        col("scorm_flag"),
         col("data_last_generated_on")
       )
       val df_warehouse = platformContentWarehouseDF.union(marketPlaceContentWarehouseDF)
