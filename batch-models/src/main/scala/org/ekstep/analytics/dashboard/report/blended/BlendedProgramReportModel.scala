@@ -265,7 +265,7 @@ object BlendedProgramReportModel extends AbsDashboardModel {
         col("MDO_Name"),
         col("maskedEmail"),
         col("maskedPhone"),
-        col("userDesignation").alias("Designation")identifier,
+        col("userDesignation").alias("Designation"),
         col("userGroup").alias("Group"),
         col("userGender").alias("Gender"),
         col("userCategory").alias("Category"),
