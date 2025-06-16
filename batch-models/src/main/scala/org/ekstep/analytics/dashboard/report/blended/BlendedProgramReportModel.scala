@@ -265,7 +265,7 @@ object BlendedProgramReportModel extends AbsDashboardModel {
         col("MDO_Name"),
         col("maskedEmail"),
         col("maskedPhone"),
-        col("userDesignation").alias("Designation"),
+        col("userDesignation").alias("Designation")identifier,
         col("userGroup").alias("Group"),
         col("userGender").alias("Gender"),
         col("userCategory").alias("Category"),
@@ -335,7 +335,7 @@ object BlendedProgramReportModel extends AbsDashboardModel {
         col("Status"),col("Component_Duration"),col("Component_Progress_Percentage"),col("Component_Completed_On"),col("Last_Accessed_On"),
         col("Offline_Session_Date"),col("Offline_Session_Start_Time"),col("Offline_Session_End_Time"),col("Offline_Attendance_Status"),col("Instructor(s)_Name"),
         col("Program_Coordinator_Name"),col("Certificate_Generated"),col("Report_Last_Generated_On")
-      ).distinct()
+      )
     val columnsToKeepInCBPReport = cbpReportDF.columns.filter(_ != "status")
     generateAndSyncReports(cbpReportDF.filter(col("status").cast("int") === 1).select(columnsToKeepInCBPReport.map(col): _*), "mdoid", reportPathCBP, "BlendedProgramReport")
 
