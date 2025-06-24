@@ -30,7 +30,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
           0.0
         }
       })
-
+      val dwPostgresUrl = s"jdbc:postgresql://${conf.dwPostgresHost}/${conf.dwPostgresSchema}"
       var nlw_mdo_id = "01358339603629670470"
       val stateLearningWeekStartString = conf.stateLearningWeekStart
       val stateLearningWeekEndString = conf.stateLearningWeekEnd
