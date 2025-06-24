@@ -22,7 +22,7 @@ object WeeklyClapsModel extends AbsDashboardModel {
     val (weekStart, weekEnd, weekEndTime, dataTillDate) = getThisWeekDates()
 //    val weekStart = ""     //for manual testing
 //    val weekEndTime = ""
-
+    val dwPostgresUrl = s"jdbc:postgresql://${conf.dwPostgresHost}/${conf.dwPostgresSchema}"
     //get existing weekly-claps data
     val existingWeeklyClapsDF = cache.load("weeklyClaps")
     // get platform engagement data from summary-events druid datasource
