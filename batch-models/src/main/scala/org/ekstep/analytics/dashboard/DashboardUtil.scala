@@ -114,6 +114,10 @@ case class DashboardConfig (
                              postgresCompetencyHierarchyTable: String,
                              dwEventsTable: String,
                              dwEventsEnrolmentTable: String,
+                             dwLearnerStatsTable: String,
+                             dwSLWMdoLeaderboardTable: String,
+                             dwSLWMdoTopLearnerTable: String,
+                             dwNLWUserLeaderboardTable: String,
 
                              // redis keys
                              redisRegisteredOfficerCountKey: String, redisTotalOfficerCountKey: String, redisOrgNameKey: String,
@@ -272,7 +276,10 @@ object DashboardConfigParser extends Serializable {
       postgresCompetencyHierarchyTable = getConfigModelParam(config, "postgresCompetencyHierarchyTable"),
       dwEventsTable = getConfigModelParam(config, "dwEventsTable"),
       dwEventsEnrolmentTable = getConfigModelParam(config, "dwEventsEnrolmentTable"),
-
+      dwLearnerStatsTable = getConfigModelParam(config, "dwLearnerStatsTable"),
+      dwSLWMdoLeaderboardTable = getConfigModelParam(config, "dwSLWMdoLeaderboardTable"),
+      dwSLWMdoTopLearnerTable = getConfigModelParam(config, "dwSLWMdoTopLearnerTable"),
+      dwNLWUserLeaderboardTable = getConfigModelParam(config, "dwNLWUserLeaderboardTable"),
       // cassandra key spaces
       cassandraUserKeyspace = getConfigModelParam(config, "cassandraUserKeyspace"),
       cassandraCourseKeyspace = getConfigModelParam(config, "cassandraCourseKeyspace"),

@@ -311,7 +311,8 @@ object NationalLearningWeekModel extends AbsDashboardModel {
           col("last_credit_date"))
         .dropDuplicates("userid")
 
-      writeToCassandra(selectedColUserLeaderboardDF, conf.cassandraUserKeyspace, conf.cassandraNLWUserLeaderboardTable)
+      //writeToCassandra(selectedColUserLeaderboardDF, conf.cassandraUserKeyspace, conf.cassandraNLWUserLeaderboardTable)
+      saveDataframeToPostgresTable_With_Append(selectedColUserLeaderboardDF, dwPostgresUrl, conf.dwNLWUserLeaderboardTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
 
       val userWithMinistryForTopLearnersDF = selectedColUserLeaderboardDF
         .join(orgHierarchyDF, selectedColUserLeaderboardDF("org_id") === orgHierarchyDF("mdo_id"), "left")
@@ -341,7 +342,8 @@ object NationalLearningWeekModel extends AbsDashboardModel {
           col("total_learning_hours")
         )
 
-      writeToCassandra(ministryTopLearnersFilteredDF, conf.cassandraUserKeyspace, conf.cassandraSLWMdoTopLearnerTable)
+      //writeToCassandra(ministryTopLearnersFilteredDF, conf.cassandraUserKeyspace, conf.cassandraSLWMdoTopLearnerTable)
+      saveDataframeToPostgresTable_With_Append(ministryTopLearnersFilteredDF, dwPostgresUrl, conf.dwSLWMdoTopLearnerTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
 
       val filteredOrgHierarchyDF = orgHierarchyDF
         .filter(col("ministry_id").isNotNull) // Ensure ministry_id is present
@@ -420,7 +422,8 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         col("active_users_count").alias("total_learning_hours"),
         col("row_num"))
 
-      writeToCassandra(finalDF, conf.cassandraUserKeyspace, conf.cassandraSLWMdoLeaderboardTable)
+      //writeToCassandra(finalDF, conf.cassandraUserKeyspace, conf.cassandraSLWMdoLeaderboardTable)
+      saveDataframeToPostgresTable_With_Append(finalDF, dwPostgresUrl, conf.dwSLWMdoLeaderboardTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
 
 
     } catch {

@@ -71,7 +71,8 @@ object WeeklyClapsModel extends AbsDashboardModel {
 
     df = df.drop("platformEngagementTime","sessionCount")
 
-    writeToCassandra(df, conf.cassandraUserKeyspace, conf.cassandraLearnerStatsTable)
+    //writeToCassandra(df, conf.cassandraUserKeyspace, conf.cassandraLearnerStatsTable)
+    saveDataframeToPostgresTable_With_Append(df, dwPostgresUrl, conf.dwLearnerStatsTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
   }catch {
     case e: Exception =>
       println(s"Error occurred during WeeklyClapsModel processing: ${e.getMessage}", e)
