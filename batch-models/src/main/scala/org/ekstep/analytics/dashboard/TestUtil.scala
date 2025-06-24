@@ -97,6 +97,10 @@ object TestUtil extends Serializable {
       "dwContentResourceTable" -> "content_resource",
       "dwEventsTable" -> "events",
       "dwEventsEnrolmentTable" -> "events_enrolment",
+      "dwLearnerStatsTable" -> "learner_stats",
+      "dwSLWMdoLeaderboardTable" -> "slw_mdo_leaderboard",
+      "dwSLWMdoTopLearnerTable" -> "slw_mdo_top_learners",
+      "dwNLWUserLeaderboardTable" -> "nlw_user_leaderboard",
 
       "cassandraUserKeyspace" -> "sunbird",
       "cassandraCourseKeyspace" -> "sunbird_courses",
