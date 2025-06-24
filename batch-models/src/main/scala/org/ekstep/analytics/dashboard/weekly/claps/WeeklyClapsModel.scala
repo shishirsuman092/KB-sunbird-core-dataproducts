@@ -22,7 +22,7 @@ object WeeklyClapsModel extends AbsDashboardModel {
     val (weekStart, weekEnd, weekEndTime, dataTillDate) = getThisWeekDates()
 //    val weekStart = ""     //for manual testing
 //    val weekEndTime = ""
-    val dwPostgresUrl = s"jdbc:postgresql://${conf.dwPostgresHost}/${conf.dwPostgresSchema}"
+    val appPostgresUrl =  s"jdbc:postgresql://${conf.appPostgresHost}/${conf.appPostgresSchema}"
     //get existing weekly-claps data
     val existingWeeklyClapsDF = cache.load("weeklyClaps")
     // get platform engagement data from summary-events druid datasource
@@ -72,7 +72,7 @@ object WeeklyClapsModel extends AbsDashboardModel {
     df = df.drop("platformEngagementTime","sessionCount")
 
     //writeToCassandra(df, conf.cassandraUserKeyspace, conf.cassandraLearnerStatsTable)
-    saveDataframeToPostgresTable_With_Append(df, dwPostgresUrl, conf.dwLearnerStatsTable, conf.dwPostgresUsername, conf.dwPostgresCredential)
+    saveDataframeToPostgresTable_With_Append(df, appPostgresUrl, conf.dwLearnerStatsTable, conf.appPostgresUsername, conf.appPostgresCredential)
   }catch {
     case e: Exception =>
       println(s"Error occurred during WeeklyClapsModel processing: ${e.getMessage}", e)
