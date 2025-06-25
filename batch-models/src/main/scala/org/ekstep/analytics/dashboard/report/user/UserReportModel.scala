@@ -125,7 +125,7 @@ object UserReportModel extends AbsDashboardModel {
         col("professionalDetails.designation").alias("designation"),
         col("personalDetails.primaryEmail").alias("email"),
         col("personalDetails.mobile").alias("phone_number"),
-        col("personalDetails.pincode").alias("Pincode"),
+        col("personalDetails.pincode").alias("pincode"),
         col("professionalDetails.group").alias("groups"),
         col("Tag").alias("tag"),
         col("userProfileStatus").alias("profile_status"),
