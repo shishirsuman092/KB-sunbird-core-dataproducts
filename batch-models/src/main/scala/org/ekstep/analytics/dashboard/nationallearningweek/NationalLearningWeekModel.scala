@@ -311,7 +311,10 @@ object NationalLearningWeekModel extends AbsDashboardModel {
           col("last_credit_date"))
         .dropDuplicates("userid")
 
-      //writeToCassandra(selectedColUserLeaderboardDF, conf.cassandraUserKeyspace, conf.cassandraNLWUserLeaderboardTable)
+      val alignedDF = selectedColUserLeaderboardDF
+        .withColumn("last_credit_date", col("last_credit_date").cast("string"))
+        .withColumn("total_learning_hours", col("total_learning_hours").cast("string"))
+        .withColumn("count", col("count").cast("int"))
       saveDataframeToPostgresTable_With_Append(selectedColUserLeaderboardDF, appPostgresUrl, conf.dwNLWUserLeaderboardTable, conf.appPostgresUsername, conf.appPostgresCredential)
 
       val userWithMinistryForTopLearnersDF = selectedColUserLeaderboardDF
@@ -341,8 +344,6 @@ object NationalLearningWeekModel extends AbsDashboardModel {
           col("row_num"),
           col("total_learning_hours")
         )
-
-      //writeToCassandra(ministryTopLearnersFilteredDF, conf.cassandraUserKeyspace, conf.cassandraSLWMdoTopLearnerTable)
       saveDataframeToPostgresTable_With_Append(ministryTopLearnersFilteredDF, appPostgresUrl, conf.dwSLWMdoTopLearnerTable, conf.appPostgresUsername, conf.appPostgresCredential)
 
       val filteredOrgHierarchyDF = orgHierarchyDF
@@ -354,40 +355,15 @@ object NationalLearningWeekModel extends AbsDashboardModel {
       // Step 2: Group by parent_id, dept_id, department & collect all unique MDOs
       val departmentToMDOsDF = filteredOrgHierarchyDF
         .groupBy("mdo_id", "mdo_name")
-      //.agg(collect_set("mdo_id").alias("child_mdos")) // Collect all MDOs under each department
-      //.withColumn("mdo_ids", array_union(col("child_mdos"), array(col("dept_id")))) // Add dept_id & ensure uniqueness
-      //.drop("child_mdos") // Drop intermediate column
-      //val explodedDeptMDOsDF = departmentToMDOsDF.withColumn("mdo_id", explode(col("mdo_ids")))
-
 
       val userWithDeptDF = selectedColUserLeaderboardDF
         .join(filteredOrgHierarchyDF, selectedColUserLeaderboardDF("org_id") === filteredOrgHierarchyDF("mdo_id"), "inner")
         .select(
           col("userid"),
           col("parent_id"),
-          col("mdo_name"),
+          col("mdo_name").alias("org_name"),
           col("mdo_id").alias("org_id"),
           coalesce(col("total_learning_hours"), lit(0)).alias("total_learning_hours"))
-
-      //   val ministryWiseDeptDF = userWithDeptDF
-      //     .groupBy("parent_id", "org_id", "org_name")
-      //     .agg(sum("total_learning_hours").alias("total_learning_hours"), countDistinct("userid").alias("total_users"))
-      //     .withColumn("size", when(col("total_users") < 200, "S").otherwise("M"))
-
-
-      //   val windowSpec = Window.partitionBy("parent_id").orderBy(col("total_learning_hours").desc, rand())
-
-      //   val rankedDF = ministryWiseDeptDF.withColumn("row_num", row_number().over(windowSpec))
-
-      //   val finalDF = rankedDF.select(
-      //    col("parent_id"),
-      //    col("org_id"),
-      //    col("org_name"),
-      //    col("size"),
-      //    col("total_users"),
-      //    col("total_learning_hours"),
-      //    col("row_num"))), lit(0)).alias("total_learning_hours"))
-
 
       val userWithDeptFilteredDF = userWithDeptDF.filter(col("total_learning_hours") >= 4)
       val ministryWiseDeptDF = userWithDeptFilteredDF.groupBy("parent_id", "org_id", "org_name").agg(countDistinct("userid").alias("active_users_count"))
@@ -421,10 +397,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         col("total_users"),
         col("active_users_count").alias("total_learning_hours"),
         col("row_num"))
-
-      //writeToCassandra(finalDF, conf.cassandraUserKeyspace, conf.cassandraSLWMdoLeaderboardTable)
       saveDataframeToPostgresTable_With_Append(finalDF, appPostgresUrl, conf.dwSLWMdoLeaderboardTable, conf.appPostgresUsername, conf.appPostgresCredential)
-
 
     } catch {
       case e: Exception =>
