@@ -30,6 +30,7 @@ object CommsReportModel extends AbsDashboardModel {
     val orgDF = warehouseCache.load(conf.dwOrgTable)
       .withColumn("department", when(col("ministry").isNotNull && col("department").isNull, col("mdo_name")).otherwise(col("department")))
       .withColumn("ministry", when(col("ministry").isNull && col("department").isNull, col("mdo_name")).otherwise(col("ministry")))
+      .withColumnRenamed("mdo_name", "organization")
       .select("mdo_id", "ministry", "department", "organization")
 
     val userDF =warehouseCache.load(conf.dwUserTable).repartition(200)
