@@ -2,11 +2,14 @@ package org.ekstep.analytics.dashboard.report.blended
 
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.ekstep.analytics.dashboard.DashboardUtil._
 import org.ekstep.analytics.dashboard.DataUtil._
 import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig, Redis}
 import org.ekstep.analytics.framework.FrameworkContext
+import org.apache.commons.io.FileUtils
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.{Column, DataFrame, Row, SparkSession}
 
 
 object BlendedProgramReportModel extends AbsDashboardModel {
@@ -23,6 +26,75 @@ object BlendedProgramReportModel extends AbsDashboardModel {
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
     try{
     val today = getDate()
+    val level3ChildSchema = StructType(Array(
+        StructField("identifier", StringType, nullable = true),
+        StructField("name", StringType, nullable = true),
+        StructField("channel", StringType, nullable = true),
+        StructField("duration", StringType, nullable = true),
+        StructField("primaryCategory", StringType, nullable = true),
+        StructField("leafNodesCount", IntegerType, nullable = true),
+        StructField("contentType", StringType, nullable = true),
+        StructField("objectType", StringType, nullable = true),
+        StructField("showTimer", StringType, nullable = true),
+        StructField("allowSkip", StringType, nullable = true)
+      ))
+
+      // Direct Schema Definition for Child (Level 2 - has level 3 children)
+      val level2ChildSchema = StructType(Array(
+        StructField("identifier", StringType, nullable = true),
+        StructField("name", StringType, nullable = true),
+        StructField("channel", StringType, nullable = true),
+        StructField("duration", StringType, nullable = true),
+        StructField("primaryCategory", StringType, nullable = true),
+        StructField("leafNodesCount", IntegerType, nullable = true),
+        StructField("contentType", StringType, nullable = true),
+        StructField("objectType", StringType, nullable = true),
+        StructField("showTimer", StringType, nullable = true),
+        StructField("allowSkip", StringType, nullable = true),
+        StructField("children", ArrayType(level3ChildSchema), nullable = true) // Level 3 children
+      ))
+
+      // Direct Schema Definition for Child (Level 1 - has level 2 children)
+      val level1ChildSchema = StructType(Array(
+        StructField("identifier", StringType, nullable = true),
+        StructField("name", StringType, nullable = true),
+        StructField("channel", StringType, nullable = true),
+        StructField("duration", StringType, nullable = true),
+        StructField("primaryCategory", StringType, nullable = true),
+        StructField("leafNodesCount", IntegerType, nullable = true),
+        StructField("contentType", StringType, nullable = true),
+        StructField("objectType", StringType, nullable = true),
+        StructField("showTimer", StringType, nullable = true),
+        StructField("allowSkip", StringType, nullable = true),
+        StructField("children", ArrayType(level2ChildSchema), nullable = true) // Level 2 children
+      ))
+
+      // Direct Main Hierarchy Schema Definition (Root level - has level 1 children)
+      val hierarchySchema = StructType(Array(
+        StructField("name", StringType, nullable = true),
+        StructField("status", StringType, nullable = true),
+        StructField("reviewStatus", StringType, nullable = true),
+        StructField("channel", StringType, nullable = true),
+        StructField("duration", StringType, nullable = true),
+        StructField("primaryCategory", StringType, nullable = true),
+        StructField("leafNodesCount", IntegerType, nullable = true),
+        StructField("leafNodes", ArrayType(StringType), nullable = true),
+        StructField("publish_type", StringType, nullable = true),
+        StructField("isExternal", BooleanType, nullable = true),
+        StructField("contentType", StringType, nullable = true),
+        StructField("objectType", StringType, nullable = true),
+        StructField("userConsent", StringType, nullable = true),
+        StructField("visibility", StringType, nullable = true),
+        StructField("createdOn", StringType, nullable = true),
+        StructField("lastUpdatedOn", StringType, nullable = true),
+        StructField("lastPublishedOn", StringType, nullable = true),
+        StructField("lastSubmittedOn", StringType, nullable = true),
+        StructField("lastStatusChangedOn", StringType, nullable = true),
+        StructField("createdFor", ArrayType(StringType), nullable = true),
+        StructField("children", ArrayType(level1ChildSchema), nullable = true), // Level 1 children
+        StructField("competencies_v3", StringType, nullable = true) // Optional competencies field
+      ))
+
 
     // get user and user org data
     val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
@@ -95,8 +167,8 @@ object BlendedProgramReportModel extends AbsDashboardModel {
 
     // children
     val hierarchyDF = contentHierarchyDataFrame()
-
-    val bpChildDF = bpChildDataFrame(blendedProgramESDF, hierarchyDF)
+    val parsedHierarchyDF = hierarchyDF.withColumn("data", from_json(col("hierarchy"), hierarchySchema)).select("identifier", "data.*")
+    val bpChildDF = bpChildDataFrame(blendedProgramESDF, hierarchyDF, parsedHierarchyDF)
 
     // add children info to bpCompletionWithUserDetailsDF
     val bpCompletionWithChildrenDF = bpCompletionWithUserDetailsDF.join(bpChildDF, Seq("bpID"), "left")
@@ -263,7 +335,7 @@ object BlendedProgramReportModel extends AbsDashboardModel {
         col("Status"),col("Component_Duration"),col("Component_Progress_Percentage"),col("Component_Completed_On"),col("Last_Accessed_On"),
         col("Offline_Session_Date"),col("Offline_Session_Start_Time"),col("Offline_Session_End_Time"),col("Offline_Attendance_Status"),col("Instructor(s)_Name"),
         col("Program_Coordinator_Name"),col("Certificate_Generated"),col("Report_Last_Generated_On")
-      ).distinct()
+      )
     val columnsToKeepInCBPReport = cbpReportDF.columns.filter(_ != "status")
     generateAndSyncReports(cbpReportDF.filter(col("status").cast("int") === 1).select(columnsToKeepInCBPReport.map(col): _*), "mdoid", reportPathCBP, "BlendedProgramReport")
 
@@ -335,36 +407,74 @@ object BlendedProgramReportModel extends AbsDashboardModel {
     (bpBatchDF, bpBatchSessionDF)
   }
 
-  def bpChildDataFrame(blendedProgramESDF: DataFrame, hierarchyDF: DataFrame)(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
+  def bpChildDataFrame(blendedProgramESDF: DataFrame, hierarchyDF: DataFrame, parsedHierarchyDF: DataFrame)(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
     val bpIDsDF = blendedProgramESDF.select("bpID")
 
-    // L1 children with modules (course units)
-    val bpChildL1WithModulesDF = addHierarchyColumn(bpIDsDF, hierarchyDF, "bpID", "data", children = true, l2Children = true)
-      .withColumn("bpChild", explode_outer(col("data.children")))
-      .drop("identifier", "data")
+    var currentDF = bpIDsDF
+      .join(parsedHierarchyDF, bpIDsDF("bpID") === parsedHierarchyDF("identifier"), "left")
+      .withColumn("bpChild", explode_outer(col("children")))
+      .select(col("bpID"), col("bpChild.*"))
 
-    // L1 children without modules
-    val bpChildL1DF = bpChildL1WithModulesDF.where(expr("bpChild.primaryCategory != 'Course Unit'"))
-      .withColumn("bpChildID", col("bpChild.identifier"))
-      .withColumn("bpChildName", col("bpChild.name"))
-      .withColumn("bpChildCategory", col("bpChild.primaryCategory"))
-      .withColumn("bpChildDuration", col("bpChild.duration"))
-      .withColumn("bpChildResourceCount", col("bpChild.leafNodesCount"))
-      .drop("bpChild")
+    // Case 1: Not Course or Course Unit → pick directly
+    val level1DirectDF = currentDF
+      .filter(!col("primaryCategory").isin("Course", "Course Unit") && col("identifier").isNotNull)
+      .select(
+        col("bpID"),
+        col("identifier").alias("bpChildID"),
+        col("name").alias("bpChildName"),
+        col("primaryCategory").alias("bpChildCategory"),
+        col("duration").alias("bpChildDuration"),
+        col("leafNodesCount").alias("bpChildResourceCount")
+      )
 
-    // L2 children (i.e. children of the modules)
-    val bpChildL2DF = bpChildL1WithModulesDF.where(expr("bpChild.primaryCategory = 'Course Unit'"))
-      .withColumn("bpModuleChild", explode_outer(col("bpChild.children")))
-      .drop("bpChild")
-      .withColumn("bpChildID", col("bpModuleChild.identifier"))
-      .withColumn("bpChildName", col("bpModuleChild.name"))
-      .withColumn("bpChildCategory", col("bpModuleChild.primaryCategory"))
-      .withColumn("bpChildDuration", col("bpModuleChild.duration"))
-      .withColumn("bpChildResourceCount", col("bpModuleChild.leafNodesCount"))
-      .drop("bpModuleChild")
+    // Case 2: Course → Course Unit → LR
+    val courseDF = currentDF
+      .filter(col("primaryCategory") === "Course" && col("children").isNotNull)
+      .withColumn("courseUnit", explode_outer(col("children")))
+      .select(col("bpID"), col("courseUnit.*"))
 
-    // merge L1 and L2 children
-    bpChildL1DF.union(bpChildL2DF)
+    val nonCourseUnitInCourseDF = courseDF
+      .filter(col("primaryCategory") =!= "Course Unit" && col("identifier").isNotNull)
+      .select(
+        col("bpID"),
+        col("identifier").alias("bpChildID"),
+        col("name").alias("bpChildName"),
+        col("primaryCategory").alias("bpChildCategory"),
+        col("duration").alias("bpChildDuration"),
+        col("leafNodesCount").alias("bpChildResourceCount")
+      )
+
+
+    // Course Unit → Learning Resource
+    val courseUnitInCourseDF = courseDF
+      .filter(col("primaryCategory") === "Course Unit" && col("children").isNotNull)
+      .withColumn("courseUnitChild", explode_outer(col("children")))
+      .select(
+        col("bpID"),
+        col("courseUnitChild.identifier").alias("bpChildID"),
+        col("courseUnitChild.name").alias("bpChildName"),
+        col("courseUnitChild.primaryCategory").alias("bpChildCategory"),
+        col("courseUnitChild.duration").alias("bpChildDuration"),
+        col("courseUnitChild.leafNodesCount").alias("bpChildResourceCount")
+      )
+
+    // Case 3: Course Unit → LR
+    val courseUnitDF = currentDF
+      .filter(col("primaryCategory") === "Course Unit" && col("children").isNotNull)
+      .withColumn("unitChild", explode_outer(col("children")))
+      .select(
+        col("bpID"),
+        col("unitChild.identifier").alias("bpChildID"),
+        col("unitChild.name").alias("bpChildName"),
+        col("unitChild.primaryCategory").alias("bpChildCategory"),
+        col("unitChild.duration").alias("bpChildDuration"),
+        col("unitChild.leafNodesCount").alias("bpChildResourceCount")
+      )
+
+    level1DirectDF
+      .unionByName(nonCourseUnitInCourseDF)
+      .unionByName(courseUnitInCourseDF)
+      .unionByName(courseUnitDF)
   }
 }
 
