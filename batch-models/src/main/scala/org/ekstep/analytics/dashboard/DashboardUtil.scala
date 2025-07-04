@@ -905,6 +905,20 @@ object DashboardUtil extends Serializable {
     }
   }
 
+  def truncateWarehouseTable(table: String, dwPostgresUrl: String)(implicit spark: SparkSession, conf: DashboardConfig): Unit = {
+    val postgresProperties = new java.util.Properties()
+    postgresProperties.setProperty("user", conf.dwPostgresUsername)
+    postgresProperties.setProperty("password", conf.dwPostgresCredential)
+    postgresProperties.setProperty("driver", "org.postgresql.Driver")
+
+    val connection = java.sql.DriverManager.getConnection(dwPostgresUrl, postgresProperties)
+    try {
+      val statement = connection.createStatement()
+      statement.executeUpdate(s"TRUNCATE TABLE ${table}")
+    } finally {
+      connection.close()
+    }
+  }
 
   def mongodbTableAsDataFrame(mongoDatabase: String, collection: String)(implicit spark: SparkSession): DataFrame = {
     val schema = new StructType()
