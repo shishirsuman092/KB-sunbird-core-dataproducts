@@ -315,6 +315,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         .withColumn("last_credit_date", col("last_credit_date").cast("string"))
         .withColumn("total_learning_hours", col("total_learning_hours").cast("string"))
         .withColumn("count", col("count").cast("int"))
+      truncateWarehouseTable(conf.dwNLWUserLeaderboardTable, appPostgresUrl)
       saveDataframeToPostgresTable_With_Append(selectedColUserLeaderboardDF, appPostgresUrl, conf.dwNLWUserLeaderboardTable, conf.appPostgresUsername, conf.appPostgresCredential)
 
       val userWithMinistryForTopLearnersDF = selectedColUserLeaderboardDF
@@ -344,6 +345,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
           col("row_num"),
           col("total_learning_hours")
         )
+      truncateWarehouseTable(conf.dwSLWMdoTopLearnerTable, appPostgresUrl)
       saveDataframeToPostgresTable_With_Append(ministryTopLearnersFilteredDF, appPostgresUrl, conf.dwSLWMdoTopLearnerTable, conf.appPostgresUsername, conf.appPostgresCredential)
 
       val filteredOrgHierarchyDF = orgHierarchyDF
@@ -397,6 +399,8 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         col("total_users"),
         col("active_users_count").alias("total_learning_hours"),
         col("row_num"))
+
+      truncateWarehouseTable(conf.dwSLWMdoLeaderboardTable, appPostgresUrl)
       saveDataframeToPostgresTable_With_Append(finalDF, appPostgresUrl, conf.dwSLWMdoLeaderboardTable, conf.appPostgresUsername, conf.appPostgresCredential)
 
     } catch {
