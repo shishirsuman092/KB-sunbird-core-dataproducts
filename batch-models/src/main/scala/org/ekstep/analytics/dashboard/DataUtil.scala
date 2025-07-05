@@ -423,6 +423,8 @@ object DataUtil extends Serializable {
       )
       .na.fill("", Seq("userOrgID", "firstName", "lastName"))
       .na.fill("{}", Seq("userProfileDetails"))
+      .withColumn("firstName", when(length(col("firstName")) > 100, substring(col("firstName"), 1, 100)).otherwise(col("firstName")))
+      .withColumn("lastName", when(length(col("lastName")) > 100, substring(col("lastName"), 1, 100)).otherwise(col("lastName")))
       .withColumn("profileDetails", from_json(col("userProfileDetails"), profileDetailsSchema))
       .withColumn("personalDetails", col("profileDetails.personalDetails"))
       .withColumn("employmentDetails", col("profileDetails.employmentDetails"))
