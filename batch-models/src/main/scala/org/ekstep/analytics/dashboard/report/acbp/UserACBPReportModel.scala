@@ -77,7 +77,7 @@ object UserACBPReportModel extends AbsDashboardModel {
       .groupByLimit(Seq("userID", "courseID"), "completionDueDate", 1, desc = true)
     kafkaDispatch(withTimestamp(acbpEnrolmentDF, timestamp), conf.acbpEnrolmentTopic)
 
-    acbpEnrolmentDF.cache()
+    //acbpEnrolmentDF.cache()
 
     // for enrolment report
     val enrolmentReportDataDF = acbpEnrolmentDF
