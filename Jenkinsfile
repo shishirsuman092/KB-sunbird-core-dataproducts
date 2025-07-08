@@ -21,19 +21,12 @@ node('build-slave') {
         }
 stage('Build') {
         sh '''
-            echo "Available memory:"
+           echo "Available memory:"
             free -h
             export MAVEN_OPTS="-Xss64m -Xmx12g -XX:MetaspaceSize=1024m -XX:MaxMetaspaceSize=2g -XX:+UseG1GC"
             echo "Maven opts: $MAVEN_OPTS"
-            # Try to compile with more verbose output to identify the problematic file
-            mvn clean compile -DskipTests -X -Dscala.maven.plugin.jvmArgs="-Xss64m -Xmx12g" \
-                -Dscala.maven.plugin.args="-verbose -Ylog-classpath" \
-                -pl batch-models 2>&1 | tee compile.log
-            # If that fails, try the other modules first
-            if [ $? -ne 0 ]; then
-                echo "batch-models failed, building other modules first..."
-                mvn clean install -DskipTests -pl '!batch-models'
-            fi
+            # Build with the updated POM configuration
+            mvn clean install -DskipTests
         '''
     }
         stage('Archive artifacts'){
