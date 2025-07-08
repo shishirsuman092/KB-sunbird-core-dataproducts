@@ -29,6 +29,7 @@ stage('Build') {
             mvn clean install -DskipTests -Dscala.maven.plugin.jvmArgs="-Xss32m -Xmx8g"
         '''
     }
+}
         stage('Archive artifacts'){
             sh """
                         mkdir lpa_core_dp_artifacts
