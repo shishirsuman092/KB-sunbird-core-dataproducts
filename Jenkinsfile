@@ -23,9 +23,9 @@ stage('Build') {
         sh '''
             echo "Available memory:"
             free -h
-            export MAVEN_OPTS="-Xss32m -Xmx8g -XX:MetaspaceSize=512m -XX:MaxMetaspaceSize=1g -XX:+UseG1GC"
+            export MAVEN_OPTS="-Xss64m -Xmx12g -XX:MetaspaceSize=1024m -XX:MaxMetaspaceSize=2g -XX:+UseG1GC"
             echo "Maven opts: $MAVEN_OPTS"
-            mvn clean install -DskipTests -Dscala.maven.plugin.jvmArgs="-Xss32m -Xmx8g"
+            mvn clean install -DskipTests -Dscala.maven.plugin.jvmArgs="-Xss64m -Xmx12g"
         '''
     }
         stage('Archive artifacts'){
