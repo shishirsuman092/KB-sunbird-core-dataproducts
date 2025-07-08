@@ -19,15 +19,16 @@ node('build-slave') {
                 #sed -i "s/'replication_factor': '2'/'replication_factor': '1'/g" scripts/database/data.cql
                 '''
         }
-        stage('Build') {
-            sh '''
-               echo "Available memory:"
-               free -h
-               export MAVEN_OPTS="-Xss16m -Xmx8g -XX:MetaspaceSize=512m -XX:MaxMetaspaceSize=1g -XX:+UseG1GC"
-               echo "Maven opts: $MAVEN_OPTS"
-                mvn clean install -DskipTests
-                '''
-        }
+stage('Build') {
+    steps {
+        sh '''
+            echo "Available memory:"
+            free -h
+            export MAVEN_OPTS="-Xss32m -Xmx8g -XX:MetaspaceSize=512m -XX:MaxMetaspaceSize=1g -XX:+UseG1GC"
+            echo "Maven opts: $MAVEN_OPTS"
+            mvn clean install -DskipTests -Dscala.maven.plugin.jvmArgs="-Xss32m -Xmx8g"
+        '''
+    }
         stage('Archive artifacts'){
             sh """
                         mkdir lpa_core_dp_artifacts
