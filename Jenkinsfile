@@ -21,6 +21,10 @@ node('build-slave') {
         }
         stage('Build') {
             sh '''
+               echo "Available memory:"
+               free -h
+               export MAVEN_OPTS="-Xss16m -Xmx8g -XX:MetaspaceSize=512m -XX:MaxMetaspaceSize=1g -XX:+UseG1GC"
+               echo "Maven opts: $MAVEN_OPTS"
                 mvn clean install -DskipTests
                 '''
         }
