@@ -387,18 +387,13 @@ object NationalLearningWeekModel extends AbsDashboardModel {
       val ministryWiseDeptWithSizeDF = ministryWiseDeptDF.join(userWithDeptDF.groupBy("parent_id", "org_id").agg(countDistinct("userid")
         .alias("total_users")), Seq("parent_id", "org_id"), "left").withColumn("size", sizeColumn)
 
-      val windowSpec = Window.partitionBy("org_id", "size").orderBy(col("active_users_count").desc, rand())
+      val windowSpec = Window.partitionBy("parent_id-", "size").orderBy(col("active_users_count").desc, rand())
 
       val rankedDF = ministryWiseDeptWithSizeDF.withColumn("row_num", row_number().over(windowSpec))
 
-      val finalDF = rankedDF.select(
-        col("parent_id"),
-        col("org_id"),
-        col("org_name"),
-        col("size"),
-        col("total_users"),
-        col("active_users_count").alias("total_learning_hours"),
-        col("row_num"))
+      val finalDF = rankedDF.select(col("parent_id").cast(StringType), col("org_id").cast(StringType), col("org_name").cast(StringType),
+        col("size").cast(StringType), col("total_users").cast(IntegerType),
+        coalesce(col("active_users_count"), lit(0)).cast(IntegerType).alias("total_learning_hours"), col("row_num").cast(IntegerType))
 
       truncateWarehouseTable(conf.dwSLWMdoLeaderboardTable, appPostgresUrl)
       saveDataframeToPostgresTable_With_Append(finalDF, appPostgresUrl, conf.dwSLWMdoLeaderboardTable, conf.appPostgresUsername, conf.appPostgresCredential)

@@ -5,6 +5,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
 import org.ekstep.analytics.dashboard.DashboardUtil._
 import org.ekstep.analytics.dashboard.DataUtil._
+import java.sql.{Connection, DriverManager, Statement}
 import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig}
 import org.ekstep.analytics.framework.FrameworkContext
 import org.ekstep.analytics.framework.util.JobLogger
@@ -29,9 +30,8 @@ object WeeklyClapsModel extends AbsDashboardModel {
     val platformEngagementDF = usersPlatformEngagementDataframe(weekStart, weekEndTime)
 
     val joinedWithExistingDF = existingWeeklyClapsDF.join(platformEngagementDF, Seq("userid"), "full")
-      .withColumn("w4", map(
-        lit("timespent"), when(col("platformEngagementTime").isNull, 0).otherwise(col("platformEngagementTime")),
-        lit("numberOfSessions"), when(col("sessionCount").isNull, 0).otherwise(col("sessionCount"))
+      .withColumn("w4", struct(when(col("platformEngagementTime").isNull, 0).otherwise(col("platformEngagementTime")).alias("timespent"), when(col("sessionCount").isNull, 0)
+        .otherwise(col("sessionCount")).alias("numberOfSessions")
       ))
 
     var df = joinedWithExistingDF
@@ -56,7 +56,11 @@ object WeeklyClapsModel extends AbsDashboardModel {
         .withColumn("total_claps", when(condition, col("total_claps") + 1).otherwise(col("total_claps")))
         .withColumn("last_updated_on", lit(dataTillDate))
         .withColumn("claps_updated_this_week", lit(false))
-        .withColumn("w4", map(lit("timespent"), lit(0.0), lit("numberOfSessions"), lit(0)))
+        .withColumn("w4",struct(
+          lit(0.0).alias("timespent"),
+          lit(0).alias("numberOfSessions")
+        ))
+
 
       JobLogger.log("Completed weekend updates")
 
@@ -72,7 +76,14 @@ object WeeklyClapsModel extends AbsDashboardModel {
     df = df.drop("platformEngagementTime","sessionCount")
 
     //writeToCassandra(df, conf.cassandraUserKeyspace, conf.cassandraLearnerStatsTable)
+    val finalDF = df.withColumn("w1", to_json(col("w1")))
+      .withColumn("w2", to_json(col("w2")))
+      .withColumn("w3", to_json(col("w3")))
+      .withColumn("w4", to_json(col("w4")))
+    finalDF.printSchema()
+    truncateWarehouseTable(conf.dwLearnerStatsTable, appPostgresUrl)
     saveDataframeToPostgresTable_With_Append(df, appPostgresUrl, conf.dwLearnerStatsTable, conf.appPostgresUsername, conf.appPostgresCredential)
+
   }catch {
     case e: Exception =>
       println(s"Error occurred during WeeklyClapsModel processing: ${e.getMessage}", e)
