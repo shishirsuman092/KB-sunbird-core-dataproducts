@@ -37,23 +37,23 @@ object DashboardSyncModel extends AbsDashboardModel {
       // obtain and save user org data
       val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
       val activeUsers = userDF.where(col("userStatus") === 1).cache()
-      val activeOrgs = orgDF.where(col("orgStatus") === 1)
+      val activeOrgs = orgDF.where(col("orgStatus") === 1).cache()
 
       val designationsDF = orgDesignationsDF(userOrgDF)
       Redis.dispatchDataFrame[String]("org_designations", designationsDF, "userOrgID", "org_designations", replace = false)
 
       // kafkaDispatch(withTimestamp(orgDF, timestamp), conf.orgTopic)
-      //kafkaDispatch(withTimestamp(userOrgDF, timestamp), conf.userOrgTopic)
+      kafkaDispatch(withTimestamp(userOrgDF, timestamp), conf.userOrgTopic)
 
       // obtain and save role count data
       val roleDF = roleDataFrame()
-      val userOrgRoleDF = userOrgRoleDataFrame(userOrgDF, roleDF)
+      val userOrgRoleDF = userOrgRoleDataFrame(userOrgDF, roleDF).cache()
       val roleCountDF = roleCountDataFrame(userOrgRoleDF)
-      //kafkaDispatch(withTimestamp(roleCountDF, timestamp), conf.roleUserCountTopic)
+      kafkaDispatch(withTimestamp(roleCountDF, timestamp), conf.roleUserCountTopic)
 
       // obtain and save org role count data
       val orgRoleCount = orgRoleCountDataFrame(userOrgRoleDF)
-      //kafkaDispatch(withTimestamp(orgRoleCount, timestamp), conf.orgRoleUserCountTopic)
+      kafkaDispatch(withTimestamp(orgRoleCount, timestamp), conf.orgRoleUserCountTopic)
 
       // org user count
       val orgUserCountDF = orgUserCountDataFrame(activeOrgs, activeUsers)
@@ -76,7 +76,7 @@ object DashboardSyncModel extends AbsDashboardModel {
 
       // get course competency mapping data, dispatch to kafka to be ingested by druid data-source: dashboards-course-competency
       val allCourseProgramCompetencyDF = allCourseProgramCompetencyDataFrame(allCourseProgramDetailsWithCompDF).cache()
-      //kafkaDispatch(withTimestamp(allCourseProgramCompetencyDF, timestamp), conf.courseCompetencyTopic)
+      kafkaDispatch(withTimestamp(allCourseProgramCompetencyDF, timestamp), conf.courseCompetencyTopic)
 
       // get course completion data, dispatch to kafka to be ingested by druid data-source: dashboards-user-course-program-progress
 
@@ -204,6 +204,7 @@ object DashboardSyncModel extends AbsDashboardModel {
 
     // enrollment/not-started/started/in-progress/completion count, live and retired courses
     val liveRetiredContentEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("courseStatus IN ('Live', 'Retired') AND userStatus=1"))
+    val liveRetiredEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category IN ('Course', 'Program', 'Blended Program', 'CuratedCollections', 'Curated Program') AND courseStatus IN ('Live', 'Retired') AND userStatus=1"))
     val liveRetiredCourseEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category='Course' AND courseStatus IN ('Live', 'Retired') AND userOrgID IS NOT NULL")).cache()
     val liveRetiredCourseProgramEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category IN ('Course', 'Program') AND courseStatus IN ('Live', 'Retired') AND userStatus=1"))
     val liveRetiredCourseProgramExcludingModeratedEnrolmentDF = allCourseProgramCompletionWithDetailsDF.where(expr("category IN ('Course', 'Program', 'Blended Program', 'CuratedCollections', 'Standalone Assessment', 'Curated Program') AND courseStatus IN ('Live', 'Retired') AND userStatus=1"))
@@ -221,7 +222,11 @@ object DashboardSyncModel extends AbsDashboardModel {
     val previousDayStartTimeString = previousDayStartTime.format(DateTimeFormatter.ofPattern(timestampWithTimezoneFormat))
     val previousDayEndTimeString = previousDayEndTime.format(DateTimeFormatter.ofPattern(timestampWithTimezoneFormat))
 
+    println("----start"+previousDayStartTimeString)
+    println("----end"+previousDayEndTimeString)
+
     //To get External content details
+    println("=-=-=-==-=-=-=")
     val externalContentEnrolmentDF = marketPlaceEnrolments()
       .withColumn("certificateID", when(col("issued_certificates").isNull, "").otherwise( col("issued_certificates")(size(col("issued_certificates")) - 1).getItem("identifier")))
       .withColumnRenamed("status", "dbCompletionStatus")
@@ -271,7 +276,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     // Filter the DataFrame based on the previous day's range (from 00:00:00 to 23:59:59)
     val liveRetiredCourseProgramCompletedYesterdayDF = allCourseProgramCompletionWithDetailsDF.where(expr(s"category IN ('Course', 'Program') AND courseStatus IN ('Live', 'Retired') AND userStatus=1 AND dbCompletionStatus=2 AND courseCompletedTimestamp >= ${twentyFourHoursAgoEpochMillisTime}"))
     //For all content types
-    val liveRetiredContentCompletedYesterdayDF = liveRetiredContentEnrolmentDF.withColumn("epoch_seconds", toEpochMillis(col("firstCompletedOn")))
+    val liveRetiredContentCompletedYesterdayDF = liveRetiredEnrolmentDF.withColumn("epoch_seconds", toEpochMillis(col("firstCompletedOn")))
       .where(expr(s"dbCompletionStatus=2 AND epoch_seconds * 1000 >= ${twentyFourHoursAgoEpochMillis} AND epoch_seconds * 1000 <= ${previousDayEndEpochMillis}"))
     // Calculate twelve months ago
     val twelveMonthsAgo = currentDate.minusMonths(12)
@@ -288,13 +293,13 @@ object DashboardSyncModel extends AbsDashboardModel {
     val liveRetiredCourseInProgressDF = liveRetiredCourseStartedDF.where(expr("dbCompletionStatus=1"))
     val liveRetiredCourseCompletedDF = liveRetiredCourseStartedDF.where(expr("dbCompletionStatus=2"))
     val liveRetiredContentCompletedDF = liveRetiredContentEnrolmentDF.where(expr("dbCompletionStatus=2"))
-    val liveRetiredAllCompletedDF = liveRetiredContentEnrolmentDF.where(expr("dbCompletionStatus=2"))
+    val liveRetiredAllCompletedDF = liveRetiredEnrolmentDF.where(expr("dbCompletionStatus=2"))
     val liveRetiredExternalContentCompletedDF = externalContentEnrolmentDF.where(expr("dbCompletionStatus=2"))
 
     val liveRetiredCourseEnrolmentsCompletionsDF = liveRetiredCourseStartedDF.where(expr("dbCompletionStatus IN (0, 1, 2)"))
     // course program completed
     val liveRetiredCourseProgramCompletedDF = liveRetiredCourseProgramEnrolmentDF.where(expr("dbCompletionStatus=2"))
-    val liveCourseProgramExcludingModeratedCompletedDF= liveCourseProgramExcludingModeratedEnrolmentDF.where(expr("dbCompletionStatus=2"))
+    val liveCourseProgramExcludingModeratedCompletedDF= liveCourseProgramExcludingModeratedEnrolmentDF.where(expr("dbCompletionStatus=2")).cache()
 
     // do both count(*) and countDistinct(userID) aggregates at once
     val enrolmentCountDF = liveRetiredCourseEnrolmentDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
@@ -305,7 +310,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     val landingPageCompletedCountDF = liveRetiredCourseProgramCompletedDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     val landingPageCompletedYesterdayCountDF = liveRetiredCourseProgramCompletedYesterdayDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     val landingPageContentCompletedYesterdayCountDF = liveRetiredContentCompletedYesterdayDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
-    val contentEnrolmentCountDF=liveRetiredContentEnrolmentDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
+    val contentEnrolmentCountDF=liveRetiredEnrolmentDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     val contentCompletedCountDF = liveRetiredAllCompletedDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     val externalContentEnrolmentCountDF=externalContentEnrolmentDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
     val externalContentCompletedCountDF=liveRetiredExternalContentCompletedDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
@@ -326,6 +331,7 @@ object DashboardSyncModel extends AbsDashboardModel {
     Redis.update("dashboard_unique_users_completed_count", completedUniqueUserCount.toString)
 
     // counts
+    val enrolmentCount = enrolmentCountDF.select("count").first().getLong(0)
     val notStartedCount = notStartedCountDF.select("count").first().getLong(0)
     val startedCount = startedCountDF.select("count").first().getLong(0)
     val inProgressCount = inProgressCountDF.select("count").first().getLong(0)
@@ -338,13 +344,23 @@ object DashboardSyncModel extends AbsDashboardModel {
     val contentEnrolmentCount = contentEnrolmentCountDF.select("count").first().getLong(0)
     val externalContentEnrolmentCount = externalContentEnrolmentCountDF.select("count").first().getLong(0)
 
+    //    Redis.update("dashboard_enrolment_count", enrolmentCount.toString)
     Redis.update("dashboard_enrolment_count",(contentEnrolmentCount+externalContentEnrolmentCount).toString)
     Redis.update("dashboard_not_started_count", notStartedCount.toString)
     Redis.update("dashboard_started_count", startedCount.toString)
     Redis.update("dashboard_in_progress_count", inProgressCount.toString)
     Redis.update("dashboard_completed_count", (contentCompletedCount+externalContentCompletedCount).toString)
+    //    Redis.update("dashboard_completed_count", completedCount.toString)
     Redis.update("lp_completed_count", landingPageCompletedCount.toString)
+    //    Redis.update("lp_completed_yesterday_count", landingPageCompletedYesterdayCount.toString)
     Redis.dispatchDataFrame[Long]("live_course_program_enrolment_count", liveCourseProgramEnrolmentCountsDF, "courseID", "enrolmentCount")
+    println("dashboard_completed_count:"+completedCount.toString)
+    println("dashboard_content_completed_count:"+contentCompletedCount.toString)
+    println("dashboard_external_content_completed_count:"+externalContentCompletedCount.toString)
+
+    println("dashboard_enrolment_count:"+enrolmentCount.toString)
+    println("dashboard_content_enrolment_count:"+contentEnrolmentCount.toString)
+    println("dashboard_external_content_enrolment_count:"+externalContentEnrolmentCount.toString)
 
     // mdo-wise enrollment/not-started/started/in-progress/completion counts
     val liveRetiredCourseEnrolmentByMDODF = liveRetiredCourseEnrolmentDF.groupBy("userOrgID").agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
@@ -406,57 +422,57 @@ object DashboardSyncModel extends AbsDashboardModel {
     Redis.dispatchDataFrame[Long]("dashboard_competencies_count_by_course_org", competencyCountByCBPDF, "courseOrgID", "courseIDs")
 
     // national learning week metrics
-    //    val nationalLearningWeekStartString = conf.nationalLearningWeekStart
-    //    val nationalLearningWeekEndString = conf.nationalLearningWeekEnd
+    val nationalLearningWeekStartString = conf.nationalLearningWeekStart
+    val nationalLearningWeekEndString = conf.nationalLearningWeekEnd
     val zoneOffset = ZoneOffset.ofHoursMinutes(5, 30)
-    //    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-    //    // Parse the strings to LocalDateTime
-    //    val nationalLearningWeekStartDateTime = LocalDateTime.parse(nationalLearningWeekStartString, formatter)
-    //    val nationalLearningWeekEndDateTime = LocalDateTime.parse(nationalLearningWeekEndString, formatter)
-    //    val nationalLearningWeekStartOffsetDateTime = nationalLearningWeekStartDateTime.atOffset(zoneOffset)
-    //    val nationalLearningWeekEndOffsetDateTime = nationalLearningWeekEndDateTime.atOffset(zoneOffset)
-    //    // Convert OffsetDateTime to epoch seconds
-    //    val nationalLearningWeekStartDateTimeEpoch = nationalLearningWeekStartOffsetDateTime.toEpochSecond
-    //    val nationalLearningWeekEndDateTimeEpoch = nationalLearningWeekEndOffsetDateTime.toEpochSecond
-    //
-    //    /* total certificates issued yesterday across all types of content */
-    //    val certificateDateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")
-    //    val eventsDateTimeFormatter=DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-    //
-    //    val nationalLearningWeekStartDate = nationalLearningWeekStartOffsetDateTime.format(eventsDateTimeFormatter)
-    //    val nationalLearningWeekEndDate = nationalLearningWeekEndOffsetDateTime.format(eventsDateTimeFormatter)
-    //    println("nationalLearningWeekStartDate",nationalLearningWeekStartDate)
-    //    println("nationalLearningWeekEndDate",nationalLearningWeekEndDate)
-    //
-    //    // NLW events enrollment data Filter the DataFrame where enrolled_on_datetime is within NLW
-    //    val eventEnrolledDF = eventsEnrolmentDataDF
-    //      .filter(col("enrolled_on_datetime") >= nationalLearningWeekStartDate && col("enrolled_on_datetime") <= nationalLearningWeekEndDate)
-    //
-    //    // Count the distinct certificate_ids
-    //    val eventEnrolledCountDF = eventEnrolledDF
-    //      .agg(count("event_id").alias("event_count"))
-    //    val totalEventEnrolledCountDF = eventsEnrolmentDataDF
-    //      .agg(count("event_id").alias("event_count"))
-    //
-    //    // Retrieve the count
-    //    val enrolmentEventNLWCount = eventEnrolledCountDF
-    //      .select("event_count")
-    //      .first()
-    //      .getLong(0)
-    //    val totalEventEnrolmentCount = totalEventEnrolledCountDF
-    //      .select("event_count")
-    //      .first()
-    //      .getLong(0)
-    //
-    //    /* total enrolments that week across all types of content */
-    //    val enrolmentContentNLWDF = liveRetiredContentEnrolmentDF.filter($"courseEnrolledTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseEnrolledTimestamp" <= nationalLearningWeekEndDateTimeEpoch)
-    //    val enrolmentContentNLWCountDF = enrolmentContentNLWDF.agg(count("*").alias("count"))
-    //    val enrolmentContentNLWCount = enrolmentContentNLWCountDF.select("count").first().getLong(0)
-    //
-    //    val totalEnrollmentNLWCount= enrolmentEventNLWCount + enrolmentContentNLWCount
-    //    Redis.update("dashboard_content_enrolment_nlw_count", totalEnrollmentNLWCount.toString)
-    //    Redis.update("dashboard_events_enrolment_count", totalEventEnrolmentCount.toString)
-    //    println("dashboard_events_enrolment_count:"+totalEventEnrolmentCount.toString)
+    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+    // Parse the strings to LocalDateTime
+    val nationalLearningWeekStartDateTime = LocalDateTime.parse(nationalLearningWeekStartString, formatter)
+    val nationalLearningWeekEndDateTime = LocalDateTime.parse(nationalLearningWeekEndString, formatter)
+    val nationalLearningWeekStartOffsetDateTime = nationalLearningWeekStartDateTime.atOffset(zoneOffset)
+    val nationalLearningWeekEndOffsetDateTime = nationalLearningWeekEndDateTime.atOffset(zoneOffset)
+    // Convert OffsetDateTime to epoch seconds
+    val nationalLearningWeekStartDateTimeEpoch = nationalLearningWeekStartOffsetDateTime.toEpochSecond
+    val nationalLearningWeekEndDateTimeEpoch = nationalLearningWeekEndOffsetDateTime.toEpochSecond
+
+    /* total certificates issued yesterday across all types of content */
+    val certificateDateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")
+    val eventsDateTimeFormatter=DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+
+    val nationalLearningWeekStartDate = nationalLearningWeekStartOffsetDateTime.format(eventsDateTimeFormatter)
+    val nationalLearningWeekEndDate = nationalLearningWeekEndOffsetDateTime.format(eventsDateTimeFormatter)
+    println("nationalLearningWeekStartDate",nationalLearningWeekStartDate)
+    println("nationalLearningWeekEndDate",nationalLearningWeekEndDate)
+
+    // NLW events enrollment data Filter the DataFrame where enrolled_on_datetime is within NLW
+    val eventEnrolledDF = eventsEnrolmentDataDF
+      .filter(col("enrolled_on_datetime") >= nationalLearningWeekStartDate && col("enrolled_on_datetime") <= nationalLearningWeekEndDate)
+
+    // Count the distinct certificate_ids
+    val eventEnrolledCountDF = eventEnrolledDF
+      .agg(count("event_id").alias("event_count"))
+    val totalEventEnrolledCountDF = eventsEnrolmentDataDF
+      .agg(count("event_id").alias("event_count"))
+
+    // Retrieve the count
+    val enrolmentEventNLWCount = eventEnrolledCountDF
+      .select("event_count")
+      .first()
+      .getLong(0)
+    val totalEventEnrolmentCount = totalEventEnrolledCountDF
+      .select("event_count")
+      .first()
+      .getLong(0)
+
+    /* total enrolments that week across all types of content */
+    val enrolmentContentNLWDF = liveRetiredContentEnrolmentDF.filter($"courseEnrolledTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseEnrolledTimestamp" <= nationalLearningWeekEndDateTimeEpoch)
+    val enrolmentContentNLWCountDF = enrolmentContentNLWDF.agg(count("*").alias("count"))
+    val enrolmentContentNLWCount = enrolmentContentNLWCountDF.select("count").first().getLong(0)
+
+    val totalEnrollmentNLWCount= enrolmentEventNLWCount + enrolmentContentNLWCount
+    Redis.update("dashboard_content_enrolment_nlw_count", totalEnrollmentNLWCount.toString)
+    Redis.update("dashboard_events_enrolment_count", totalEventEnrolmentCount.toString)
+    println("dashboard_events_enrolment_count:"+totalEventEnrolmentCount.toString)
 
     //Calculate event Published Details
     val eventsDataDF = cache.load("eventDetails")
@@ -465,115 +481,116 @@ object DashboardSyncModel extends AbsDashboardModel {
       .distinct()
       .count()
     Redis.update("dashboard_events_published_count", eventsPublishedCount.toString())
+    println(s"dashboard_events_published_count: $eventsPublishedCount")
 
 
     // Calculate start and end of the previous day as OffsetDateTime
-    // val previousDayStart = currentDate.minusDays(1).atStartOfDay().atOffset(zoneOffset)
-    // val previousDayEnd = currentDate.atStartOfDay().minusSeconds(1).atOffset(zoneOffset)
-    //  val previousDayStartString = previousDayStart.format(certificateDateTimeFormatter)
-    //   val previousDayEndString = previousDayEnd.format(certificateDateTimeFormatter)
-    //   val certificateGeneratedYdayDF = liveRetiredContentEnrolmentDF.filter($"certificateGeneratedOn" >= previousDayStartString && $"certificateGeneratedOn" <= previousDayEndString)
-    //   val certificateGeneratedYdayCountDF = certificateGeneratedYdayDF.agg(count("*").alias("count"))
-    //   val certificateGeneratedYdayCount = certificateGeneratedYdayCountDF.select("count").first().getLong(0)
-    //   val previousStart = previousDayStart.format(eventsDateTimeFormatter)
-    //   val previousEnd = previousDayEnd.format(eventsDateTimeFormatter)
+    val previousDayStart = currentDate.minusDays(1).atStartOfDay().atOffset(zoneOffset)
+    val previousDayEnd = currentDate.atStartOfDay().minusSeconds(1).atOffset(zoneOffset)
+    val previousDayStartString = previousDayStart.format(certificateDateTimeFormatter)
+    val previousDayEndString = previousDayEnd.format(certificateDateTimeFormatter)
+    val certificateGeneratedYdayDF = liveRetiredContentEnrolmentDF.filter($"certificateGeneratedOn" >= previousDayStartString && $"certificateGeneratedOn" <= previousDayEndString)
+    val certificateGeneratedYdayCountDF = certificateGeneratedYdayDF.agg(count("*").alias("count"))
+    val certificateGeneratedYdayCount = certificateGeneratedYdayCountDF.select("count").first().getLong(0)
+    val previousStart = previousDayStart.format(eventsDateTimeFormatter)
+    val previousEnd = previousDayEnd.format(eventsDateTimeFormatter)
 
     //Redis.update("dashboard_content_certificates_generated_yday_nlw_count", certificateGeneratedYdayCount.toString)
 
     // NLW events data Filter the DataFrame where status is 'completed' and the enrolled_on_datetime is within yesterday's range
-    //    val eventCertificatesGeneratedYdayDF = eventsEnrolmentDataDF
-    //      .filter(col("status") === "completed")
-    //      .filter(col("enrolled_on_datetime") >= previousStart && col("enrolled_on_datetime") <= previousEnd)
-    //      .filter(col("certificate_id").isNotNull) // Ensuring the certificate_id exists
-    //
-    //    // Count the distinct certificate_ids
-    //    val eventCertificateGeneratedYdayCountDF = eventCertificatesGeneratedYdayDF
-    //      .agg(countDistinct("certificate_id").alias("event_certificate_count"))
-    //
-    //    // Retrieve the count
-    //    val eventCertificateGeneratedYdayCount = eventCertificateGeneratedYdayCountDF
-    //      .select("event_certificate_count")
-    //      .first()
-    //      .getLong(0)
-    //
-    //    // dashboard_event_certificates_generated_yday_nlw_count contains event count
-    //    Redis.update("dashboard_event_certificates_generated_yday_nlw_count", eventCertificateGeneratedYdayCount.toString)
+    val eventCertificatesGeneratedYdayDF = eventsEnrolmentDataDF
+      .filter(col("status") === "completed")
+      .filter(col("enrolled_on_datetime") >= previousStart && col("enrolled_on_datetime") <= previousEnd)
+      .filter(col("certificate_id").isNotNull) // Ensuring the certificate_id exists
+
+    // Count the distinct certificate_ids
+    val eventCertificateGeneratedYdayCountDF = eventCertificatesGeneratedYdayDF
+      .agg(countDistinct("certificate_id").alias("event_certificate_count"))
+
+    // Retrieve the count
+    val eventCertificateGeneratedYdayCount = eventCertificateGeneratedYdayCountDF
+      .select("event_certificate_count")
+      .first()
+      .getLong(0)
+
+    // dashboard_event_certificates_generated_yday_nlw_count contains event count
+    Redis.update("dashboard_event_certificates_generated_yday_nlw_count", eventCertificateGeneratedYdayCount.toString)
 
     //Adding completed Course', 'Program', 'Blended Program', 'CuratedCollections', 'Curated Program',External Content,Events
-    //    Redis.update("lp_completed_yesterday_count", (landingPageContentCompletedYesterdayCount + eventCertificateGeneratedYdayCount + externalCertificateIssuedYesterdayCount).toString)
-    //
-    //    //Total number of certificated yesterday both event+content
-    //    val totalCertificatesGeneratedYdayCount = certificateGeneratedYdayCount + eventCertificateGeneratedYdayCount
-    //
-    //    // dashboard_content_only_certificates_generated_yday_nlw_count contains content counts
-    //    Redis.update("dashboard_content_only_certificates_generated_yday_nlw_count", certificateGeneratedYdayCount.toString)
-    //
-    //    //dashboard_content_certificates_generated_yday_nlw_count contains content+event count
-    //    Redis.update("dashboard_content_certificates_generated_yday_nlw_count", totalCertificatesGeneratedYdayCount.toString)
-    //
-    //    println("dashboard_event_certificates_generated_yday_nlw_count",eventCertificateGeneratedYdayCount.toString)
-    //    println("dashboard_content_only_certificates_generated_yday_nlw_count", certificateGeneratedYdayCount.toString)
-    //    println("dashboard_content_certificates_generated_yday_nlw_count",totalCertificatesGeneratedYdayCount.toString)
+    Redis.update("lp_completed_yesterday_count", (landingPageContentCompletedYesterdayCount + eventCertificateGeneratedYdayCount + externalCertificateIssuedYesterdayCount).toString)
+
+    //Total number of certificated yesterday both event+content
+    val totalCertificatesGeneratedYdayCount = certificateGeneratedYdayCount + eventCertificateGeneratedYdayCount
+
+    // dashboard_content_only_certificates_generated_yday_nlw_count contains content counts
+    Redis.update("dashboard_content_only_certificates_generated_yday_nlw_count", certificateGeneratedYdayCount.toString)
+
+    //dashboard_content_certificates_generated_yday_nlw_count contains content+event count
+    Redis.update("dashboard_content_certificates_generated_yday_nlw_count", totalCertificatesGeneratedYdayCount.toString)
+
+    println("dashboard_event_certificates_generated_yday_nlw_count",eventCertificateGeneratedYdayCount.toString)
+    println("dashboard_content_only_certificates_generated_yday_nlw_count", certificateGeneratedYdayCount.toString)
+    println("dashboard_content_certificates_generated_yday_nlw_count",totalCertificatesGeneratedYdayCount.toString)
 
     /* total certificates issued that week across all types of content */
-    //    val nationalLearningWeekStartDateTimeString = nationalLearningWeekStartOffsetDateTime.format(certificateDateTimeFormatter)
-    //    val nationalLearningWeekEndDateTimeString = nationalLearningWeekEndOffsetDateTime.format(certificateDateTimeFormatter)
-    //
-    //    val eventCertificatesGeneratedNLWDF = eventsEnrolmentDataDF
-    //      .filter(col("status") === "completed")
-    //      .filter(col("enrolled_on_datetime") >= nationalLearningWeekStartDate)
-    //      .filter(col("certificate_id").isNotNull) // Ensuring the certificate_id exists
-    //
-    //    // Count the distinct certificate_ids
-    //    val eventCertificateGeneratedNLWCountDF = eventCertificatesGeneratedNLWDF
-    //      .agg(countDistinct("certificate_id").alias("event_certificate_count"))
-    //
-    //    // Retrieve the count
-    //    val eventCertificateGeneratedNLWCount = eventCertificateGeneratedNLWCountDF
-    //      .select("event_certificate_count")
-    //      .first()
-    //      .getLong(0)
-    //
-    //    val certificateGeneratedInNLWDF = liveRetiredContentEnrolmentDF.filter($"certificateGeneratedOn" >= nationalLearningWeekStartDateTimeString && $"certificateGeneratedOn" <= nationalLearningWeekEndDateTimeString)
-    //    val certificateGeneratedInNLWCountDF = certificateGeneratedInNLWDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
-    //    val certificateGeneratedInNLWCount = certificateGeneratedInNLWCountDF.select("count").first().getLong(0)
-    //    val totalCertificatesIssuedInNLW = certificateGeneratedInNLWCount + eventCertificateGeneratedNLWCount
-    //    Redis.update("dashboard_content_certificates_generated_nlw_count", totalCertificatesIssuedInNLW.toString)
-    //    Redis.update("dashboard_events_completed_count", eventCertificateGeneratedNLWCount.toString)
-    //    println("dashboard_events_completed_count:"+eventCertificateGeneratedNLWCount)
-    //
-    //    println("dashboard_content_certificates_generated_nlw_count |"+ totalCertificatesIssuedInNLW.toString+"|-|"+certificateGeneratedInNLWCount.toString+"|-|"+eventCertificateGeneratedNLWCount.toString)
-    //
-    //    /* total number of events published that week */
-    //    val primaryCategory = "Event"
-    //    val shouldClause = s"""{"match":{"contentType":"${primaryCategory}"}}"""
-    //    val fields = Seq("identifier", "name", "startDate", "createdFor")
-    //    val arrayFields = Seq("createdFor")
-    //
-    //    // Corrected the split method
-    //    val startDate = nationalLearningWeekStartString.split(" ")(0)
-    //    val endDate = nationalLearningWeekEndString.split(" ")(0)
-    //
-    //    val dateConditions = s"""{"range": {"startDate": {"gte": "${startDate}", "lte": "${endDate}"}}}"""
-    //    val fieldsClause = fields.map(f => s""""${f}"""").mkString(",")
-    //
-    //    val events_query = s"""{"_source":[${fieldsClause}],"query":{"bool":{"should":[${shouldClause}],"filter":[${dateConditions}]}}}"""
-    //
-    //    val eventsPublishedInNLWDF = elasticSearchDataFrame(conf.sparkElasticsearchConnectionHost, "compositesearch", events_query, fields, arrayFields)
-    //    println(eventsPublishedInNLWDF.count())
-    //
-    //    // Make sure this Redis call is valid in your context
-    //    val eventsPublishedInNLWCount = eventsPublishedInNLWDF.count()
-    //    Redis.update("dashboard_events_published_nlw_count", eventsPublishedInNLWCount.toString())
-    //    println("dashboard_events_published_nlw_count "+ eventsPublishedInNLWCount.toString())
-    //
-    //    /* certificates issued by user that week across all types of content*/
-    //    val certificateGeneratedInNLWByUserDF = certificateGeneratedInNLWDF.groupBy("userID").agg(count("*").alias("count"))
-    //    val eventCertificateGeneratedInNLWByUserDF = eventCertificatesGeneratedNLWDF.groupBy("user_id").agg(count("*").alias("count"))
-    //    cache.write(certificateGeneratedInNLWByUserDF.coalesce(1), "nlwContentCertificateGeneratedCount")
-    //    pqCache.write(certificateGeneratedInNLWByUserDF.coalesce(1), "nlwContentCertificateGeneratedCount")
-    //    cache.write(eventCertificateGeneratedInNLWByUserDF.coalesce(1), "nlwEventCertificateGeneratedCount")
-    //    pqCache.write(eventCertificateGeneratedInNLWByUserDF.coalesce(1), "nlwEventCertificateGeneratedCount")
+    val nationalLearningWeekStartDateTimeString = nationalLearningWeekStartOffsetDateTime.format(certificateDateTimeFormatter)
+    val nationalLearningWeekEndDateTimeString = nationalLearningWeekEndOffsetDateTime.format(certificateDateTimeFormatter)
+
+    val eventCertificatesGeneratedNLWDF = eventsEnrolmentDataDF
+      .filter(col("status") === "completed")
+      .filter(col("enrolled_on_datetime") >= nationalLearningWeekStartDate)
+      .filter(col("certificate_id").isNotNull) // Ensuring the certificate_id exists
+
+    // Count the distinct certificate_ids
+    val eventCertificateGeneratedNLWCountDF = eventCertificatesGeneratedNLWDF
+      .agg(countDistinct("certificate_id").alias("event_certificate_count"))
+
+    // Retrieve the count
+    val eventCertificateGeneratedNLWCount = eventCertificateGeneratedNLWCountDF
+      .select("event_certificate_count")
+      .first()
+      .getLong(0)
+
+    val certificateGeneratedInNLWDF = liveRetiredContentEnrolmentDF.filter($"certificateGeneratedOn" >= nationalLearningWeekStartDateTimeString && $"certificateGeneratedOn" <= nationalLearningWeekEndDateTimeString)
+    val certificateGeneratedInNLWCountDF = certificateGeneratedInNLWDF.agg(count("*").alias("count"), countDistinct("userID").alias("uniqueUserCount"))
+    val certificateGeneratedInNLWCount = certificateGeneratedInNLWCountDF.select("count").first().getLong(0)
+    val totalCertificatesIssuedInNLW = certificateGeneratedInNLWCount + eventCertificateGeneratedNLWCount
+    Redis.update("dashboard_content_certificates_generated_nlw_count", totalCertificatesIssuedInNLW.toString)
+    Redis.update("dashboard_events_completed_count", eventCertificateGeneratedNLWCount.toString)
+    println("dashboard_events_completed_count:"+eventCertificateGeneratedNLWCount)
+
+    println("dashboard_content_certificates_generated_nlw_count |"+ totalCertificatesIssuedInNLW.toString+"|-|"+certificateGeneratedInNLWCount.toString+"|-|"+eventCertificateGeneratedNLWCount.toString)
+
+    /* total number of events published that week */
+    val primaryCategory = "Event"
+    val shouldClause = s"""{"match":{"contentType":"${primaryCategory}"}}"""
+    val fields = Seq("identifier", "name", "startDate", "createdFor")
+    val arrayFields = Seq("createdFor")
+
+    // Corrected the split method
+    val startDate = nationalLearningWeekStartString.split(" ")(0)
+    val endDate = nationalLearningWeekEndString.split(" ")(0)
+
+    val dateConditions = s"""{"range": {"startDate": {"gte": "${startDate}", "lte": "${endDate}"}}}"""
+    val fieldsClause = fields.map(f => s""""${f}"""").mkString(",")
+
+    val events_query = s"""{"_source":[${fieldsClause}],"query":{"bool":{"should":[${shouldClause}],"filter":[${dateConditions}]}}}"""
+
+    val eventsPublishedInNLWDF = elasticSearchDataFrame(conf.sparkElasticsearchConnectionHost, "compositesearch", events_query, fields, arrayFields)
+    println(eventsPublishedInNLWDF.count())
+
+    // Make sure this Redis call is valid in your context
+    val eventsPublishedInNLWCount = eventsPublishedInNLWDF.count()
+    Redis.update("dashboard_events_published_nlw_count", eventsPublishedInNLWCount.toString())
+    println("dashboard_events_published_nlw_count "+ eventsPublishedInNLWCount.toString())
+
+    /* certificates issued by user that week across all types of content*/
+    val certificateGeneratedInNLWByUserDF = certificateGeneratedInNLWDF.groupBy("userID").agg(count("*").alias("count"))
+    val eventCertificateGeneratedInNLWByUserDF = eventCertificatesGeneratedNLWDF.groupBy("user_id").agg(count("*").alias("count"))
+    cache.write(certificateGeneratedInNLWByUserDF.coalesce(1), "nlwContentCertificateGeneratedCount")
+    pqCache.write(certificateGeneratedInNLWByUserDF.coalesce(1), "nlwContentCertificateGeneratedCount")
+    cache.write(eventCertificateGeneratedInNLWByUserDF.coalesce(1), "nlwEventCertificateGeneratedCount")
+    pqCache.write(eventCertificateGeneratedInNLWByUserDF.coalesce(1), "nlwEventCertificateGeneratedCount")
     //Redis.dispatchDataFrame[String]("dashboard_content_certificates_issued_nlw_by_user", certificateGeneratedInNLWByUserDF, "userID", "count")
     //Redis.dispatchDataFrame[String]("dashboard_event_certificates_issued_nlw_by_user", eventCertificateGeneratedInNLWByUserDF, "user_id", "count")
 
@@ -588,23 +605,23 @@ object DashboardSyncModel extends AbsDashboardModel {
       .withColumn("minutes", split(col("event_duration"), ":").getItem(1).cast("int"))
       .withColumn("seconds", split(col("event_duration"), ":").getItem(2).cast("int"))
       .withColumn("event_duration_seconds", col("hours") * 3600 + col("minutes") * 60 + col("seconds"))*/
-    //    val eventTotalLearningNLWByUserDF = eventsEnrolmentDataDF.filter(col("duration").isNotNull)
-    //      .groupBy("user_id").agg(sum(when(col("duration") >= 180, col("event_duration_seconds")).otherwise(0)).alias("totalLearningSeconds"))
-    //      .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2))
-    //      .select("user_id", "totalLearningHours")
-    //    cache.write(eventTotalLearningNLWByUserDF, "nlwEventLearningHours")
-    //    pqCache.write(eventTotalLearningNLWByUserDF, "nlwEventLearningHours")
-    //
-    //    //Redis.dispatchDataFrame[String]("dashboard_event_learning_hours_nlw_by_user", eventTotalLearningNLWByUserDF, "user_id", "totalLearningHours")
-    //
-    //    //    val enrolmentContentDurationNLWByUserDF = cbpCompletionWithDetailsDF.filter($"courseCompletedTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseCompletedTimestamp" <= nationalLearningWeekEndDateTimeEpoch && $"userID" =!= "") .groupBy("userID").agg(sum(expr("(completionPercentage / 100) * courseDuration")).alias("totalLearningSeconds"))
-    //    //      .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2)).select("userID", "totalLearningHours")
-    //    val enrolmentContentDurationNLWByUserDF = cbpCompletionWithDetailsDF.filter($"courseCompletedTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseCompletedTimestamp" <= nationalLearningWeekEndDateTimeEpoch && $"userID" =!= "" && $"dbCompletionStatus" === 2 && $"certificateID".isNotNull).groupBy("userID").agg(sum("courseDuration").alias("totalLearningSeconds"))
+    val eventTotalLearningNLWByUserDF = eventsEnrolmentDataDF.filter(col("duration").isNotNull)
+      .groupBy("user_id").agg(sum(when(col("duration") >= 180, col("event_duration_seconds")).otherwise(0)).alias("totalLearningSeconds"))
+      .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2))
+      .select("user_id", "totalLearningHours")
+    cache.write(eventTotalLearningNLWByUserDF, "nlwEventLearningHours")
+    pqCache.write(eventTotalLearningNLWByUserDF, "nlwEventLearningHours")
+
+    //Redis.dispatchDataFrame[String]("dashboard_event_learning_hours_nlw_by_user", eventTotalLearningNLWByUserDF, "user_id", "totalLearningHours")
+
+    //    val enrolmentContentDurationNLWByUserDF = cbpCompletionWithDetailsDF.filter($"courseCompletedTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseCompletedTimestamp" <= nationalLearningWeekEndDateTimeEpoch && $"userID" =!= "") .groupBy("userID").agg(sum(expr("(completionPercentage / 100) * courseDuration")).alias("totalLearningSeconds"))
     //      .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2)).select("userID", "totalLearningHours")
-    //    cache.write(enrolmentContentDurationNLWByUserDF, "nlwContentLearningHours")
-    //    pqCache.write(enrolmentContentDurationNLWByUserDF, "nlwContentLearningHours")
-    //    //Redis.dispatchDataFrame[String]("dashboard_content_learning_hours_nlw_by_user", enrolmentContentDurationNLWByUserDF, "userID", "totalLearningHours")
-    //    println("eventTotalLearningNLWByUserDF cache write")
+    val enrolmentContentDurationNLWByUserDF = cbpCompletionWithDetailsDF.filter($"courseCompletedTimestamp" >= nationalLearningWeekStartDateTimeEpoch && $"courseCompletedTimestamp" <= nationalLearningWeekEndDateTimeEpoch && $"userID" =!= "" && $"dbCompletionStatus" === 2 && $"certificateID".isNotNull).groupBy("userID").agg(sum("courseDuration").alias("totalLearningSeconds"))
+      .withColumn("totalLearningHours", bround(col("totalLearningSeconds") / 3600, 2)).select("userID", "totalLearningHours")
+    cache.write(enrolmentContentDurationNLWByUserDF, "nlwContentLearningHours")
+    pqCache.write(enrolmentContentDurationNLWByUserDF, "nlwContentLearningHours")
+    //Redis.dispatchDataFrame[String]("dashboard_content_learning_hours_nlw_by_user", enrolmentContentDurationNLWByUserDF, "userID", "totalLearningHours")
+    println("eventTotalLearningNLWByUserDF cache write")
 
     // get the count for each courseID
     val topContentCountDF = liveCourseProgramExcludingModeratedCompletedDF.groupBy("courseID").agg(count("*").alias("count"))
@@ -744,13 +761,15 @@ object DashboardSyncModel extends AbsDashboardModel {
     // Anonymous Assessment KPIs END
 
     // DSR new keys monthly active users and certificate issued yesterday
+    val averageMonthlyActiveUsersCount = averageMonthlyActiveUsersDataFrame()
+    Redis.update("dashboard_average_monthly_active_users_last_30_days", averageMonthlyActiveUsersCount.toString)
 
-    //    val tmpDF = liveRetiredCourseModeratedCourseEnrolmentDF.filter($"certificateGeneratedOn".isNotNull && $"certificateGeneratedOn" =!= "").select(col("certificateGeneratedOn"))
-    //    val twenteyFourHoursAgoLocalDateTimeString = (twentyFourHoursAgoLocalDateTime.toString)+":00+0000"
-    //    val courseModeratedCourseCertificateGeneratedYesterdayDF = liveRetiredCourseModeratedCourseEnrolmentDF.filter($"certificateGeneratedOn".isNotNull && $"certificateGeneratedOn" =!= "" && $"certificateGeneratedOn" >= twenteyFourHoursAgoLocalDateTimeString)
-    //    val courseModeratedCourseCertificateGeneratedYesterdayCountDF = courseModeratedCourseCertificateGeneratedYesterdayDF.agg(count("*").alias("count"))
-    //    val courseModeratedCourseCertificateGeneratedYesterdayCount = courseModeratedCourseCertificateGeneratedYesterdayCountDF.select("count").first().getLong(0)
-    //    Redis.update("dashboard_course_moderated_course_certificates_generated_yesterday_count", courseModeratedCourseCertificateGeneratedYesterdayCount.toString)
+    val tmpDF = liveRetiredCourseModeratedCourseEnrolmentDF.filter($"certificateGeneratedOn".isNotNull && $"certificateGeneratedOn" =!= "").select(col("certificateGeneratedOn"))
+    val twenteyFourHoursAgoLocalDateTimeString = (twentyFourHoursAgoLocalDateTime.toString)+":00+0000"
+    val courseModeratedCourseCertificateGeneratedYesterdayDF = liveRetiredCourseModeratedCourseEnrolmentDF.filter($"certificateGeneratedOn".isNotNull && $"certificateGeneratedOn" =!= "" && $"certificateGeneratedOn" >= twenteyFourHoursAgoLocalDateTimeString)
+    val courseModeratedCourseCertificateGeneratedYesterdayCountDF = courseModeratedCourseCertificateGeneratedYesterdayDF.agg(count("*").alias("count"))
+    val courseModeratedCourseCertificateGeneratedYesterdayCount = courseModeratedCourseCertificateGeneratedYesterdayCountDF.select("count").first().getLong(0)
+    Redis.update("dashboard_course_moderated_course_certificates_generated_yesterday_count", courseModeratedCourseCertificateGeneratedYesterdayCount.toString)
 
 
     // courses enrolled/completed at-least once, only live courses
@@ -787,6 +806,11 @@ object DashboardSyncModel extends AbsDashboardModel {
     val competencyCountByMDODF = courseIDsByMDOConcatenatedDF.withColumnRenamed("userOrgID", "userOrgID").withColumnRenamed("sortedCourseIDs", "courseIDs")
     Redis.dispatchDataFrame[Long]("dashboard_core_competencies_by_user_org", competencyCountByMDODF, "userOrgID", "courseIDs")
 
+
+    // Top 5 Users - By course completion
+    // SELECT userID, CONCAT(firstName, ' ', lastName) AS name, maskedEmail, COUNT(courseID) AS completed_count
+    // FROM \"dashboards-user-course-program-progress\" WHERE __time = (SELECT MAX(__time) FROM \"dashboards-user-course-program-progress\")
+    // AND userStatus=1 AND category='Course' AND courseStatus IN ('Live', 'Retired') AND dbCompletionStatus=2 $mdo$ GROUP BY 1, 2, 3 ORDER BY completed_count DESC LIMIT 5
     val top5UsersByCompletionByMdoDF = liveRetiredCourseCompletedDF
       .groupBy("userID", "fullName", "maskedEmail", "userOrgID", "userOrgName")
       .agg(count("courseID").alias("completedCount"))
@@ -797,6 +821,15 @@ object DashboardSyncModel extends AbsDashboardModel {
       .agg(to_json(collect_list("jsonData")).alias("jsonData"))
     Redis.dispatchDataFrame[String]("dashboard_top_5_users_by_completion_by_org", top5UsersByCompletionByMdoDF, "userOrgID", "jsonData")
 
+    // Top 5 Courses - By completion
+    // SELECT courseID, courseName, category, courseOrgName, COUNT(userID) AS enrolled_count,
+    // SUM(CASE WHEN dbCompletionStatus=0 THEN 1 ELSE 0 END) AS not_started_count,
+    // SUM(CASE WHEN dbCompletionStatus=1 THEN 1 ELSE 0 END) AS in_progress_count,
+    // SUM(CASE WHEN dbCompletionStatus=2 THEN 1 ELSE 0 END) AS \"Course Completions\"
+    // FROM \"dashboards-user-course-program-progress\"
+    // WHERE __time = (SELECT MAX(__time) FROM \"dashboards-user-course-program-progress\")
+    // AND userStatus=1 AND category='Course' AND courseStatus IN ('Live', 'Retired') $mdo$
+    // GROUP BY 1, 2, 3, 4 ORDER BY \"Course Completions\" DESC LIMIT 5
     val top5CoursesByCompletionByMdoDF = liveRetiredCourseEnrolmentDF
       .groupBy("courseID", "courseName", "userOrgID", "userOrgName")
       .agg(
@@ -812,6 +845,13 @@ object DashboardSyncModel extends AbsDashboardModel {
       .agg(to_json(collect_list("jsonData")).alias("jsonData"))
     Redis.dispatchDataFrame[String]("dashboard_top_5_courses_by_completion_by_org", top5CoursesByCompletionByMdoDF, "userOrgID", "jsonData")
 
+    // Top 5 Content - By completion
+    // SELECT courseID, courseName, category, courseOrgName, COUNT(userID) AS enrolled_count,
+    // SUM(CASE WHEN dbCompletionStatus=2 THEN 1 ELSE 0 END) AS \"Course Completions\"
+    // FROM \"dashboards-user-course-program-progress\"
+    // WHERE __time = (SELECT MAX(__time) FROM \"dashboards-user-course-program-progress\")
+    // AND userStatus=1 AND courseStatus IN ('Live', 'Retired') $mdo$
+    // GROUP BY 1, 2, 3, 4 ORDER BY \"Course Completions\" DESC LIMIT 5
     val top5ContentByCompletionByCbpDF = liveRetiredContentEnrolmentDF
       .groupBy("courseID", "courseName", "courseOrgID")
       .agg(
@@ -825,6 +865,12 @@ object DashboardSyncModel extends AbsDashboardModel {
       .agg(to_json(collect_list("jsonData")).alias("jsonData"))
     Redis.dispatchDataFrame[String]("dashboard_top_5_content_by_completion_by_course_org", top5ContentByCompletionByCbpDF, "courseOrgID", "jsonData")
 
+    // Top 5 Content - By enrolments
+    // SELECT courseID, courseName, category, courseOrgName, COUNT(userID) AS enrolled_count,
+    // FROM \"dashboards-user-course-program-progress\"
+    // WHERE __time = (SELECT MAX(__time) FROM \"dashboards-user-course-program-progress\")
+    // AND userStatus=1 AND courseStatus IN ('Live', 'Retired') $mdo$
+    // GROUP BY 1, 2, 3, 4 ORDER BY \"enrolled_count\" DESC LIMIT 5
     val top5ContentByEnrolmentsByCbpDF = liveRetiredContentEnrolmentDF
       .groupBy("courseID", "courseName", "courseOrgID")
       .agg(
@@ -837,6 +883,11 @@ object DashboardSyncModel extends AbsDashboardModel {
     Redis.dispatchDataFrame[String]("dashboard_top_5_content_by_enrolments_by_course_org", top5ContentByEnrolmentsByCbpDF, "courseOrgID", "jsonData")
 
 
+    // Top 5 Courses - By user ratings
+    // SELECT courseID, courseName, category, courseOrgName, ROUND(AVG(ratingAverage), 1) AS rating_avg, SUM(ratingCount) AS rating_count
+    // FROM \"dashboards-course\" WHERE __time = (SELECT MAX(__time) FROM \"dashboards-course\")
+    // AND ratingCount>0 AND ratingAverage<=5.0 AND category='Course' AND courseStatus='Live'
+    // GROUP BY 1, 2, 3, 4 ORDER BY rating_count * rating_avg DESC LIMIT 5
     val top5CoursesByRatingDF = ratedLiveCourseDF
       .where(expr("ratingCount>0 AND ratingAverage<=5.0"))
       .withColumn("ratingMetric", expr("ratingCount * ratingAverage"))
@@ -852,6 +903,11 @@ object DashboardSyncModel extends AbsDashboardModel {
     val top5CoursesByRatingJson = top5CoursesByRatingDF.toJSON.collectAsList().toString
     Redis.update("dashboard_top_5_courses_by_rating", top5CoursesByRatingJson)
 
+    // Top 5 contents - By user ratings
+    // SELECT courseID, courseName, category, courseOrgName, ROUND(AVG(ratingAverage), 1) AS rating_avg, SUM(ratingCount) AS rating_count
+    // FROM \"dashboards-course\" WHERE __time = (SELECT MAX(__time) FROM \"dashboards-course\")
+    // AND ratingCount>0 AND ratingAverage<=5.0 AND category='Course' AND courseStatus='Live'
+    // GROUP BY 1, 2, 3, 4 ORDER BY rating_count * rating_avg DESC LIMIT 5
     val averageRatingsDF = ratedLiveContentDF
       .where(expr("ratingCount > 0 AND ratingAverage <= 5.0"))
       .groupBy("courseOrgID", "courseID", "courseName")
@@ -944,6 +1000,19 @@ object DashboardSyncModel extends AbsDashboardModel {
     // trending events and featured events for events hub - end
   }
 
+  def averageMonthlyActiveUsersDataFrame()(implicit spark: SparkSession, conf: DashboardConfig) : Long = {
+    val query = """SELECT ROUND(AVG(daily_count * 1.0), 0) as DAUOutput FROM (SELECT COUNT(DISTINCT(actor_id)) AS daily_count, TIME_FLOOR(__time + INTERVAL '05:30' HOUR TO MINUTE, 'P1D') AS day_start FROM \"telemetry-events-syncts\" WHERE eid='IMPRESSION' AND actor_type='User' AND __time > CURRENT_TIMESTAMP - INTERVAL '30' DAY GROUP BY 2)"""
+    var df = druidDFOption(query, conf.sparkDruidRouterHost).orNull
+    var averageMonthlyActiveUserCount = 0L
+    if (df == null || df.isEmpty) return averageMonthlyActiveUserCount
+    else
+    {
+      df = df.withColumn("DAUOutput", expr("CAST(DAUOutput as LONG)"))
+      df = df.withColumn("DAUOutput", col("DAUOutput").cast("long"))
+      averageMonthlyActiveUserCount  = df.select("DAUOutput").first().getLong(0)
+    }
+    averageMonthlyActiveUserCount
+  }
 
   def updateLearnerHomePageData(orgDF: DataFrame, userOrgDF: DataFrame, userCourseProgramCompletionDF: DataFrame, cbpCompletionWithDetailsDF: DataFrame, cbpDetailsWithRatingDF: DataFrame, eventsEnrolmentDataDF: DataFrame)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
 
@@ -1069,21 +1138,22 @@ object DashboardSyncModel extends AbsDashboardModel {
     //    Redis.updateMapField("lhp_certifications", "across:today", totalCertificationsToday.toString)
 
     //NLWEventsCalculation
-    //    val nationalLearningWeekStartString = conf.nationalLearningWeekStart
-    //    val zoneOffset = ZoneOffset.ofHoursMinutes(5, 30)
-    //    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-    //    // Parse the strings to LocalDateTime
-    //    val nationalLearningWeekStartDateTime = LocalDateTime.parse(nationalLearningWeekStartString, formatter)
-    //    val nationalLearningWeekStartOffsetDateTime = nationalLearningWeekStartDateTime.atOffset(zoneOffset)
+    val nationalLearningWeekStartString = conf.nationalLearningWeekStart
+    val zoneOffset = ZoneOffset.ofHoursMinutes(5, 30)
+    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+    // Parse the strings to LocalDateTime
+    val nationalLearningWeekStartDateTime = LocalDateTime.parse(nationalLearningWeekStartString, formatter)
+    val nationalLearningWeekStartOffsetDateTime = nationalLearningWeekStartDateTime.atOffset(zoneOffset)
 
     /* total certificates issued yesterday across all types of event */
     val eventsDateTimeFormatter=DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-    //    val nationalLearningWeekStartDate = nationalLearningWeekStartOffsetDateTime.format(eventsDateTimeFormatter)
+    val nationalLearningWeekStartDate = nationalLearningWeekStartOffsetDateTime.format(eventsDateTimeFormatter)
 
     val EventEnrollmentDf= cache.load("eventEnrolmentDetails")
     val totalEventCertificationsTillToday =
       EventEnrollmentDf
         .filter(col("status") === "completed")
+        .filter(col("enrolled_on_datetime") >= nationalLearningWeekStartDate)
         .filter(col("certificate_id").isNotNull).count()
 
     val totalEventCertificationsTillYesterdayStr = Redis.get("lhp_eventCertificationsTillToday")
