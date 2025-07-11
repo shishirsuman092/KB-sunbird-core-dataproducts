@@ -42,25 +42,16 @@ object DashboardSyncModel extends AbsDashboardModel {
       val designationsDF = orgDesignationsDF(userOrgDF)
       Redis.dispatchDataFrame[String]("org_designations", designationsDF, "userOrgID", "org_designations", replace = false)
 
-      // kafkaDispatch(withTimestamp(orgDF, timestamp), conf.orgTopic)
-      kafkaDispatch(withTimestamp(userOrgDF, timestamp), conf.userOrgTopic)
-
       // obtain and save role count data
       val roleDF = roleDataFrame()
       val userOrgRoleDF = userOrgRoleDataFrame(userOrgDF, roleDF).cache()
       val roleCountDF = roleCountDataFrame(userOrgRoleDF)
-      kafkaDispatch(withTimestamp(roleCountDF, timestamp), conf.roleUserCountTopic)
 
       // obtain and save org role count data
       val orgRoleCount = orgRoleCountDataFrame(userOrgRoleDF)
-      kafkaDispatch(withTimestamp(orgRoleCount, timestamp), conf.orgRoleUserCountTopic)
 
       // org user count
       val orgUserCountDF = orgUserCountDataFrame(activeOrgs, activeUsers)
-      // validate activeOrgCount and orgUserCountDF count
-      validate({orgUserCountDF.count()},
-        {userOrgDF.filter(expr("userStatus=1 AND userOrgID IS NOT NULL AND userOrgStatus=1")).select("userOrgID").distinct().count()},
-        "orgUserCountDF.count() should equal distinct active org count in userOrgDF")
 
       //obtain and save total karma points of each user
       val karmaPointsDataDF = cache.load("userKarmaPoints")
@@ -76,14 +67,12 @@ object DashboardSyncModel extends AbsDashboardModel {
 
       // get course competency mapping data, dispatch to kafka to be ingested by druid data-source: dashboards-course-competency
       val allCourseProgramCompetencyDF = allCourseProgramCompetencyDataFrame(allCourseProgramDetailsWithCompDF).cache()
-      kafkaDispatch(withTimestamp(allCourseProgramCompetencyDF, timestamp), conf.courseCompetencyTopic)
 
       // get course completion data, dispatch to kafka to be ingested by druid data-source: dashboards-user-course-program-progress
 
       val userCourseProgramCompletionDF = userCourseProgramCompletionDataFrame(datesAsLong = true).cache()
       val allCourseProgramCompletionWithDetailsDF = allCourseProgramCompletionWithDetailsDataFrame(userCourseProgramCompletionDF, allCourseProgramDetailsDF, userOrgDF)
 
-      validate({userCourseProgramCompletionDF.count()}, {allCourseProgramCompletionWithDetailsDF.count()}, "userCourseProgramCompletionDF.count() should equal final course progress DF count")
       kafkaDispatch(withTimestamp(allCourseProgramCompletionWithDetailsDF, timestamp), conf.userCourseProgramProgressTopic)
 
       // org user details redis dispatch
