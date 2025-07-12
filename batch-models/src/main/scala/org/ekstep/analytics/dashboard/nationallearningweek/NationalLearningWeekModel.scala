@@ -134,7 +134,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         )
 
       Redis.dispatchDataFrame[Int]("dashboard_total_enrolment_by_ministry_slw_count", totalEnrolmentsInSLWByMinistryDF, "ministry_id", "total_enrolments")
-      Redis.dispatchDataFrame[Int]("dashboard_total_enrolment_by_ministry_slw_count", maharashtraTotalEnrolments, "ministry_id", "total_enrolments")
+      //Redis.dispatchDataFrame[Int]("dashboard_total_enrolment_by_ministry_slw_count", maharashtraTotalEnrolments, "ministry_id", "total_enrolments")
       // total enrolments stats ends
 
       // certificate generated stats starts
@@ -194,27 +194,41 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         .filter(col("ministry_id").isNotNull)
 
       Redis.dispatchDataFrame[Int]("dashboard_certificates_generated_by_ministry_slw_count", totalCertificatesGeneratedInSLWByMinistryDF, "ministry_id", "total_certificates")
-      Redis.dispatchDataFrame[Int]("dashboard_certificates_generated_by_ministry_slw_count", maharashtraTotalCertificates, "ministry_id", "total_certificates")
+      //Redis.dispatchDataFrame[Int]("dashboard_certificates_generated_by_ministry_slw_count", maharashtraTotalCertificates, "ministry_id", "total_certificates")
       // certificate generated stats ends
 
-     /* val slwStartDate = stateLearningWeekStartString.split(" ")(0)
+     
+      val slwStartDate = stateLearningWeekStartString.split(" ")(0)
       val slwEndDate = stateLearningWeekEndString.split(" ")(0)
       val slwDateConditions = s"""{"range": {"startDate": {"gte": "${slwStartDate}", "lte": "${slwEndDate}"}}}"""
       val objectType = Seq("Event")
       val shouldClauseRequired = objectType.map(pc => s"""{"match":{"objectType.raw":"${pc}"}}""").mkString(",")
-      val fieldsRequired = Seq("identifier", "name", "objectType", "resourcetype", "status", "startDate", "startTime", "duration", "registrationLink" ,"createdFor", "recordedLinks")
+      val fieldsRequired = Seq("identifier", "name", "objectType", "resourceType", "status", "startDate", "startTime", "duration", "registrationLink" ,"createdFor", "recordedLinks","resourceTypeDetails")
       val arrayFieldsRequired = Seq("createdFor","recordedLinks")
       val fieldsClauseRequired = fieldsRequired.map(f => s""""${f}"""").mkString(",")
       val eventQuery = s"""{"_source":[${fieldsClauseRequired}],"query":{"bool":{"must": [${slwDateConditions}], "should":[${shouldClauseRequired}]}}}"""
       val eventDataDF = elasticSearchDataFrame(conf.sparkElasticsearchConnectionHost, "compositesearch", eventQuery, fieldsRequired, arrayFieldsRequired)
-      val filteredDF = eventDataDF.filter(col("resourcetype") === "Rajya Karmayogi Saptah")
-      val publishedEventsCount = filteredDF.select(countDistinct("identifier")).first().getLong(0)
+      val filteredDF = eventDataDF.filter(col("resourceType") === "Rajya Karmayogi Saptah")
+      
+      // resourceTypeDetails.stateOrMinistryId is an array, explode it first
+      val explodedDF = filteredDF.select(
+        col("identifier"),
+        explode(col("resourceTypeDetails.stateOrMinistryId")).alias("stateOrMinistryId")
+      )
+
+      // Group by exploded createdFor and count distinct identifiers
+      val publishedEventsCountByCreatedFor = explodedDF
+        .groupBy("stateOrMinistryId")
+        .agg(countDistinct("identifier").alias("event_count"))
+        .orderBy(desc("event_count"))
+
+      publishedEventsCountByCreatedFor.show(false)
+
+      // adding filter to temporarly handle bihar mdo
+      val publishedEventsCount = publishedEventsCountByCreatedFor.filter(col("stateOrMinistryId") === "01358339172689510459").first().getAs[Long]("event_count")
 
       Redis.update("dashboard_events_published_by_ministry_slw_count", publishedEventsCount.toString)
       // events published stats ends
-
-      feedback - we will show event published data for Maharastra
-*/
 
       val userEventCertificatesDF = eventsEnrolmentsDF
         .filter(col("completed_on_datetime") >= stateLearningWeekStartString && col("completed_on_datetime") <= stateLearningWeekEndString)
