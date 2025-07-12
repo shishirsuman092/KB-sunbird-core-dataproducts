@@ -225,7 +225,15 @@ object NationalLearningWeekModel extends AbsDashboardModel {
       publishedEventsCountByCreatedFor.show(false)
 
       // adding filter to temporarly handle bihar mdo
-      val publishedEventsCount = publishedEventsCountByCreatedFor.filter(col("stateOrMinistryId") === "01358339172689510459").first().getAs[Long]("event_count")
+      val filteredRows = publishedEventsCountByCreatedFor
+        .filter(col("stateOrMinistryId") === "01358339172689510459")
+        .collect()
+
+      val publishedEventsCount = if (filteredRows.nonEmpty) {
+        filteredRows.head.getAs[Long]("event_count")
+      } else {
+        0L // Default value when no matching rows
+      }
 
       Redis.update("dashboard_events_published_by_ministry_slw_count", publishedEventsCount.toString)
       // events published stats ends
