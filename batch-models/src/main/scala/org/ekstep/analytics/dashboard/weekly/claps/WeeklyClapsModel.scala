@@ -76,10 +76,7 @@ object WeeklyClapsModel extends AbsDashboardModel {
 
     df = df.drop("platformEngagementTime","sessionCount")
 
-    val finalDF = df.withColumn("w1", to_json(col("w1")))
-      .withColumn("w2", to_json(col("w2")))
-      .withColumn("w3", to_json(col("w3")))
-      .withColumn("w4", to_json(col("w4")))
+    val finalDF = df.withColumn("w4", to_json(col("w4")))
 
     //finalDF.coalesce(1).write.mode(SaveMode.Overwrite).format("csv").option("header", true).save("/tmp/weeklyClaps")
     truncateWarehouseTable(conf.dwLearnerStatsTable, appPostgresUrl)
