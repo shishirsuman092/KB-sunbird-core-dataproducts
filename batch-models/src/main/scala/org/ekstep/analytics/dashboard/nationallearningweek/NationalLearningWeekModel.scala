@@ -79,7 +79,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
 
       // mdo level filtering
       val eventCertificatesGeneratedSLWMdoYdayDF = eventsEnrolmentsDF
-        .filter(col("completed_on_datetime") >= "2025-07-14 00:00:00" && col("completed_on_datetime") <= "2025-07-21 23:59:59")
+        .filter(col("completed_on_datetime") >= previousStart && col("completed_on_datetime") <= previousEnd)
         .filter(col("certificate_id").isNotNull)
         .join(userDetailsDF, Seq("user_id"), "left")
         .join(orgHierarchyDF, Seq("mdo_id"), "left")
@@ -88,7 +88,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         .agg(countDistinct("certificate_id").alias("event_certificate_count"))
 
       val contentCertificatesGeneratedSLWMdoYdayDF = contentEnrolmentsDF
-        .filter(col("first_completed_on") >= "2025-07-14 00:00:00" && col("first_completed_on") <= "2025-07-21 23:59:59")
+        .filter(col("first_completed_on") >= previousStart && col("first_completed_on") <= previousEnd)
         .filter(col("certificate_id").isNotNull)
         .join(userDetailsDF, Seq("user_id"), "left")
         .join(orgHierarchyDF, Seq("mdo_id"), "left")
