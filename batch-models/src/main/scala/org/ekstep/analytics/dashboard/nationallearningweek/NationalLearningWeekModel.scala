@@ -79,7 +79,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
 
       // mdo level filtering
       val eventCertificatesGeneratedSLWMdoYdayDF = eventsEnrolmentsDF
-        .filter(col("completed_on_datetime") >= "2025-07-14 00:00:00" && col("completed_on_datetime") <= "2025-07-14 23:59:59")
+        .filter(col("completed_on_datetime") >= "2025-07-14 00:00:00" && col("completed_on_datetime") <= "2025-07-21 23:59:59")
         .filter(col("certificate_id").isNotNull)
         .join(userDetailsDF, Seq("user_id"), "left")
         .join(orgHierarchyDF, Seq("mdo_id"), "left")
@@ -88,7 +88,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         .agg(countDistinct("certificate_id").alias("event_certificate_count"))
 
       val contentCertificatesGeneratedSLWMdoYdayDF = contentEnrolmentsDF
-        .filter(col("first_completed_on") >= "2025-07-14 00:00:00" && col("first_completed_on") <= "2025-07-14 23:59:59")
+        .filter(col("first_completed_on") >= "2025-07-14 00:00:00" && col("first_completed_on") <= "2025-07-21 23:59:59")
         .filter(col("certificate_id").isNotNull)
         .join(userDetailsDF, Seq("user_id"), "left")
         .join(orgHierarchyDF, Seq("mdo_id"), "left")
@@ -143,7 +143,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
 
       // total enrolment stats for other MDO start
       val eventEnrolmentsInSLWMdoDF = eventsEnrolmentsDF
-        .filter(col("enrolled_on_datetime") >= "2025-07-14 00:00:00" && col("enrolled_on_datetime") <= "2025-07-14 23:59:59")
+        .filter(col("enrolled_on_datetime") >= "2025-07-14 00:00:00" && col("enrolled_on_datetime") <= "2025-07-21 23:59:59")
         .join(userDetailsDF, Seq("user_id"), "left")
         .join(orgHierarchyDF, Seq("mdo_id"), "left")
         .withColumn("ministry_id", coalesce(col("ministry_id"), col("mdo_id")))
@@ -152,7 +152,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         .agg(count("*").alias("event_enrolment_count"))
 
       val contentEnrolmentsInSLWMdoDF = contentEnrolmentsDF
-        .filter(col("enrolled_on") >= "2025-07-14 00:00:00" && col("enrolled_on") <= "2025-07-14 23:59:59")
+        .filter(col("enrolled_on") >= "2025-07-14 00:00:00" && col("enrolled_on") <= "2025-07-21 23:59:59")
         .join(userDetailsDF, Seq("user_id"), "left")
         .join(orgHierarchyDF, Seq("mdo_id"), "left")
         .withColumn("ministry_id", coalesce(col("ministry_id"), col("mdo_id")))
