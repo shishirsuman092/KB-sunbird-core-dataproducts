@@ -235,6 +235,7 @@ object NationalLearningWeekModel extends AbsDashboardModel {
         0L // Default value when no matching rows
       }
 
+      Redis.dispatchDataFrame[Int]("dashboard_events_published_by_ministry_count", publishedEventsCountByCreatedFor, "stateOrMinistryId", "event_count")
       Redis.update("dashboard_events_published_by_ministry_slw_count", publishedEventsCount.toString)
       // events published stats ends
 
