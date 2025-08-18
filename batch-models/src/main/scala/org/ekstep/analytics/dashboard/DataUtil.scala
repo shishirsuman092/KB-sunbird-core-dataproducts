@@ -1663,6 +1663,7 @@ object DataUtil extends Serializable {
         col("draftdata"),
         col("status").alias("acbpStatus"),
         col("createdby").alias("acbpCreatedBy"),
+        col("isapar"),
         col("name").alias("cbPlanName"),
         col("assignmenttype").alias("assignmentType"),
         col("assignmenttypeinfo").alias("assignmentTypeInfo"),
@@ -1672,7 +1673,7 @@ object DataUtil extends Serializable {
       ).na.fill("", Seq("cbPlanName"))
 
     val draftCBPData = df.filter(col("acbpStatus") === "DRAFT" && col("draftdata").isNotNull)
-      .select(col("acbpID"),col("userOrgID"),col("draftdata"),col("acbpStatus"),col("acbpCreatedBy"))
+      .select(col("acbpID"),col("userOrgID"),col("draftdata"),col("acbpStatus"),col("acbpCreatedBy"), col("isapar"))
       .withColumn("draftData", from_json(col("draftdata"), Schema.cbplanDraftDataSchema))
       .withColumn("cbPlanName", col("draftData.name"))
       .withColumn("assignmentType", col("draftData.assignmentType"))

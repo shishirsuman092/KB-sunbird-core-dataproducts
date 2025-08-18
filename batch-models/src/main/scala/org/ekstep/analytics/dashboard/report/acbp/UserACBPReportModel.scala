@@ -40,7 +40,7 @@ object UserACBPReportModel extends AbsDashboardModel {
     val acbpDF = acbpDetailsDF()
 
     val selectColumns = Seq("userID", "fullName", "userPrimaryEmail", "userMobile", "designation", "group", "userOrgID", "ministry_name", "dept_name", "userOrgName", "userStatus", "acbpID",
-      "assignmentType", "completionDueDate", "allocatedOn", "acbpCourseIDList","acbpStatus", "acbpCreatedBy","cbPlanName")
+      "assignmentType", "completionDueDate", "allocatedOn", "acbpCourseIDList","acbpStatus", "acbpCreatedBy","cbPlanName", "isapar")
     val acbpAllotmentDF = explodedACBPDetails(acbpDF, userDataDF, selectColumns)
 
     // replace content list with names of the courses instead of ids
@@ -68,6 +68,7 @@ object UserACBPReportModel extends AbsDashboardModel {
         //col("allocatedOn").alias("allocated_on"),
         //col("completionDueDate").alias("due_by"),
         col("acbpStatus").alias("status"),
+        col("isapar"),
         col("data_last_generated_on")
       )
       .distinct().orderBy("org_id","created_by","cbPlanName")
@@ -103,6 +104,7 @@ object UserACBPReportModel extends AbsDashboardModel {
         col("Department"),
         col("Organization"),
         col("courseName").alias("Name of CBP Allocated Course"),
+        col("isapar"),
         col("allocatedOn").alias("Allocated On"),
         col("currentProgress").alias("Current Progress"),
         col("completionDueDate").alias("Due Date of Completion"),
