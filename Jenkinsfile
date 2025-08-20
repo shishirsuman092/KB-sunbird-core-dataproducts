@@ -19,11 +19,16 @@ node('build-slave') {
                 #sed -i "s/'replication_factor': '2'/'replication_factor': '1'/g" scripts/database/data.cql
                 '''
         }
-        stage('Build') {
-            sh '''
-                mvn clean install -DskipTests
-                '''
-        }
+stage('Build') {
+        sh '''
+           echo "Available memory:"
+            free -h
+            export MAVEN_OPTS="-Xss64m -Xmx12g -XX:MetaspaceSize=1024m -XX:MaxMetaspaceSize=2g -XX:+UseG1GC"
+            echo "Maven opts: $MAVEN_OPTS"
+            # Build with the updated POM configuration
+            mvn clean install -DskipTests
+        '''
+    }
         stage('Archive artifacts'){
             sh """
                         mkdir lpa_core_dp_artifacts

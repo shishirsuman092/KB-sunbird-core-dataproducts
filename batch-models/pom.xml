@@ -302,18 +302,35 @@
 				<groupId>net.alchim31.maven</groupId>
 				<artifactId>scala-maven-plugin</artifactId>
 				<version>3.2.2</version>
+				<configuration>
+					<!-- Add JVM arguments for the Scala compiler process -->
+					<jvmArgs>
+						<jvmArg>-Xss128m</jvmArg>
+						<jvmArg>-Xmx12g</jvmArg>
+						<jvmArg>-XX:MetaspaceSize=1024m</jvmArg>
+						<jvmArg>-XX:MaxMetaspaceSize=2g</jvmArg>
+						<jvmArg>-XX:+UseG1GC</jvmArg>
+					</jvmArgs>
+					<!-- Add compiler arguments to help with complex compilation -->
+					<args>
+						<arg>-dependencyfile</arg>
+						<arg>${project.build.directory}/.scala_dependencies</arg>
+						<arg>-feature</arg>
+						<arg>-unchecked</arg>
+						<arg>-deprecation</arg>
+						<arg>-optimise</arg>
+						<arg>-Yinline-warnings</arg>
+					</args>
+					<!-- Enable incremental compilation -->
+					<recompileMode>incremental</recompileMode>
+					<useZincServer>true</useZincServer>
+				</configuration>
 				<executions>
 					<execution>
 						<goals>
 							<goal>compile</goal>
 							<goal>testCompile</goal>
 						</goals>
-						<configuration>
-							<args>
-								<arg>-dependencyfile</arg>
-								<arg>${project.build.directory}/.scala_dependencies</arg>
-							</args>
-						</configuration>
 					</execution>
 				</executions>
 			</plugin>
