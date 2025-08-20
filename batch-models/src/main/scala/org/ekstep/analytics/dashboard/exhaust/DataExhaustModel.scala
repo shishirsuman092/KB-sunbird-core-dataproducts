@@ -190,6 +190,7 @@ object DataExhaustModel extends AbsDashboardModel {
       pqCache.write(orgPostgresDF, "orgCompleteHierarchy")
       orgDF.unpersist()
 
+
     val marketPlaceContentDF = postgresTableAsDataFrame(appPostgresUrl, "cios_content_entity", conf.appPostgresUsername, conf.appPostgresCredential)
     cache.write(marketPlaceContentDF, "externalContent")
     pqCache.write(marketPlaceContentDF, "externalContent")
@@ -225,7 +226,7 @@ object DataExhaustModel extends AbsDashboardModel {
     pqCache.write(oldAssessmentDetailsDF, "oldAssessmentDetails")
     oldAssessmentDetailsDF.unpersist()
 
-    val weeklyClapsDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraLearnerStatsTable)
+    val weeklyClapsDF = postgresTableAsDataFrame(appPostgresUrl, conf.dwLearnerStatsTable, conf.appPostgresUsername, conf.appPostgresCredential)
     cache.write(weeklyClapsDF, "weeklyClaps")
     pqCache.write(weeklyClapsDF, "weeklyClaps")
     weeklyClapsDF.unpersist()

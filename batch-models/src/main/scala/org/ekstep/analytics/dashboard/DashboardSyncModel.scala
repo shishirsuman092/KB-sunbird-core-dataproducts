@@ -31,105 +31,94 @@ object DashboardSyncModel extends AbsDashboardModel {
    */
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
     try{
-    val processingTime = new SimpleDateFormat(s"${dateFormat}'T'${timeFormat}'Z'").format(timestamp)
-    Redis.update("dashboard_update_time", processingTime)
+      val processingTime = new SimpleDateFormat(s"${dateFormat}'T'${timeFormat}'Z'").format(timestamp)
+      Redis.update("dashboard_update_time", processingTime)
 
-    // obtain and save user org data
-    val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
-    val activeUsers = userDF.where(col("userStatus") === 1).cache()
-    val activeOrgs = orgDF.where(col("orgStatus") === 1).cache()
+      // obtain and save user org data
+      val (orgDF, userDF, userOrgDF) = getOrgUserDataFrames()
+      val activeUsers = userDF.where(col("userStatus") === 1).cache()
+      val activeOrgs = orgDF.where(col("orgStatus") === 1).cache()
 
-    val designationsDF = orgDesignationsDF(userOrgDF)
-    Redis.dispatchDataFrame[String]("org_designations", designationsDF, "userOrgID", "org_designations", replace = false)
+      val designationsDF = orgDesignationsDF(userOrgDF)
+      Redis.dispatchDataFrame[String]("org_designations", designationsDF, "userOrgID", "org_designations", replace = false)
 
-    // kafkaDispatch(withTimestamp(orgDF, timestamp), conf.orgTopic)
-    kafkaDispatch(withTimestamp(userOrgDF, timestamp), conf.userOrgTopic)
+      // obtain and save role count data
+      val roleDF = roleDataFrame()
+      val userOrgRoleDF = userOrgRoleDataFrame(userOrgDF, roleDF).cache()
+      val roleCountDF = roleCountDataFrame(userOrgRoleDF)
 
-    // obtain and save role count data
-    val roleDF = roleDataFrame()
-    val userOrgRoleDF = userOrgRoleDataFrame(userOrgDF, roleDF).cache()
-    val roleCountDF = roleCountDataFrame(userOrgRoleDF)
-    kafkaDispatch(withTimestamp(roleCountDF, timestamp), conf.roleUserCountTopic)
+      // obtain and save org role count data
+      val orgRoleCount = orgRoleCountDataFrame(userOrgRoleDF)
 
-    // obtain and save org role count data
-    val orgRoleCount = orgRoleCountDataFrame(userOrgRoleDF)
-    kafkaDispatch(withTimestamp(orgRoleCount, timestamp), conf.orgRoleUserCountTopic)
+      // org user count
+      val orgUserCountDF = orgUserCountDataFrame(activeOrgs, activeUsers)
 
-    // org user count
-    val orgUserCountDF = orgUserCountDataFrame(activeOrgs, activeUsers)
-    // validate activeOrgCount and orgUserCountDF count
-    validate({orgUserCountDF.count()},
-      {userOrgDF.filter(expr("userStatus=1 AND userOrgID IS NOT NULL AND userOrgStatus=1")).select("userOrgID").distinct().count()},
-      "orgUserCountDF.count() should equal distinct active org count in userOrgDF")
+      //obtain and save total karma points of each user
+      val karmaPointsDataDF = cache.load("userKarmaPoints")
+        .groupBy(col("userid").alias("userID")).agg(sum(col("points")).alias("total_points"))
 
-    //obtain and save total karma points of each user
-    val karmaPointsDataDF = cache.load("userKarmaPoints")
-      .groupBy(col("userid").alias("userID")).agg(sum(col("points")).alias("total_points"))
+      val kPointsWithUserOrgDF = karmaPointsDataDF.join(userOrgDF, Seq("userID"), "inner")
+        .select(karmaPointsDataDF("*"), userOrgDF("fullName"), userOrgDF("userOrgID"), userOrgDF("userOrgName"), userOrgDF("professionalDetails.designation").alias("designation"), userOrgDF("userProfileImgUrl"))
 
-    val kPointsWithUserOrgDF = karmaPointsDataDF.join(userOrgDF, Seq("userID"), "inner")
-      .select(karmaPointsDataDF("*"), userOrgDF("fullName"), userOrgDF("userOrgID"), userOrgDF("userOrgName"), userOrgDF("professionalDetails.designation").alias("designation"), userOrgDF("userProfileImgUrl"))
+      val (hierarchyDF, allCourseProgramDetailsWithCompDF, allCourseProgramDetailsDF,
+      allCourseProgramDetailsWithRatingDF) = contentDataFrames(orgDF)
 
-    val (hierarchyDF, allCourseProgramDetailsWithCompDF, allCourseProgramDetailsDF,
-    allCourseProgramDetailsWithRatingDF) = contentDataFrames(orgDF)
+      kafkaDispatch(withTimestamp(allCourseProgramDetailsWithRatingDF, timestamp), conf.allCourseTopic)
 
-    kafkaDispatch(withTimestamp(allCourseProgramDetailsWithRatingDF, timestamp), conf.allCourseTopic)
+      // get course competency mapping data, dispatch to kafka to be ingested by druid data-source: dashboards-course-competency
+      val allCourseProgramCompetencyDF = allCourseProgramCompetencyDataFrame(allCourseProgramDetailsWithCompDF).cache()
 
-    // get course competency mapping data, dispatch to kafka to be ingested by druid data-source: dashboards-course-competency
-    val allCourseProgramCompetencyDF = allCourseProgramCompetencyDataFrame(allCourseProgramDetailsWithCompDF).cache()
-    kafkaDispatch(withTimestamp(allCourseProgramCompetencyDF, timestamp), conf.courseCompetencyTopic)
+      // get course completion data, dispatch to kafka to be ingested by druid data-source: dashboards-user-course-program-progress
 
-    // get course completion data, dispatch to kafka to be ingested by druid data-source: dashboards-user-course-program-progress
+      val userCourseProgramCompletionDF = userCourseProgramCompletionDataFrame(datesAsLong = true).cache()
+      val allCourseProgramCompletionWithDetailsDF = allCourseProgramCompletionWithDetailsDataFrame(userCourseProgramCompletionDF, allCourseProgramDetailsDF, userOrgDF)
 
-    val userCourseProgramCompletionDF = userCourseProgramCompletionDataFrame(datesAsLong = true).cache()
-    val allCourseProgramCompletionWithDetailsDF = allCourseProgramCompletionWithDetailsDataFrame(userCourseProgramCompletionDF, allCourseProgramDetailsDF, userOrgDF)
+      kafkaDispatch(withTimestamp(allCourseProgramCompletionWithDetailsDF, timestamp), conf.userCourseProgramProgressTopic)
 
-    validate({userCourseProgramCompletionDF.count()}, {allCourseProgramCompletionWithDetailsDF.count()}, "userCourseProgramCompletionDF.count() should equal final course progress DF count")
-    kafkaDispatch(withTimestamp(allCourseProgramCompletionWithDetailsDF, timestamp), conf.userCourseProgramProgressTopic)
+      // org user details redis dispatch
+      val (orgRegisteredUserCountMap, orgTotalUserCountMap, orgNameMap) = getOrgUserMaps(orgUserCountDF)
+      val activeOrgCount = activeOrgs.count()
+      val activeUserCount = activeUsers.count()
+      Redis.dispatch(conf.redisRegisteredOfficerCountKey, orgRegisteredUserCountMap)
+      Redis.dispatch(conf.redisTotalOfficerCountKey, orgTotalUserCountMap)
+      Redis.dispatch(conf.redisOrgNameKey, orgNameMap)
+      Redis.update(conf.redisTotalRegisteredOfficerCountKey, activeUserCount.toString)
+      Redis.update(conf.redisTotalOrgCountKey, activeOrgCount.toString)
 
-    // org user details redis dispatch
-    val (orgRegisteredUserCountMap, orgTotalUserCountMap, orgNameMap) = getOrgUserMaps(orgUserCountDF)
-    val activeOrgCount = activeOrgs.count()
-    val activeUserCount = activeUsers.count()
-    Redis.dispatch(conf.redisRegisteredOfficerCountKey, orgRegisteredUserCountMap)
-    Redis.dispatch(conf.redisTotalOfficerCountKey, orgTotalUserCountMap)
-    Redis.dispatch(conf.redisOrgNameKey, orgNameMap)
-    Redis.update(conf.redisTotalRegisteredOfficerCountKey, activeUserCount.toString)
-    Redis.update(conf.redisTotalOrgCountKey, activeOrgCount.toString)
+      // update redis key for top 10 learners in MDO channel
+      val toJsonStringUDF = udf((userID: String, fullName: String, userOrgName: String, designation: String, userProfileImgUrl: String, total_points: Long, rank: Int) => {
+        s"""{"userID":"$userID","fullName":"$fullName","userOrgName":"$userOrgName","designation":"$designation","userProfileImgUrl":"$userProfileImgUrl","total_points":$total_points,"rank":$rank}"""
+      })
+      val windowSpec = Window.partitionBy("userOrgID").orderBy(col("total_points").desc)
+      val rankedDF = kPointsWithUserOrgDF.withColumn("rank", rank().over(windowSpec))
+      val top10LearnersByMDODF = rankedDF.filter(col("rank") <= 10)
+      val jsonStringDF = top10LearnersByMDODF.withColumn("json_details", toJsonStringUDF(
+        col("userID"), col("fullName"), col("userOrgName"), col("designation"), col("userProfileImgUrl"), col("total_points"), col("rank")
+      )).groupBy("userOrgID").agg(collect_list(col("json_details")).as("top_learners"))
+      val resultDF = jsonStringDF.select(col("userOrgID"), to_json(struct(col("top_learners"))).alias("top_learners"))
 
-    // update redis key for top 10 learners in MDO channel
-    val toJsonStringUDF = udf((userID: String, fullName: String, userOrgName: String, designation: String, userProfileImgUrl: String, total_points: Long, rank: Int) => {
-      s"""{"userID":"$userID","fullName":"$fullName","userOrgName":"$userOrgName","designation":"$designation","userProfileImgUrl":"$userProfileImgUrl","total_points":$total_points,"rank":$rank}"""
-    })
-    val windowSpec = Window.partitionBy("userOrgID").orderBy(col("total_points").desc)
-    val rankedDF = kPointsWithUserOrgDF.withColumn("rank", rank().over(windowSpec))
-    val top10LearnersByMDODF = rankedDF.filter(col("rank") <= 10)
-    val jsonStringDF = top10LearnersByMDODF.withColumn("json_details", toJsonStringUDF(
-      col("userID"), col("fullName"), col("userOrgName"), col("designation"), col("userProfileImgUrl"), col("total_points"), col("rank")
-    )).groupBy("userOrgID").agg(collect_list(col("json_details")).as("top_learners"))
-    val resultDF = jsonStringDF.select(col("userOrgID"), to_json(struct(col("top_learners"))).alias("top_learners"))
+      Redis.dispatchDataFrame[String]("dashboard_top_10_learners_on_kp_by_user_org", resultDF, "userOrgID", "top_learners")
 
-    Redis.dispatchDataFrame[String]("dashboard_top_10_learners_on_kp_by_user_org", resultDF, "userOrgID", "top_learners")
-
-    val (hierarchy1DF, cbpDetailsWithCompDF, cbpDetailsDF,
-    cbpDetailsWithRatingDF) = contentDataFrames(orgDF, Seq("Course", "Program", "Blended Program", "Curated Program"))
-    val cbpCompletionWithDetailsDF = allCourseProgramCompletionWithDetailsDataFrame(userCourseProgramCompletionDF, cbpDetailsDF, userOrgDF)
-    val eventsEnrolmentDataDF = cache.load("eventEnrolmentDetails")
+      val (hierarchy1DF, cbpDetailsWithCompDF, cbpDetailsDF,
+      cbpDetailsWithRatingDF) = contentDataFrames(orgDF, Seq("Course", "Program", "Blended Program", "Curated Program"))
+      val cbpCompletionWithDetailsDF = allCourseProgramCompletionWithDetailsDataFrame(userCourseProgramCompletionDF, cbpDetailsDF, userOrgDF)
+      val eventsEnrolmentDataDF = cache.load("eventEnrolmentDetails")
       val eventDetails = cache.load("eventDetails")
-    // update redis data for learner home page
-    updateLearnerHomePageData(orgDF, userOrgDF, userCourseProgramCompletionDF, cbpCompletionWithDetailsDF, cbpDetailsWithRatingDF, eventsEnrolmentDataDF)
+      // update redis data for learner home page
+      updateLearnerHomePageData(orgDF, userOrgDF, userCourseProgramCompletionDF, cbpCompletionWithDetailsDF, cbpDetailsWithRatingDF, eventsEnrolmentDataDF)
 
-    // update redis data for dashboards
-    dashboardRedisUpdates(orgRoleCount, activeUsers, allCourseProgramDetailsWithRatingDF, allCourseProgramCompletionWithDetailsDF, allCourseProgramCompetencyDF, cbpCompletionWithDetailsDF, userOrgDF, eventsEnrolmentDataDF, eventDetails)
+      // update redis data for dashboards
+      dashboardRedisUpdates(orgRoleCount, activeUsers, allCourseProgramDetailsWithRatingDF, allCourseProgramCompletionWithDetailsDF, allCourseProgramCompetencyDF, cbpCompletionWithDetailsDF, userOrgDF, eventsEnrolmentDataDF, eventDetails)
 
-    // update cbp top 10 reviews
-    cbpTop10Reviews(allCourseProgramDetailsWithRatingDF)
+      // update cbp top 10 reviews
+      cbpTop10Reviews(allCourseProgramDetailsWithRatingDF)
 
-    Redis.closeRedisConnect()
-  }catch {
-    case e: Exception =>
-      println(s"Error occurred during DashboardSyncModel processing: ${e.getMessage}", e)
-      System.exit(1)
-  }
+      Redis.closeRedisConnect()
+    }catch {
+      case e: Exception =>
+        println(s"Error occurred during DashboardSyncModel processing: ${e.getMessage}", e)
+        System.exit(1)
+    }
   }
 
   def dashboardRedisUpdates(orgRoleCount: DataFrame, activeUsers: DataFrame, allCourseProgramDetailsWithRatingDF: DataFrame,
@@ -344,15 +333,15 @@ object DashboardSyncModel extends AbsDashboardModel {
     val contentEnrolmentCount = contentEnrolmentCountDF.select("count").first().getLong(0)
     val externalContentEnrolmentCount = externalContentEnrolmentCountDF.select("count").first().getLong(0)
 
-//    Redis.update("dashboard_enrolment_count", enrolmentCount.toString)
+    //    Redis.update("dashboard_enrolment_count", enrolmentCount.toString)
     Redis.update("dashboard_enrolment_count",(contentEnrolmentCount+externalContentEnrolmentCount).toString)
     Redis.update("dashboard_not_started_count", notStartedCount.toString)
     Redis.update("dashboard_started_count", startedCount.toString)
     Redis.update("dashboard_in_progress_count", inProgressCount.toString)
     Redis.update("dashboard_completed_count", (contentCompletedCount+externalContentCompletedCount).toString)
-//    Redis.update("dashboard_completed_count", completedCount.toString)
+    //    Redis.update("dashboard_completed_count", completedCount.toString)
     Redis.update("lp_completed_count", landingPageCompletedCount.toString)
-//    Redis.update("lp_completed_yesterday_count", landingPageCompletedYesterdayCount.toString)
+    //    Redis.update("lp_completed_yesterday_count", landingPageCompletedYesterdayCount.toString)
     Redis.dispatchDataFrame[Long]("live_course_program_enrolment_count", liveCourseProgramEnrolmentCountsDF, "courseID", "enrolmentCount")
     println("dashboard_completed_count:"+completedCount.toString)
     println("dashboard_content_completed_count:"+contentCompletedCount.toString)
@@ -730,34 +719,34 @@ object DashboardSyncModel extends AbsDashboardModel {
     Redis.dispatchDataFrame[String]("dashboard_top_10_courses_by_completion_by_course_org", combinedDFByCBP, "courseOrgID:content", "sorted_courseIDs")
 
     // Anonymous Assessment KPIs START
-//     val courseIDs = conf.anonymousAssessmentLoggedInUserContentIDs.split(",").toSeq
-//     val anonymousAssessmentIDs = conf.anonymousAssessmentNonLoggedInUserAssessmentIDs.split(",").toSeq
-//     val loggedInEnrolmentData = cache.load("enrolment")
-//       .where(expr("active=true"))
-//       .select(col("status"), col("userid"), col("courseid"), col("issued_certificates"))
-//       .filter(col("courseid").isin(courseIDs: _*))
-//
-//     val nonLoggedInUserConpletionWIthAssessmentData = cassandraTableAsDataFrame(conf.cassandraUserKeyspace,conf.cassandraPublicUserAssessmentDataTable)
-//       .select(col("userid"), col("status"), col("issued_certificates"), col("assessmentid"))
-//       .filter(col("assessmentid").isin(anonymousAssessmentIDs: _*))
-//
-//      val nonLoggedInUserAccessCount = nonLoggedInUserAccessCountDataFrame().select(col("user_count")).first().getLong(0)
-//      val loggedInUserAccessCount = loggedInUserAccessCountDataFrame().select(col("user_count")).first().getLong(0)
-//      val loggedInUserEnrolmentsCount = loggedInEnrolmentData
-//        .filter(col("status").isin(0, 1, 2)).agg(count("userid").alias("distinct_user_count"))
-//        .select(col("distinct_user_count")).first().getLong(0)
-//      val loggedInUserCompletionWithCertificateCount = loggedInEnrolmentData
-//        .filter(col("status") === 2 && size(col("issued_certificates")) > 0).agg(count("userid").alias("distinct_user_count"))
-//        .select(col("distinct_user_count")).first().getLong(0)
-//      val nonLoggedInUserCompletionWithCertificateCount = nonLoggedInUserConpletionWIthAssessmentData
-//        .filter(col("status") === "SUBMITTED" && size(col("issued_certificates")) > 0).agg(count("userid").alias("distinct_user_count"))
-//        .select(col("distinct_user_count")).first().getLong(0)
-//
-//      Redis.update("dashboards_lu_assessment_access_count", loggedInUserAccessCount.toString)
-//       Redis.update("dashboards_lu_assessment_enrolment_count", loggedInUserEnrolmentsCount.toString)
-//       Redis.update("dashboards_lu_assessment_certification_count", loggedInUserCompletionWithCertificateCount.toString)
-//       Redis.update("dashboards_nlu_anonymous_assessment_access_count", nonLoggedInUserAccessCount.toString)
-//       Redis.update("dashboards_nlu_anonymous_assessment_certification_count", nonLoggedInUserCompletionWithCertificateCount.toString)
+    //     val courseIDs = conf.anonymousAssessmentLoggedInUserContentIDs.split(",").toSeq
+    //     val anonymousAssessmentIDs = conf.anonymousAssessmentNonLoggedInUserAssessmentIDs.split(",").toSeq
+    //     val loggedInEnrolmentData = cache.load("enrolment")
+    //       .where(expr("active=true"))
+    //       .select(col("status"), col("userid"), col("courseid"), col("issued_certificates"))
+    //       .filter(col("courseid").isin(courseIDs: _*))
+    //
+    //     val nonLoggedInUserConpletionWIthAssessmentData = cassandraTableAsDataFrame(conf.cassandraUserKeyspace,conf.cassandraPublicUserAssessmentDataTable)
+    //       .select(col("userid"), col("status"), col("issued_certificates"), col("assessmentid"))
+    //       .filter(col("assessmentid").isin(anonymousAssessmentIDs: _*))
+    //
+    //      val nonLoggedInUserAccessCount = nonLoggedInUserAccessCountDataFrame().select(col("user_count")).first().getLong(0)
+    //      val loggedInUserAccessCount = loggedInUserAccessCountDataFrame().select(col("user_count")).first().getLong(0)
+    //      val loggedInUserEnrolmentsCount = loggedInEnrolmentData
+    //        .filter(col("status").isin(0, 1, 2)).agg(count("userid").alias("distinct_user_count"))
+    //        .select(col("distinct_user_count")).first().getLong(0)
+    //      val loggedInUserCompletionWithCertificateCount = loggedInEnrolmentData
+    //        .filter(col("status") === 2 && size(col("issued_certificates")) > 0).agg(count("userid").alias("distinct_user_count"))
+    //        .select(col("distinct_user_count")).first().getLong(0)
+    //      val nonLoggedInUserCompletionWithCertificateCount = nonLoggedInUserConpletionWIthAssessmentData
+    //        .filter(col("status") === "SUBMITTED" && size(col("issued_certificates")) > 0).agg(count("userid").alias("distinct_user_count"))
+    //        .select(col("distinct_user_count")).first().getLong(0)
+    //
+    //      Redis.update("dashboards_lu_assessment_access_count", loggedInUserAccessCount.toString)
+    //       Redis.update("dashboards_lu_assessment_enrolment_count", loggedInUserEnrolmentsCount.toString)
+    //       Redis.update("dashboards_lu_assessment_certification_count", loggedInUserCompletionWithCertificateCount.toString)
+    //       Redis.update("dashboards_nlu_anonymous_assessment_access_count", nonLoggedInUserAccessCount.toString)
+    //       Redis.update("dashboards_nlu_anonymous_assessment_certification_count", nonLoggedInUserCompletionWithCertificateCount.toString)
     // Anonymous Assessment KPIs END
 
     // DSR new keys monthly active users and certificate issued yesterday
@@ -1025,11 +1014,11 @@ object DashboardSyncModel extends AbsDashboardModel {
     print("The last run date is " + lastRunDate + "\n")
     print("current Date is" + currentDateString + "\n")
 
-     if(!lastRunDate.equals(currentDateString)) {
-    learnerHPRedisCalculations(cbpCompletionWithDetailsDF, cbpDetailsWithRatingDF, userOrgDF, eventsEnrolmentDataDF)
-      } else {
-        print("This is a second run today and the computation and redis key updates are not required")
-      }
+    if(!lastRunDate.equals(currentDateString)) {
+      learnerHPRedisCalculations(cbpCompletionWithDetailsDF, cbpDetailsWithRatingDF, userOrgDF, eventsEnrolmentDataDF)
+    } else {
+      print("This is a second run today and the computation and redis key updates are not required")
+    }
 
     Redis.update("lhp_lastRunDate", currentDateString)
 
@@ -1134,8 +1123,8 @@ object DashboardSyncModel extends AbsDashboardModel {
 
     Redis.update("lhp_certificationsTillToday", totalCertificationsTillToday.toString)
     Redis.update("lhp_certificationsTillYesterday", totalCertificationsTillYesterday.toString)
-//    Redis.updateMapField("lhp_certifications", "across:yesterday", totalCertificationsYesterday.toString)
-//    Redis.updateMapField("lhp_certifications", "across:today", totalCertificationsToday.toString)
+    //    Redis.updateMapField("lhp_certifications", "across:yesterday", totalCertificationsYesterday.toString)
+    //    Redis.updateMapField("lhp_certifications", "across:today", totalCertificationsToday.toString)
 
     //NLWEventsCalculation
     val nationalLearningWeekStartString = conf.nationalLearningWeekStart
