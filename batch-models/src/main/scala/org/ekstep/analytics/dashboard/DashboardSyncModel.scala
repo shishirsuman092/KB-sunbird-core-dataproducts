@@ -41,6 +41,7 @@ object DashboardSyncModel extends AbsDashboardModel {
 
       val designationsDF = orgDesignationsDF(userOrgDF)
       Redis.dispatchDataFrame[String]("org_designations", designationsDF, "userOrgID", "org_designations", replace = false)
+      kafkaDispatch(withTimestamp(userOrgDF, timestamp), conf.userOrgTopic)
 
       // obtain and save role count data
       val roleDF = roleDataFrame()
@@ -49,6 +50,7 @@ object DashboardSyncModel extends AbsDashboardModel {
 
       // obtain and save org role count data
       val orgRoleCount = orgRoleCountDataFrame(userOrgRoleDF)
+
 
       // org user count
       val orgUserCountDF = orgUserCountDataFrame(activeOrgs, activeUsers)

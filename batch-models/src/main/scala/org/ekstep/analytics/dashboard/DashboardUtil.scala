@@ -88,6 +88,7 @@ case class DashboardConfig (
                              cassandraGroupDesignationTable: String,
                              cassandraSLWMdoTopLearnerTable: String,
                              cassandraSLWMdoLeaderboardTable: String,
+                             cassandraUserExtendedProfileTable: String,
 
                              //warehouse tables;
                              appPostgresHost: String,
@@ -313,6 +314,7 @@ object DashboardConfigParser extends Serializable {
       cassandraGroupDesignationTable = getConfigModelParam(config, "cassandraGroupDesignationTable"),
       cassandraSLWMdoTopLearnerTable = getConfigModelParam(config, "cassandraSLWMdoTopLearnerTable"),
       cassandraSLWMdoLeaderboardTable = getConfigModelParam(config, "cassandraSLWMdoLeaderboardTable"),
+      cassandraUserExtendedProfileTable = getConfigModelParam(config, "cassandraUserExtendedProfileTable"),
 
 
       // redis keys
@@ -906,6 +908,7 @@ object DashboardUtil extends Serializable {
   }
 
   def truncateWarehouseTable(table: String, dwPostgresUrl: String)(implicit spark: SparkSession, conf: DashboardConfig): Unit = {
+    println("truncating table - ", table)
     val postgresProperties = new java.util.Properties()
     postgresProperties.setProperty("user", conf.dwPostgresUsername)
     postgresProperties.setProperty("password", conf.dwPostgresCredential)
