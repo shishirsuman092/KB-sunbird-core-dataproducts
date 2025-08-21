@@ -61,6 +61,24 @@ object DataUtil extends Serializable {
       StructField("externalSystemId", StringType, nullable = true),
       StructField("externalSystem", StringType, nullable = true)
     ))
+
+    /* schema definitions for user extended profile contextdata */
+    val customFieldValueSchema: StructType = StructType(Seq(
+      StructField("attributeName", StringType, nullable = true),
+      StructField("value", StringType, nullable = true),
+      StructField("level", IntegerType, nullable = true)
+    ))
+    val customFieldSchema: StructType = StructType(Seq(
+      StructField("customFieldId", StringType, nullable = true),
+      StructField("type", StringType, nullable = true),
+      StructField("attributeName", StringType, nullable = true),
+      StructField("value", StringType, nullable = true),
+      StructField("values", ArrayType(customFieldValueSchema), nullable = true)
+    ))
+    val contextDataSchema: StructType = StructType(Seq(
+      StructField("organisationId", StringType, nullable = true),
+      StructField("customFieldValues", ArrayType(customFieldSchema), nullable = true)
+    ))
     def makeProfileDetailsSchema(competencies: Boolean = false, additionalProperties: Boolean = false, professionalDetails: Boolean = false): StructType = {
       val fields = ListBuffer(
         StructField("verifiedKarmayogi", BooleanType, nullable = true),
@@ -169,6 +187,7 @@ object DataUtil extends Serializable {
       }
       if (competencies) {
         fields.append(StructField("competencies_v3", StringType, nullable = true))
+        //fields.append(StructField("competencies_v6", StringType, nullable = true))
       }
       StructType(fields)
     }
@@ -403,7 +422,7 @@ object DataUtil extends Serializable {
   /**
    * user data from cassandra TODO
    * @return DataFrame(userID, firstName, lastName, maskedEmail, userOrgID, userStatus, userCreatedTimestamp, userUpdatedTimestamp,
-   *         userVerified, userMandatoryFieldsExists, userPhoneVerified)
+   *         
    */
   def userDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
     val profileDetailsSchema = Schema.makeProfileDetailsSchema(additionalProperties = true, professionalDetails = true)
@@ -449,6 +468,7 @@ object DataUtil extends Serializable {
 
     userDF
   }
+
   /**
    * de-normalize user data with org data
    *
@@ -628,7 +648,8 @@ object DataUtil extends Serializable {
         col("competencies_v6.competencyThemeRefId"),
         col("competencies_v6.competencySubThemeRefId"),
         col("contentLanguage"),
-        col("courseCategory")
+        col("courseCategory"),
+        col("source")
       ).dropDuplicates("courseID", "category")
       .na.fill(0.0, Seq("courseDuration"))
       .na.fill(0, Seq("courseResourceCount"))
@@ -986,7 +1007,8 @@ object DataUtil extends Serializable {
   def userCourseProgramCompletionDataFrame(extraCols: Seq[String] = Seq(), datesAsLong: Boolean = false)(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
 
     val selectCols = Seq("userID", "courseID", "batchID", "courseProgress", "dbCompletionStatus", "courseCompletedTimestamp",
-      "courseEnrolledTimestamp", "lastContentAccessTimestamp", "issuedCertificateCount","issuedCertificateCountPerContent", "firstCompletedOn", "certificateGeneratedOn", "certificateID") ++ extraCols
+      "courseEnrolledTimestamp", "lastContentAccessTimestamp", "issuedCertificateCount","issuedCertificateCountPerContent", 
+      "firstCompletedOn", "certificateGeneratedOn", "certificateID") ++ extraCols
 
     var df = cache.load("enrolment")
       .where(expr("active=true"))
@@ -1003,7 +1025,8 @@ object DataUtil extends Serializable {
       .withColumnRenamed("batchid", "batchID")
       .withColumnRenamed("progress", "courseProgress")
       .withColumnRenamed("status", "dbCompletionStatus")
-      .withColumnRenamed("contentstatus", "courseContentStatus")
+      //.withColumnRenamed("contentstatus", "courseContentStatus")
+      .withColumnRenamed("lang_contentstatus", "courseContentStatus")
       .na.fill(0, Seq("courseProgress", "issuedCertificateCount"))
       .na.fill("", Seq("certificateGeneratedOn"))
       .select(selectCols.head, selectCols.tail: _*)
