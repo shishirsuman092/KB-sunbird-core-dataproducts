@@ -110,7 +110,7 @@ object TestUtil extends Serializable {
       "cassandraUserTable" -> "user",
       "cassandraUserRolesTable" -> "user_roles",
       "cassandraOrgTable" -> "organisation",
-      "cassandraUserEnrolmentsTable" -> "user_enrolments",
+      "cassandraUserEnrolmentsTable" -> "user_enrolments_v2",
       "cassandraContentHierarchyTable" -> "content_hierarchy",
       "cassandraRatingSummaryTable" -> "ratings_summary",
       "cassandraRatingsTable" -> "ratings",
@@ -180,6 +180,7 @@ object TestUtil extends Serializable {
       "cassandraSLWMdoTopLearnerTable" -> "slw_mdo_top_learners",
       "anonymousAssessmentLoggedInUserContentIDs" -> "do_1141533540853432321675,do_1141533857591132161321,do_1141525365329264641663,do_1141527106280980481664",
       "anonymousAssessmentNonLoggedInUserAssessmentIDs" -> "do_11415336159226265611",
+      "cassandraUserExtendedProfileTable" -> "user_extended_profile",
 
       "prefixDirectoryPath" -> "standalone-reports",
       "destinationDirectoryPath" -> "standalone-reports/merged",
