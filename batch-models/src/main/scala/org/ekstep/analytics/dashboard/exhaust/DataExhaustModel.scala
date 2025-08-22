@@ -57,7 +57,8 @@ object DataExhaustModel extends AbsDashboardModel {
         col("userid").alias("userID"),
         col("assessmentreadresponse"),
         col("submitassessmentresponse"),
-        col("submitassessmentrequest")
+        col("submitassessmentrequest"),
+        col("language").alias("assessLanguage")
       )
       .na.fill("{}", Seq("submitassessmentresponse", "submitassessmentrequest"))
       .withColumn("readResponse", from_json(col("assessmentreadresponse"), Schema.assessmentReadResponseSchema))
@@ -72,6 +73,7 @@ object DataExhaustModel extends AbsDashboardModel {
       col("assessEndTimestamp"),
       col("assessUserStatus"),
       col("userID"),
+      col("assessLanguage"),
 
       col("readResponse.totalQuestions").alias("assessTotalQuestions"),
       col("readResponse.maxQuestions").alias("assessMaxQuestions"),
