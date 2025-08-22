@@ -119,7 +119,7 @@ object TestUtil extends Serializable {
       "cassandraLearnerStatsTable" -> "learner_stats",
       "cassandraKarmaPointsTable" -> "user_karma_points",
       "cassandraHallOfFameTable" -> "mdo_karma_points",
-      "cassandraUserAssessmentTable" -> "user_assessment_data",
+      "cassandraUserAssessmentTable" -> "user_assessment_data_v2",
       "cassandraKarmaPointsLookupTable" -> "user_karma_points_credit_lookup",
       "cassandraKarmaPointsTable" -> "user_karma_points",
       "cassandraKarmaPointsSummaryTable" -> "user_karma_points_summary",
