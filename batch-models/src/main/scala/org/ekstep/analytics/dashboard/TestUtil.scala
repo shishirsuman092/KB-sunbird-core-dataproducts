@@ -150,6 +150,7 @@ object TestUtil extends Serializable {
       "mdoIDs" -> "",
 
       "userReportPath" -> "standalone-reports/user-report",
+      "userCustomReportPath" -> "standalone-reports/user-custom-report",
       "userEnrolmentReportPath" -> "standalone-reports/user-enrollment-report",
       "courseReportPath" -> "standalone-reports/course-report",
       "cbaReportPath" -> "standalone-reports/cba-report",

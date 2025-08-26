@@ -79,7 +79,18 @@ object DataUtil extends Serializable {
       StructField("organisationId", StringType, nullable = true),
       StructField("customFieldValues", ArrayType(customFieldSchema), nullable = true)
     ))
-    def makeProfileDetailsSchema(competencies: Boolean = false, additionalProperties: Boolean = false, professionalDetails: Boolean = false): StructType = {
+    val cadreDetailsSchema = StructType(List(
+      StructField("cadreName", StringType, nullable = true),
+      StructField("civilServiceId", StringType, nullable = true),
+      StructField("cadreId", StringType, nullable = true),
+      StructField("civilServiceTypeId", StringType, nullable = true),
+      StructField("civilServiceType", StringType, nullable = true),
+      StructField("cadreControllingAuthorityName", StringType, nullable = true),
+      StructField("civilServiceName", StringType, nullable = true),
+      StructField("cadreBatch", StringType, nullable = true)
+    ))
+
+    def makeProfileDetailsSchema(competencies: Boolean = false, additionalProperties: Boolean = false, professionalDetails: Boolean = false, cadreDetails: Boolean = false ): StructType = {
       val fields = ListBuffer(
         StructField("verifiedKarmayogi", BooleanType, nullable = true),
         StructField("mandatoryFieldsExists", BooleanType, nullable = true),
@@ -97,6 +108,9 @@ object DataUtil extends Serializable {
       }
       if (professionalDetails) {
         fields.append(StructField("professionalDetails", ArrayType(professionalDetailsSchema), nullable = true))
+      }
+      if (cadreDetails) {
+        fields.append(StructField("cadreDetails", cadreDetailsSchema, nullable = true))
       }
       StructType(fields)
     }
@@ -425,7 +439,7 @@ object DataUtil extends Serializable {
    *         
    */
   def userDataFrame()(implicit spark: SparkSession, conf: DashboardConfig): DataFrame = {
-    val profileDetailsSchema = Schema.makeProfileDetailsSchema(additionalProperties = true, professionalDetails = true)
+    val profileDetailsSchema = Schema.makeProfileDetailsSchema(additionalProperties = true, professionalDetails = true, cadreDetails = true)
     var userDF = cache.load("user")
       .select(
         col("id").alias("userID"),
@@ -454,6 +468,12 @@ object DataUtil extends Serializable {
       .withColumn("userProfileStatus", col("profileDetails.profileStatus"))
       .withColumn("userPhoneVerified", expr("LOWER(personalDetails.phoneVerified) = 'true'"))
       .withColumn("fullName", rtrim(concat_ws(" ", col("firstName"), col("lastName"))))
+      .withColumn("cadreDetails", col("profileDetails.cadreDetails"))
+      .withColumn("cadreName", col("cadreDetails.cadreName"))
+      .withColumn("civilServiceType", col("cadreDetails.civilServiceType"))
+      .withColumn("civilServiceName", col("cadreDetails.civilServiceName"))
+      .withColumn("cadreBatch", col("cadreDetails.cadreBatch"))
+      .withColumn("organised_service", when(col("cadreDetails").isNotNull, lit("Yes")).otherwise(lit("No")))
 
     userDF = userDF
       .withColumn("additionalProperties",
