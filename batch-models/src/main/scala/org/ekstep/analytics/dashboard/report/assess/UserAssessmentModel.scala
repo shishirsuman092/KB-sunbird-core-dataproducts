@@ -38,10 +38,14 @@ object UserAssessmentModel extends AbsDashboardModel {
     kafkaDispatch(withTimestamp(assessWithDetailsDF, timestamp), conf.assessmentTopic)
 
     val assessChildrenDF = assessmentChildrenDataFrame(assessWithHierarchyDF).cache()
+    assessChildrenDF.show(false)
     val userAssessmentDF = cache.load("userAssessment")
+    userAssessmentDF.show(false)
     val userAssessChildrenDF = userAssessmentChildrenDataFrame(userAssessmentDF, assessChildrenDF)
+    userAssessChildrenDF.show(false)
     val userAssessChildrenDetailsDF = userAssessmentChildrenDetailsDataFrame(userAssessChildrenDF, assessWithDetailsDF,
       allCourseProgramDetailsWithRatingDF, userOrgDF)
+    userAssessChildrenDetailsDF.show(false)
     // kafka dispatch to dashboard.user.assessment
     kafkaDispatch(withTimestamp(userAssessChildrenDetailsDF, timestamp), conf.userAssessmentTopic)
 
@@ -58,6 +62,7 @@ object UserAssessmentModel extends AbsDashboardModel {
         expr("COUNT(*)").alias("noOfAttempts")
       )
 
+    latest.show(false)
     val caseExpression = "CASE WHEN assessPass == 1 AND assessUserStatus == 'SUBMITTED' THEN 'Pass' WHEN assessPass == 0 AND assessUserStatus == 'SUBMITTED' THEN 'Fail' " +
       " ELSE 'N/A' END"
     val caseExpressionCompletionStatus = "CASE WHEN assessUserStatus == 'SUBMITTED' THEN 'Completed' ELSE 'In progress' END"
@@ -71,6 +76,7 @@ object UserAssessmentModel extends AbsDashboardModel {
         col("userID").alias("User_ID"),
         col("fullName").alias("Full_Name"),
         col("assessName").alias("Assessment_Name"),
+        col("assessLanguage").alias("Assessment_Language"),
         col("Overall_Status"),
         col("Assessment_Status"),
         col("assessPassPercentage").alias("Percentage_Of_Score"),
@@ -81,6 +87,8 @@ object UserAssessmentModel extends AbsDashboardModel {
         col("assessOrgID").alias("mdoid"),
         col("Report_Last_Generated_On")
       ).coalesce(1)
+    
+    df.show(false)
     val columnsToKeepInReport = df.columns.filter(_ != "status")
     val reportPath = s"${conf.standaloneAssessmentReportPath}/${today}"
     // generateReport(df, s"${reportPath}-full")

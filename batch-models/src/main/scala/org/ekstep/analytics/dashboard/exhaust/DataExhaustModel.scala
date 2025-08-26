@@ -57,7 +57,8 @@ object DataExhaustModel extends AbsDashboardModel {
         col("userid").alias("userID"),
         col("assessmentreadresponse"),
         col("submitassessmentresponse"),
-        col("submitassessmentrequest")
+        col("submitassessmentrequest"),
+        col("language").alias("assessLanguage")
       )
       .na.fill("{}", Seq("submitassessmentresponse", "submitassessmentrequest"))
       .withColumn("readResponse", from_json(col("assessmentreadresponse"), Schema.assessmentReadResponseSchema))
@@ -72,6 +73,7 @@ object DataExhaustModel extends AbsDashboardModel {
       col("assessEndTimestamp"),
       col("assessUserStatus"),
       col("userID"),
+      col("assessLanguage"),
 
       col("readResponse.totalQuestions").alias("assessTotalQuestions"),
       col("readResponse.maxQuestions").alias("assessMaxQuestions"),
@@ -136,7 +138,7 @@ object DataExhaustModel extends AbsDashboardModel {
     // ES content
     val primaryCategories = Seq("Course","Program","Blended Program","Curated Program","Standalone Assessment","CuratedCollections","Moderated Course")
     val shouldClause = primaryCategories.map(pc => s"""{"match":{"primaryCategory.raw":"${pc}"}}""").mkString(",")
-    val fields = Seq("identifier", "name", "primaryCategory", "status", "reviewStatus", "channel", "duration", "leafNodesCount", "lastPublishedOn", "lastStatusChangedOn", "createdFor", "competencies_v6", "programDirectorName","language","courseCategory")
+    val fields = Seq("identifier", "name", "primaryCategory", "status", "reviewStatus", "channel", "duration", "leafNodesCount", "lastPublishedOn", "lastStatusChangedOn", "createdFor", "competencies_v6", "programDirectorName","language","courseCategory", "source")
     val arrayFields = Seq("createdFor","language")
     val fieldsClause = fields.map(f => s""""${f}"""").mkString(",")
     val query = s"""{"_source":[${fieldsClause}],"query":{"bool":{"should":[${shouldClause}]}}}"""
@@ -294,6 +296,11 @@ object DataExhaustModel extends AbsDashboardModel {
     cache.write(eventsEnrolmentWithDurationDF.coalesce(1), "eventEnrolmentDetails")
     pqCache.write(eventsEnrolmentWithDurationDF.coalesce(1), "eventEnrolmentDetails")
     eventsEnrolmentDF.unpersist()
+    // user_extended_profile
+    val userExtendedProfileDF = cassandraTableAsDataFrame(conf.cassandraUserKeyspace, conf.cassandraUserExtendedProfileTable)
+    cache.write(userExtendedProfileDF, "userExtendedProfile")
+    pqCache.write(userExtendedProfileDF, "userExtendedProfile")
+    userExtendedProfileDF.unpersist()
 
   } catch {
     case e: Exception =>
