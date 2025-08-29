@@ -1,3 +1,5 @@
+package org.ekstep.analytics.dashboard.report.user
+
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
