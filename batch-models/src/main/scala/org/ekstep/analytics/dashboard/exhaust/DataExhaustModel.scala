@@ -104,7 +104,7 @@ object DataExhaustModel extends AbsDashboardModel {
       col("assessPass"),col("assessOverallResult"),col("assessPassPercentage"), col("courseID"),
       col("assessTotalQuestions"), col("assessVersion"), col("assessMaxRetakeAttempts"), col("assessReadStatus"), col("assessBatchID"), col("assessIsAssessment"), col("assessTimeLimit"),
       col("assessResult"), col("assessTotal"),col("assessStartTimestamp"),
-      col("assessEndTimestamp")
+      col("assessEndTimestamp"), col("assessLanguage")
     )
     cache.write(finalAssessmentDF, "userAssessment")
     pqCache.write(finalAssessmentDF, "userAssessment")
