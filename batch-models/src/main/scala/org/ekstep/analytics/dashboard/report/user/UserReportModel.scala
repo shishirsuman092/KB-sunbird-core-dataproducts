@@ -274,47 +274,10 @@ object UserReportModel extends AbsDashboardModel {
             col("userOrgID").alias("mdoid")
           ).coalesce(1)
 
-        val selectedColumns = Seq(
-          "userID",
-          "Full_Name",
-          "Designation",
-          "Email",
-          "Phone_Number",
-          "MDO_Name",
-          "Group",
-          "Tag",
-          "Ministry",
-          "Department",
-          "Organization",
-          "User_Registration_Date",
-          "Roles",
-          "Gender",
-          "Category",
-          "External_System",
-          "External_System_Id",
-          "Employee_Id",
-          "MDO_Created_On",
-          "Profile_Status",
-          "weekly_claps_day_before_yesterday",
-          "Karma_Points",
-          "Event_Enrolments",
-          "Event_Completions",
-          "Event_Learning_Hours",
-          "Course_Enrolments",
-          "Course_Completions",
-          "Course_Learning_Hours",
-          "Total_Enrolments",
-          "Total_Completions",
-          "Total_Learning_Hours",
-          "Report_Last_Generated_On",
-          "mdoid"
-        ) ++ attributeNames
-
         val userCustomAttrDf = finalDF
           .join(mdowiseDataDF, Seq("userID"), "left")
 
-
-        generateReport(userCustomAttrDf, customReportPath, "mdoid", "UserCustomReport")
+        generateReport(userCustomAttrDf, customReportPath, null, "UserCustomReport")
 
       }
 

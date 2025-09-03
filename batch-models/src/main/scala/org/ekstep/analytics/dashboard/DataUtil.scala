@@ -652,6 +652,7 @@ object DataUtil extends Serializable {
     val df = elasticSearchCourseProgramDataFrame(primaryCategories)
       .withColumn("courseOrgID", explode_outer(col("createdFor")))
       .withColumn("contentLanguage", explode_outer(col("language")))
+      .withColumn("contentCreator", explode_outer(col("source")))
       .select(
         col("identifier").alias("courseID"),
         col("primaryCategory").alias("category"),
@@ -669,7 +670,7 @@ object DataUtil extends Serializable {
         col("competencies_v6.competencySubThemeRefId"),
         col("contentLanguage"),
         col("courseCategory"),
-        col("source")
+        col("contentCreator")
       ).dropDuplicates("courseID", "category")
       .na.fill(0.0, Seq("courseDuration"))
       .na.fill(0, Seq("courseResourceCount"))
@@ -1082,7 +1083,8 @@ object DataUtil extends Serializable {
       .withColumnRenamed("courseid", "courseID")
       .withColumnRenamed("batchid", "batchID")
       .withColumnRenamed("status", "dbCompletionStatus")
-      .withColumnRenamed("contentstatus", "courseContentStatus")
+      //.withColumnRenamed("contentstatus", "courseContentStatus")
+      .withColumnRenamed("lang_contentstatus", "courseContentStatus")
       .na.fill("", Seq("certificateGeneratedOn"))
       .select(selectCols.head, selectCols.tail: _*)
 
