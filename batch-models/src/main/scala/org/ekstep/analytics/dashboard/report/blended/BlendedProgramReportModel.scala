@@ -157,10 +157,23 @@ object BlendedProgramReportModel extends AbsDashboardModel {
     val bpCompletionDF = bpWithBatchDF.join(bpUserEnrolmentDF.drop("bpContentStatus"), Seq("bpID", "bpBatchID"), "inner")
 
     // get content status DF
-    val bpUserContentStatusDF = bpUserEnrolmentDF
+    /*val bpUserContentStatusDF = bpUserEnrolmentDF
       .select(col("userID"), col("bpID"), col("bpBatchID"), explode_outer(col("bpContentStatus")))
       .withColumnRenamed("key", "bpChildID")
+      .withColumnRenamed("value", "bpContentStatus")*/
+
+    // Step 3: Explode nested content status (language -> {contentId: status})
+    val bpUserContentStatusDF = bpUserEnrolmentDF
+      .select(
+        col("userID"),
+        col("bpID"),
+        col("bpBatchID"),
+        explode_outer(col("bpContentStatus")).alias("language", "contentStatusMap")
+      )
+      .withColumn("bpChildContent", explode_outer(col("contentStatusMap")))
+      .withColumnRenamed("key", "bpChildID")
       .withColumnRenamed("value", "bpContentStatus")
+      .drop("contentStatusMap")
 
     // add user and user org info
     val bpCompletionWithUserDetailsDF = userOrgHierarchyDataDF.join(bpCompletionDF, Seq("userID"), "right")

@@ -1,0 +1,21 @@
+central_ministries - 89
+department_organisations_onboarded - lp_es_org_count - "{{ es_host }}/org_v2/_search" - "{\"from\":0,\"size\":0,\"query\":{\"bool\":{\"must\":[{\"match\":{\"status\":1}}]}}}"
+state_ut - 36
+course_publishers - lp_es_live_course_publisher_count - "{{ live_course_output.json.hits.hits | map(attribute='_source.createdFor') | select() | sum(start=[]) | unique | select() | list }}"
+courses_published - lp_es_live_course_count - "{{ es_host }}/compositesearch/_search" - "{\"from\":0,\"size\":10000,\"_source\":[\"identifier\",\"duration\",\"createdFor\"],\"query\":{\"bool\":{\"must\":[{\"match\":{\"status.raw\":\"Live\"}},{\"match\":{\"primaryCategory.raw\":\"Course\"}}]}}}"
+course_duration - lp_es_agg_course_duration - "{{ live_course_output.json.hits.hits | map(attribute='_source.duration') | list }}"
+course_enrolments - dashboard_enrolment_count
+course_completions - dashboard_completed_count
+user_count - lp_es_user_count - "{{ es_host }}/user_v2/_search" - "{\"from\":0,\"size\":0,\"query\":{\"bool\":{\"must\":[{\"match\":{\"status\":1}}]}}}"
+newuser_registrations_yesterday - dashboard_new_users_registered_yesterday
+user_loggedin_yesterday - druid - SELECT COUNT(DISTINCT(actor_id)) AS UserLoggedinYesterday FROM \"teleusermetry-events-syncts\" WHERE eid='IMPRESSION' AND actor_type='User' AND __time >= TIME_FLOOR(CURRENT_TIMESTAMP + INTERVAL '5:30' HOUR TO MINUTE - INTERVAL '24' HOUR, 'P1D') AND __time < TIME_FLOOR(CURRENT_TIMESTAMP + INTERVAL '5:30' HOUR TO MINUTE, 'P1D')
+users_enrolledin_atleast_one_course - dashboard_unique_users_enrolled_count
+
+
+draft_course_count_api_body: "{\"from\":0,\"size\":0,\"query\":{\"bool\":{\"must\":[{\"match\":{\"status.raw\":\"Draft\"}},{\"match\":{\"primaryCategory.raw\":\"Course\"}}]}}}"
+review_course_count_api_body: "{\"from\":0,\"size\":0,\"query\":{\"bool\":{\"must\":[{\"match\":{\"status.raw\":\"Review\"}},{\"match\":{\"primaryCategory.raw\":\"Course\"}}]}}}"
+retired_course_count_api_body: "{\"from\":0,\"size\":0,\"query\":{\"bool\":{\"must\":[{\"match\":{\"status.raw\":\"Retired\"}},{\"match\":{\"primaryCategory.raw\":\"Course\"}}]}}}"
+pending_publish_course_count_api_body: "{\"from\":0,\"size\":0,\"query\":{\"bool\":{\"must\":[{\"match\":{\"status.raw\":\"Review\"}},{\"match\":{\"reviewStatus.raw\":\"Reviewed\"}},{\"match\":{\"primaryCategory.raw\":\"Course\"}}]}}}"
+
+
+insert into dsr_email_metrics (central_ministries,state_ut,department_organisations_onboarded,total_course_publishers,total_courses_published,total_course_duration,total_course_enrolments,total_course_completions,total_user_count,new_user_registrations_yesterday,user_logged_in_yesterday,users_enrolled_in_at_least_one_course) values (89,36,123,4,334,5433,2144,432566,2,5333,5556,255);
