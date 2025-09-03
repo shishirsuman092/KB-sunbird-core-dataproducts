@@ -139,7 +139,7 @@ object DataExhaustModel extends AbsDashboardModel {
     val primaryCategories = Seq("Course","Program","Blended Program","Curated Program","Standalone Assessment","CuratedCollections","Moderated Course")
     val shouldClause = primaryCategories.map(pc => s"""{"match":{"primaryCategory.raw":"${pc}"}}""").mkString(",")
     val fields = Seq("identifier", "name", "primaryCategory", "status", "reviewStatus", "channel", "duration", "leafNodesCount", "lastPublishedOn", "lastStatusChangedOn", "createdFor", "competencies_v6", "programDirectorName","language","courseCategory", "source")
-    val arrayFields = Seq("createdFor","language")
+    val arrayFields = Seq("createdFor","language", "source")
     val fieldsClause = fields.map(f => s""""${f}"""").mkString(",")
     val query = s"""{"_source":[${fieldsClause}],"query":{"bool":{"should":[${shouldClause}]}}}"""
     val esContentDF = elasticSearchDataFrame(conf.sparkElasticsearchConnectionHost, "compositesearch", query, fields, arrayFields)
