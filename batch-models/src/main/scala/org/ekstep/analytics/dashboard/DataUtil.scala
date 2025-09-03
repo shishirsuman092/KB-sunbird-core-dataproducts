@@ -1083,8 +1083,8 @@ object DataUtil extends Serializable {
       .withColumnRenamed("courseid", "courseID")
       .withColumnRenamed("batchid", "batchID")
       .withColumnRenamed("status", "dbCompletionStatus")
-      //.withColumnRenamed("contentstatus", "courseContentStatus")
-      .withColumnRenamed("lang_contentstatus", "courseContentStatus")
+      .withColumnRenamed("contentstatus", "courseContentStatus")
+      //.withColumnRenamed("lang_contentstatus", "courseContentStatus")
       .na.fill("", Seq("certificateGeneratedOn"))
       .select(selectCols.head, selectCols.tail: _*)
 
