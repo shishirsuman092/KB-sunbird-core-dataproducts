@@ -7,6 +7,7 @@ import org.ekstep.analytics.dashboard.DashboardUtil._
 import org.ekstep.analytics.dashboard.DataUtil._
 import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig, Redis}
 import org.ekstep.analytics.framework.FrameworkContext
+import spark.implicits._
 
 object UserReportModel extends AbsDashboardModel {
   implicit val className: String = "org.ekstep.analytics.dashboard.report.user.UserReportModel"
