@@ -110,9 +110,10 @@ object UserReportModel extends AbsDashboardModel {
       val reportPath = s"${conf.userReportPath}/${today}"
       val customReportPath = s"${conf.userCustomReportPath}/${today}" // make entry in conf
       generateReport(mdoWiseReportDF, reportPath, "mdoid", "UserReport")
-      //    if (conf.reportSyncEnable) {
-      //      syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
-      //    }
+      // sync reports
+      if (conf.reportSyncEnable) {
+        syncReports(s"${conf.localReportDir}/${reportPath}", reportPath)
+      }
 
       val df_warehouse = userCompleteData
         .withColumn("marked_as_not_my_user", when(col("userProfileStatus") === "NOT-MY-USER", true).otherwise(false))
@@ -157,172 +158,121 @@ object UserReportModel extends AbsDashboardModel {
       warehouseCache.write(df_warehouse.coalesce(1), conf.dwUserTable)
       warehousePqCache.write(df_warehouse.coalesce(1), conf.dwUserTable)
 
-      // user external profile data
-      val userExtendedProfileDF = cache.load("userExtendedProfile")
-        .filter(col("contexttype") === "orgAdditionalProperties")
-        .withColumnRenamed("userid", "userID")
-        .withColumn("contextData", from_json(col("contextdata"), Schema.contextDataSchema))
-        .select(
-          col("userID"),
-          col("contexttype").alias("contextType"),
-          col("contextData"),
-          col("contextData.organisationId").alias("mdo_id")
+     // user external profile data
+    val userExtendedProfileDF = cache.load("userExtendedProfile")
+      .filter(col("contexttype") === "orgAdditionalProperties")
+      .withColumnRenamed("userid", "userID")
+      .withColumn("contextData", from_json(col("contextdata"), Schema.contextDataSchema))
+      .select(
+        col("userID"),
+        col("contexttype").alias("contextType"),
+        col("contextData"),
+        col("contextData.organisationId").alias("mdo_id")
+      )
+
+    // Step 1: Explode customFieldValues to get individual attribute-value pairs
+    val explodedDF = userExtendedProfileDF
+      .withColumn("customField", explode(col("contextData.customFieldValues")))
+      .select(
+        col("userID"),
+        col("mdo_id"),
+        col("customField.attributeName").alias("attribute_name"),
+        col("customField.value").alias("attribute_value")
+      )
+      .filter(col("attribute_name").isNotNull && col("attribute_value").isNotNull)
+
+    warehouseCache.write(explodedDF.coalesce(1), "userCustomFields")
+    warehousePqCache.write(explodedDF.coalesce(1), "userCustomFields")
+
+    val explodedCached = explodedDF.persist()                      // userID, mdo_id, attribute_name, attribute_value
+    val mdowiseSlim = userCompleteData
+      .filter(col("userStatus").cast("int") === 1)
+      .select(
+        col("userID"),
+        col("fullName").alias("Full_Name"),
+        col("professionalDetails.designation").alias("Designation"),
+        col("personalDetails.primaryEmail").alias("Email"),
+        col("personalDetails.mobile").alias("Phone_Number"),
+        col("userOrgName").alias("MDO_Name"),
+        col("professionalDetails.group").alias("Group"),
+        col("Tag"),
+        when(col("ministry_name").isNull, col("userOrgName")).otherwise(col("ministry_name")).alias("Ministry"),
+        when(col("ministry_name").isNotNull && col("ministry_name") =!= col("userOrgName") &&
+            (col("dept_name").isNull || col("dept_name") === ""), col("userOrgName")).otherwise(col("dept_name")).alias("Department"),
+        when(col("ministry_name") =!= col("userOrgName") && col("dept_name") =!= col("userOrgName"), col("userOrgName"))
+          .otherwise(lit("")).alias("Organization"),
+        from_unixtime(col("userCreatedTimestamp"), dateFormat).alias("User_Registration_Date"),
+        col("role").alias("Roles"),
+        col("personalDetails.gender").alias("Gender"),
+        col("personalDetails.category").alias("Category"),
+        col("additionalProperties.externalSystem").alias("External_System"),
+        col("additionalProperties.externalSystemId").alias("External_System_Id"),
+        col("employmentDetails.employeeCode").alias("Employee_Id"),
+        from_unixtime(col("userOrgCreatedDate"), dateFormat).alias("MDO_Created_On"),
+        col("userProfileStatus").alias("Profile_Status"),
+        col("weekly_claps_day_before_yesterday"),
+        coalesce(col("total_points"), lit(0)).alias("Karma_Points"),
+        coalesce(col("total_event_enrolments"), lit(0)).alias("Event_Enrolments"),
+        coalesce(col("total_event_completions"), lit(0)).alias("Event_Completions"),
+        coalesce(col("total_event_learning_hours_with_certificates"), lit(0)).alias("Event_Learning_Hours"),
+        coalesce(col("total_content_enrolments"), lit(0)).alias("Course_Enrolments"),
+        coalesce(col("total_content_completions"), lit(0)).alias("Course_Completions"),
+        coalesce(col("total_content_duration"), lit(0)).alias("Course_Learning_Hours"),
+        (coalesce(col("total_event_enrolments"), lit(0)) + coalesce(col("total_content_enrolments"), lit(0))).alias("Total_Enrolments"),
+        (coalesce(col("total_event_completions"), lit(0)) + coalesce(col("total_content_completions"), lit(0))).alias("Total_Completions"),
+        coalesce(col("Total_Learning_Hours"), lit(0)).alias("Total_Learning_Hours"),
+        lit(currentDateTime).alias("Report_Last_Generated_On"),
+        col("userOrgID").alias("mdoid")
+      )
+      val mdowiseB = broadcast(mdowiseSlim)                           // if it’s reasonably small
+
+      val baseOut = s"standalone-reports/user-custom-report/$today"
+
+      val orgIds = explodedCached.select("mdo_id").distinct().as[String].collect().sorted
+      
+      orgIds.foreach { orgId =>
+        val orgData = explodedCached.filter(col("mdo_id") === orgId)
+
+        // attribute list ONLY for this org, sanitized
+        val attributeNames =
+          orgData.select(trim(col("attribute_name")).alias("n"))
+            .where(col("n").isNotNull && length(col("n")) > 0)
+            .distinct().as[String].collect().sorted
+
+        // pivot only on these attributes → columns limited to this org’s customs
+        val pivoted =
+          if (attributeNames.nonEmpty)
+            orgData.groupBy("userID").pivot("attribute_name", attributeNames).agg(first("attribute_value"))
+          else
+            orgData.select("userID").distinct() // no customs → keep ids only
+
+        // join enrichments
+        val joined = pivoted.join(mdowiseB, Seq("userID"), "left")
+          .withColumn("mdoid", lit(orgId))
+
+        // order columns: fixed first, then org-specific custom fields
+        val fixedCols = Seq(
+          "userID","Full_Name","Designation","Email","Phone_Number","MDO_Name","Group","Tag",
+          "Ministry","Department","Organization","User_Registration_Date","Roles","Gender",
+          "Category","External_System","External_System_Id","Employee_Id","MDO_Created_On",
+          "Profile_Status","weekly_claps_day_before_yesterday","Karma_Points","Event_Enrolments",
+          "Event_Completions","Event_Learning_Hours","Course_Enrolments","Course_Completions",
+          "Course_Learning_Hours","Total_Enrolments","Total_Completions","Total_Learning_Hours",
+          "Report_Last_Generated_On","mdoid"
         )
-      // Show the user extended profile data
-      println("User Extended Profile Data found")
+        val dynamicCols = attributeNames
+        val ordered = joined.select((fixedCols ++ dynamicCols).map(n => col(s"`$n`")): _*)
 
-      // Step 1: Explode customFieldValues to get individual attribute-value pairs
-      val explodedDF = userExtendedProfileDF
-        .withColumn("customField", explode(col("contextData.customFieldValues")))
-        .select(
-          col("userID"),
-          col("mdo_id"),
-          col("customField.attributeName").alias("attribute_name"),
-          col("customField.value").alias("attribute_value")
-        )
-        .filter(col("attribute_name").isNotNull && col("attribute_value").isNotNull)
-
-      // write explodedDF to warehouse
-      warehouseCache.write(explodedDF.coalesce(1), "userCustomFields")
-      warehousePqCache.write(explodedDF.coalesce(1), "userCustomFields")
-
-      // Step 2: Get unique organizations
-      val organizations = explodedDF
-        .select("mdo_id")
-        .distinct()
-        .collect()
-        .map(_.getString(0))
-        .sorted
-
-      println(s"Unique Organizations: ${organizations.mkString(", ")}")
-
-      // step 4: call function in createOrgCSV
-      organizations.foreach(createOrgCSV)
-
-      // Step 3: Function to process each organization
-      def createOrgCSV(orgId: String): Unit = {
-        println(s"Processing organization: $orgId")
-
-        // Get data for this specific organization
-        val orgData = explodedDF.filter(col("mdo_id") === orgId)
-
-        // Get all unique attribute names for this organization (these will be our CSV headers)
-        val attributeNames = orgData
-          .select("attribute_name")
-          .distinct()
-          .collect()
-          .map(_.getString(0))
-          .sorted
-
-        println(s"Attributes for org $orgId: ${attributeNames.mkString(", ")}")
-
-        // Pivot the data to create columns for each attribute
-        val pivotedData = orgData
-          .groupBy("userID")
-          .pivot("attribute_name", attributeNames)
-          .agg(first("attribute_value"))
-
-        // Add mdo_id back to the final dataset - Alternative approach
-        val allColumns = Seq("mdo_id", "userID") ++ attributeNames
-        // pivoted data
-        val finalDF = pivotedData
-          .withColumn("mdo_id", lit(orgId))
-          .selectExpr(allColumns: _*)
-
-
-        val mdowiseDataDF =  userCompleteData.filter(col("userStatus").cast("int") === 1)
-          .withColumn("Report_Last_Generated_On", currentDateTime)
-          .withColumn("Total_Enrolments", coalesce(col("total_event_enrolments"), lit(0)) + coalesce(col("total_content_enrolments"), lit(0)))
-          .withColumn("Total_Completions", coalesce(col("total_event_completions"), lit(0)) + coalesce(col("total_content_completions"), lit(0)))
-          .withColumn("MDO_Name", col("userOrgName"))
-          .withColumn("Ministry", when(col("ministry_name").isNull, col("userOrgName")).otherwise(col("ministry_name")))
-          .withColumn("Department", when(col("Ministry").isNotNull && col("Ministry") =!=  col("userOrgName") && (col("dept_name").isNull || col("dept_name") === ""), col("userOrgName")).otherwise(col("dept_name")))
-          .withColumn("Organization",when(col("Ministry") =!=  col("userOrgName") && col("Department") =!= col("userOrgName"), col("userOrgName")).otherwise(lit("")))
-          .select(
-            col("userID"),
-            col("fullName").alias("Full_Name"),
-            col("professionalDetails.designation").alias("Designation"),
-            col("personalDetails.primaryEmail").alias("Email"),
-            col("personalDetails.mobile").alias("Phone_Number"),
-            col("MDO_Name"),
-            col("professionalDetails.group").alias("Group"),
-            col("Tag"),
-            col("Ministry"),
-            col("Department"),
-            col("Organization"),
-            from_unixtime(col("userCreatedTimestamp"), dateFormat).alias("User_Registration_Date"),
-            col("role").alias("Roles"),
-            col("personalDetails.gender").alias("Gender"),
-            col("personalDetails.category").alias("Category"),
-            col("additionalProperties.externalSystem").alias("External_System"),
-            col("additionalProperties.externalSystemId").alias("External_System_Id"),
-            col("employmentDetails.employeeCode").alias("Employee_Id"),
-            from_unixtime(col("userOrgCreatedDate"), dateFormat).alias("MDO_Created_On"),
-            col("userProfileStatus").alias("Profile_Status"),
-            col("weekly_claps_day_before_yesterday"),
-            coalesce(col("total_points"), lit(0)).alias("Karma_Points"),
-            coalesce(col("total_event_enrolments"), lit(0)).alias("Event_Enrolments"),
-            coalesce(col("total_event_completions"), lit(0)).alias("Event_Completions"),
-            coalesce(col("total_event_learning_hours_with_certificates"), lit(0)).alias("Event_Learning_Hours"),
-            coalesce(col("total_content_enrolments"), lit(0)).alias("Course_Enrolments"),
-            coalesce(col("total_content_completions"), lit(0)).alias("Course_Completions"),
-            coalesce(col("total_content_duration"), lit(0)).alias("Course_Learning_Hours"),
-            coalesce(col("Total_Enrolments"), lit(0)).alias("Total_Enrolments"),
-            coalesce(col("Total_Completions"), lit(0)).alias("Total_Completions"),
-            coalesce(col("Total_Learning_Hours"), lit(0)).alias("Total_Learning_Hours"),
-            col("Report_Last_Generated_On"),
-            col("userOrgID").alias("mdoid")
-          ).coalesce(1)
-
-        val selectedColumns = Seq(
-          "userID",
-          "Full_Name",
-          "Designation",
-          "Email",
-          "Phone_Number",
-          "MDO_Name",
-          "Group",
-          "Tag",
-          "Ministry",
-          "Department",
-          "Organization",
-          "User_Registration_Date",
-          "Roles",
-          "Gender",
-          "Category",
-          "External_System",
-          "External_System_Id",
-          "Employee_Id",
-          "MDO_Created_On",
-          "Profile_Status",
-          "weekly_claps_day_before_yesterday",
-          "Karma_Points",
-          "Event_Enrolments",
-          "Event_Completions",
-          "Event_Learning_Hours",
-          "Course_Enrolments",
-          "Course_Completions",
-          "Course_Learning_Hours",
-          "Total_Enrolments",
-          "Total_Completions",
-          "Total_Learning_Hours",
-          "Report_Last_Generated_On",
-          "mdoid"
-        ) ++ attributeNames
-
-        val userCustomAttrDf = finalDF
-          .join(mdowiseDataDF, Seq("userID"), "left")
-
-
-        generateReport(userCustomAttrDf, customReportPath, "mdoid", "UserCustomReport")
-
+        // write one file per org using your helper (no partitioning)
+        val outPath = s"$baseOut/mdoid=$orgId"
+        generateReport(ordered.coalesce(1), outPath, partitionKey = null, fileName = "UserCustomReport")
       }
 
       Redis.closeRedisConnect()
     }catch {
       case e: Exception =>
         println(s"Error occurred during UserReportModel processing: ${e.getMessage}", e)
-      //System.exit(1)
+        System.exit(1)
     }
   }
 }
