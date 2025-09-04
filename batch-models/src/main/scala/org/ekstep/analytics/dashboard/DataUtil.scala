@@ -652,7 +652,7 @@ object DataUtil extends Serializable {
     val df = elasticSearchCourseProgramDataFrame(primaryCategories)
       .withColumn("courseOrgID", explode_outer(col("createdFor")))
       .withColumn("contentLanguage", explode_outer(col("language")))
-      .withColumn("contentCreator", explode_outer(col("source")))
+      .withColumn("contentCreator", explode_outer(col("organisation")))
       .select(
         col("identifier").alias("courseID"),
         col("primaryCategory").alias("category"),
