@@ -7,7 +7,6 @@ import org.ekstep.analytics.dashboard.DashboardUtil._
 import org.ekstep.analytics.dashboard.DataUtil._
 import org.ekstep.analytics.dashboard.{AbsDashboardModel, DashboardConfig, Redis}
 import org.ekstep.analytics.framework.FrameworkContext
-import spark.implicits._
 
 object UserReportModel extends AbsDashboardModel {
   implicit val className: String = "org.ekstep.analytics.dashboard.report.user.UserReportModel"
@@ -15,6 +14,7 @@ object UserReportModel extends AbsDashboardModel {
 
   def processData(timestamp: Long)(implicit spark: SparkSession, sc: SparkContext, fc: FrameworkContext, conf: DashboardConfig): Unit = {
     try{
+      import spark.implicits._
       val today = getDate()
 
       // get user roles data
