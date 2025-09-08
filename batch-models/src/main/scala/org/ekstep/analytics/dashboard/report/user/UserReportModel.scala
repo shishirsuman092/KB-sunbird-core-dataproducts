@@ -225,7 +225,7 @@ object UserReportModel extends AbsDashboardModel {
         lit(currentDateTime).alias("Report_Last_Generated_On"),
         col("userOrgID").alias("mdoid")
       )
-      val mdowiseB = broadcast(mdowiseSlim)                           // if it’s reasonably small
+//      val mdowiseB = broadcast(mdowiseSlim)                           // if it’s reasonably small
 
       val baseOut = s"standalone-reports/user-custom-report/$today"
 
@@ -248,7 +248,7 @@ object UserReportModel extends AbsDashboardModel {
             orgData.select("userID").distinct() // no customs → keep ids only
 
         // join enrichments
-        val joined = pivoted.join(mdowiseB, Seq("userID"), "left")
+        val joined = pivoted.join(mdowiseSlim, Seq("userID"), "left")
           .withColumn("mdoid", lit(orgId))
 
         // order columns: fixed first, then org-specific custom fields
