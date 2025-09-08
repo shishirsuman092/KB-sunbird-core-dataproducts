@@ -254,61 +254,33 @@ object CourseReportModel extends AbsDashboardModel {
         col("data_last_generated_on").alias("Report_Last_Generated_On")
       ).coalesce(1)
 
-    val platformContentMdoReportDF = fullDF
-      .filter(col("courseOrgName").isNotNull && trim(col("courseOrgName")) =!= "")
-      .select(
-        col("courseStatus").alias("Content_Status"),
-        col("courseOrgName").alias("Content_Provider"),
-        col("courseName").alias("Content_Name"),
-        col("category").alias("Content_Type"),
-        col("batchID").alias("Batch_Id"),
-        col("courseBatchName").alias("Batch_Name"),
-        col("courseBatchStartDate").alias("Batch_Start_Date"),
-        col("courseBatchEndDate").alias("Batch_End_Date"),
-        col("courseDuration").alias("Content_Duration"),
-        col("enrolledUserCount").alias("Enrolled"),
-        col("notStartedCount").alias("Not_Started"),
-        col("inProgressCount").alias("In_Progress"),
-        col("completedCount").alias("Completed"),
-        col("rating").alias("Content_Rating"),
-        col("courseLastPublishedOn").alias("Last_Published_On"),
-        col("firstCompletedOn").alias("First_Completed_On"),
-        col("lastCompletedOn").alias("Last_Completed_On"),
-        col("ArchivedOn").alias("Content_Retired_On"),
-        col("totalCertificatesIssued").alias("Total_Certificates_Issued"),
-        col("courseOrgID").alias("mdoid"),
-        col("Report_Last_Generated_On")
-      ).coalesce(1)
+      val platformContentMdoReportDF = fullDF
+        .select(
+          col("courseStatus").alias("Content_Status"),
+          when(col("courseOrgName").isNotNull && trim(col("courseOrgName")) =!= "", col("courseOrgName"))
+            .otherwise(col("contentCreator")).alias("Content_Provider"),
+          col("courseName").alias("Content_Name"),
+          col("category").alias("Content_Type"),
+          col("batchID").alias("Batch_Id"),
+          col("courseBatchName").alias("Batch_Name"),
+          col("courseBatchStartDate").alias("Batch_Start_Date"),
+          col("courseBatchEndDate").alias("Batch_End_Date"),
+          col("courseDuration").alias("Content_Duration"),
+          col("enrolledUserCount").alias("Enrolled"),
+          col("notStartedCount").alias("Not_Started"),
+          col("inProgressCount").alias("In_Progress"),
+          col("completedCount").alias("Completed"),
+          col("rating").alias("Content_Rating"),
+          col("courseLastPublishedOn").alias("Last_Published_On"),
+          col("firstCompletedOn").alias("First_Completed_On"),
+          col("lastCompletedOn").alias("Last_Completed_On"),
+          col("ArchivedOn").alias("Content_Retired_On"),
+          col("totalCertificatesIssued").alias("Total_Certificates_Issued"),
+          col("courseOrgID").alias("mdoid"),
+          col("Report_Last_Generated_On")
+        ).coalesce(1)
 
-    // fix for KAR-1054 - content provider name is empty for deleted orgs from cassandra but ES has content provider name
-    // fetching missing content provider names from ES
-    val platformContentFilteredMdoReportDF = fullDF
-      .filter(col("courseOrgName").isNull || trim(col("courseOrgName")) === "")
-      .select(
-        col("courseStatus").alias("Content_Status"),
-        col("contentCreator").alias("Content_Provider"),
-        col("courseName").alias("Content_Name"),
-        col("category").alias("Content_Type"),
-        col("batchID").alias("Batch_Id"),
-        col("courseBatchName").alias("Batch_Name"),
-        col("courseBatchStartDate").alias("Batch_Start_Date"),
-        col("courseBatchEndDate").alias("Batch_End_Date"),
-        col("courseDuration").alias("Content_Duration"),
-        col("enrolledUserCount").alias("Enrolled"),
-        col("notStartedCount").alias("Not_Started"),
-        col("inProgressCount").alias("In_Progress"),
-        col("completedCount").alias("Completed"),
-        col("rating").alias("Content_Rating"),
-        col("courseLastPublishedOn").alias("Last_Published_On"),
-        col("firstCompletedOn").alias("First_Completed_On"),
-        col("lastCompletedOn").alias("Last_Completed_On"),
-        col("ArchivedOn").alias("Content_Retired_On"),
-        col("totalCertificatesIssued").alias("Total_Certificates_Issued"),
-        col("courseOrgID").alias("mdoid"),
-        col("Report_Last_Generated_On")
-      ).coalesce(1)
-
-    val mdoReportDF = platformContentMdoReportDF.union(marketPlaceContentMdoReportDF).union(platformContentFilteredMdoReportDF)
+    val mdoReportDF = platformContentMdoReportDF.union(marketPlaceContentMdoReportDF)
     //generate report
     generateReport(mdoReportDF,  reportPath,"mdoid", "ContentReport")
     // to be removed once new security job is created
@@ -338,67 +310,36 @@ object CourseReportModel extends AbsDashboardModel {
         .withColumn("scorm_flag", greatest(col("lvl1_flag"), col("lvl2_flag")))
         .select("courseID", "scorm_flag")
 
-    val platformContentWarehouseDF = fullDF
-      .join(scormFlagDF, Seq("courseID"), "left")
-      .na.fill(0, Seq("scorm_flag"))
-      .withColumn("data_last_generated_on", currentDateTime)
-      .filter(col("courseOrgName").isNotNull && trim(col("courseOrgName")) =!= "")
-      .select(
-        col("courseID").alias("content_id"),
-        col("courseOrgID").alias("content_provider_id"),
-        col("courseOrgName").alias("content_provider_name"),
-        col("courseName").alias("content_name"),
-        col("category").alias("content_type"),
-        col("batchID").alias("batch_id"),
-        col("courseBatchName").alias("batch_name"),
-        col("courseBatchStartDate").alias("batch_start_date"),
-        col("courseBatchEndDate").alias("batch_end_date"),
-        col("courseDuration").alias("content_duration"),
-        col("rating").alias("content_rating"),
-        date_format(col("courseLastPublishedOn"), dateFormat).alias("last_published_on"),
-        col("ArchivedOn").alias("content_retired_on"),
-        col("courseStatus").alias("content_status"),
-        col("courseResourceCount").alias("resource_count"),
-        col("totalCertificatesIssued").alias("total_certificates_issued"),
-        col("courseReviewStatus").alias("content_substatus"),
-        col("contentLanguage").alias("language"),
-        col("courseCategory").alias("content_sub_type"),
-        col("scorm_flag"),
-        col("data_last_generated_on")
-      )
+      val platformContentWarehouseDF = fullDF
+        .join(scormFlagDF, Seq("courseID"), "left")
+        .na.fill(0, Seq("scorm_flag"))
+        .withColumn("data_last_generated_on", currentDateTime)
+        .select(
+          col("courseID").alias("content_id"),
+          col("courseOrgID").alias("content_provider_id"),
+          when(col("courseOrgName").isNotNull && trim(col("courseOrgName")) =!= "", col("courseOrgName"))
+            .otherwise(col("contentCreator")).alias("content_provider_name"),
+          col("courseName").alias("content_name"),
+          col("category").alias("content_type"),
+          col("batchID").alias("batch_id"),
+          col("courseBatchName").alias("batch_name"),
+          col("courseBatchStartDate").alias("batch_start_date"),
+          col("courseBatchEndDate").alias("batch_end_date"),
+          col("courseDuration").alias("content_duration"),
+          col("rating").alias("content_rating"),
+          date_format(col("courseLastPublishedOn"), dateFormat).alias("last_published_on"),
+          col("ArchivedOn").alias("content_retired_on"),
+          col("courseStatus").alias("content_status"),
+          col("courseResourceCount").alias("resource_count"),
+          col("totalCertificatesIssued").alias("total_certificates_issued"),
+          col("courseReviewStatus").alias("content_substatus"),
+          col("contentLanguage").alias("language"),
+          col("courseCategory").alias("content_sub_type"),
+          col("scorm_flag"),
+          col("data_last_generated_on")
+        )
 
-    // fix for KAR-1054 - content provider name is empty for deleted orgs but ES has content provider name
-    // fetching missing content provider names from ES
-    val platformContentFilteredWarehouseDF = fullDF
-      .join(scormFlagDF, Seq("courseID"), "left")
-      .na.fill(0, Seq("scorm_flag"))
-      .withColumn("data_last_generated_on", currentDateTime)
-      .filter(col("courseOrgName").isNull || trim(col("courseOrgName")) === "")
-      .select(
-        col("courseID").alias("content_id"),
-        col("courseOrgID").alias("content_provider_id"),
-        col("contentCreator").alias("content_provider_name"),
-        col("courseName").alias("content_name"),
-        col("category").alias("content_type"),
-        col("batchID").alias("batch_id"),
-        col("courseBatchName").alias("batch_name"),
-        col("courseBatchStartDate").alias("batch_start_date"),
-        col("courseBatchEndDate").alias("batch_end_date"),
-        col("courseDuration").alias("content_duration"),
-        col("rating").alias("content_rating"),
-        date_format(col("courseLastPublishedOn"), dateFormat).alias("last_published_on"),
-        col("ArchivedOn").alias("content_retired_on"),
-        col("courseStatus").alias("content_status"),
-        col("courseResourceCount").alias("resource_count"),
-        col("totalCertificatesIssued").alias("total_certificates_issued"),
-        col("courseReviewStatus").alias("content_substatus"),
-        col("contentLanguage").alias("language"),
-        col("courseCategory").alias("content_sub_type"),
-        col("scorm_flag"),
-        col("data_last_generated_on")
-      )
-
-    val df_warehouse = platformContentWarehouseDF.union(marketPlaceContentWarehouseDF).union(platformContentFilteredWarehouseDF)
+    val df_warehouse = platformContentWarehouseDF.union(marketPlaceContentWarehouseDF)
     warehouseCache.write(df_warehouse.coalesce(1), conf.dwCourseTable)
     warehousePqCache.write(df_warehouse.coalesce(1), conf.dwCourseTable)
     Redis.closeRedisConnect()
