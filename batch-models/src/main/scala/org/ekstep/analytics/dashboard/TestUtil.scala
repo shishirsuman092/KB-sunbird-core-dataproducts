@@ -188,6 +188,8 @@ object TestUtil extends Serializable {
       "password" -> "123456",
       "bqScriptPath" -> "/mount/data/analytics/bq-scripts.sh",
       "sizeBucketString" -> "1-100-XS,101-500-S,501-1000-M,1001-10000-L,10001-25000-X,above 25000-XXL",
+      "trendingEventsCount" -> 15,
+      "featuredEventsCount" -> 20,
 
       "sideOutput" -> sideOutput
     )

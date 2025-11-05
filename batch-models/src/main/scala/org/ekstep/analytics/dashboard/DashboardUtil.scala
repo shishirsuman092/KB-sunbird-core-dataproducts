@@ -194,7 +194,9 @@ case class DashboardConfig (
                              // script path to push data to bq
                              bqScriptPath: String,
                              warehouseReportPath: String,
-                             destinationFullReportPath: String
+                             destinationFullReportPath: String,
+                             trendingEventsCount: Int,
+                             featuredEventsCount: Int
                            ) extends Serializable
 
 object DashboardConfigParser extends Serializable {
@@ -406,7 +408,9 @@ object DashboardConfigParser extends Serializable {
       bqScriptPath = getConfigModelParam(config, "bqScriptPath", "/mount/data/analytics/bq-scripts.sh"),
       // warehouse report path
       warehouseReportPath = getConfigModelParam(config, "warehouseReportPath", "warehouse"),
-      destinationFullReportPath = getConfigModelParam(config, "destinationFullReportPath", "/standalone-reports/full_report")
+      destinationFullReportPath = getConfigModelParam(config, "destinationFullReportPath", "/standalone-reports/full_report"),
+      trendingEventsCount = getConfigModelParam(config, "trendingEventsCount"),
+      featuredEventsCount = getConfigModelParam(config, "featuredEventsCount")
     )
   }
   /* Config functions end */
