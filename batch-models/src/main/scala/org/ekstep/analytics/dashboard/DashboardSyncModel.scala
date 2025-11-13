@@ -967,22 +967,69 @@ object DashboardSyncModel extends AbsDashboardModel {
     val liveEventsDF = eventsEnrolmentDataDF.join(eventDetails, Seq("event_id"), "inner").filter(eventDetails("event_status") === "Live").select(eventsEnrolmentDataDF("*"))
     val joinedDF = liveEventsDF.join(userOrgDF.withColumnRenamed("userID", "user_id"), Seq("user_id"), "inner")
 
-    // Step 2: Compute event counts per userOrgID
-    val trendingEventsByMDODF = joinedDF
-      .groupBy("userOrgID", "event_id")
-      .agg(count("*").alias("event_count")) // Count occurrences of each event per userOrgID
-      .withColumn("rank", dense_rank().over(Window.partitionBy("userOrgID").orderBy(col("event_count").desc))) // Rank events per userOrgID
-      .filter(col("rank") <= 20) // Keep only top 20 events per userOrgID
-      .groupBy("userOrgID")
-      .agg(concat_ws(",", collect_list("event_id")).alias("events")) // Collect top 20 event_ids into a CSV string
+    val trendingEventsCount =  conf.trendingEventsCount
+    val featuredEventsCount =  conf.featuredEventsCount
 
-    // Step 3: Compute top 20 event_ids overall (without grouping)
-    val featuredEventsDF = joinedDF
+    // ---- Effective caps with default = 100 when <= 0 or missing ----
+    def capN(n: Int, defaultN: Int = 100): Int = if (Option(n).getOrElse(0) > 0) n else defaultN
+    val topNTrending  = capN(trendingEventsCount, 100)
+    val topNFeatured  = capN(featuredEventsCount, 100)
+
+
+    val wTrending = Window
+      .partitionBy("userOrgID")
+      .orderBy(col("event_count").desc, col("event_id"))
+
+
+    val perMdoCounts = joinedDF
+      .groupBy("userOrgID", "event_id")
+      .agg(count(lit(1)).alias("event_count"))
+
+
+    val topPerMdo = perMdoCounts
+      .withColumn("rn", row_number().over(wTrending))
+      .filter(col("rn") <= lit(topNTrending))
+      .select("userOrgID", "event_id")
+
+    val trendingEventsByMDODF = topPerMdo
+      .groupBy("userOrgID")
+      .agg(
+        concat_ws(
+          ",",
+          slice(                         // hard cap to N
+            array_distinct(              // safety: remove dupes if any slipped in
+              sort_array(collect_list(col("event_id")))
+            ),
+            1,
+            topNTrending
+          )
+        ).alias("events")
+      )
+
+    // ================== Overall featured events (topNFeatured) ==================
+    val overallCounts = joinedDF
       .groupBy("event_id")
-      .agg(count("*").alias("event_count")) // Count occurrences of each event
-      .orderBy(col("event_count").desc) // Order events by frequency
-      .limit(20) // Take the top 20 events
-      .agg(concat_ws(",", collect_list("event_id")).alias("events")) // Collect event_ids into a CSV string
+      .agg(count(lit(1)).alias("event_count"))
+
+    val wFeatured = Window.orderBy(col("event_count").desc, col("event_id"))
+
+    val overallTop = overallCounts
+      .withColumn("rn", row_number().over(wFeatured))
+      .filter(col("rn") <= lit(topNFeatured))
+      .select("event_id")
+
+    // Single-row DF with CSV string of top events (unique, deterministic, capped)
+    val featuredEventsDF = overallTop
+      .agg(
+        concat_ws(
+          ",",
+          slice(
+            array_distinct(sort_array(collect_list(col("event_id")))),
+            1,
+            topNFeatured
+          )
+        ).alias("events")
+      )
     Redis.dispatchDataFrame[String]("dashboard_trending_events_by_mdo", trendingEventsByMDODF, "userOrgID", "events")
     Redis.update("dashboard_overall_featured_events", featuredEventsDF.first().getString(0))
 
