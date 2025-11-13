@@ -412,6 +412,7 @@ object DashboardConfigParser extends Serializable {
       trendingEventsCount = getConfigModelParam(config, "trendingEventsCount").toInt,
       featuredEventsCount = getConfigModelParam(config, "featuredEventsCount").toInt
     )
+  }
   /* Config functions end */
 }
 
